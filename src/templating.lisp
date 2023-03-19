@@ -1,5 +1,5 @@
 (defpackage #:yolk.templating
-  (:use #:cl #:defstar #:iterate #:trivia #:defclass-std)
+  (:use #:cl #:defstar #:iterate #:trivia)
   (:export #:process-text))
 
 (in-package #:yolk.templating)
@@ -42,7 +42,11 @@
     ("r" (function directive-replace))))
 
 
-(defclass/std yolk-call () ((directive pattern replacement)))
+(defclass yolk-call ()
+  ((directive :initarg :directive :accessor directive)
+   (pattern :initarg :pattern :accessor pattern)
+   (replacement :initarg :replacement :accessor replacement)))
+
 (defmethod print-object ((c yolk-call) stream)
   (format stream "(yolk-call :directive \"~a\" :pattern \"~a\" :replacement \"~a\")"
           (directive c) (pattern c) (replacement c)))
@@ -62,7 +66,7 @@
 (defun process-text (data text)
   (declare (ignore data))
   (iter (for line in (str:lines text))
-    (run-call (read-inline-yolk-call text) line)))
+    (collect (run-call (print (read-inline-yolk-call text)) line))))
 
 (defun tests ()
   (format t "~%Running tests...~%")
