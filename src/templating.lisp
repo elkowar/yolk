@@ -1,5 +1,5 @@
 (defpackage #:yolk.templating
-  (:use #:cl #:defstar #:iterate #:trivia)
+  (:use #:cl #:alexandria #:defstar #:iterate #:trivia)
   (:export #:process-text))
 
 (in-package #:yolk.templating)
@@ -12,23 +12,17 @@
 ; TODO add more directives
 ; TODO add support for conditional inclusion of blocks of text
 
-(defparameter *tests*
-  (list (cons "bg_color = \"#ebdbb2\" # [yolk:ri] \" -> \"12\""
-              "bg_color = \"12\" # [yolk:ri] \" -> \"12\"")
-        (cons "bg_color = \"#ebdbb2\" # [yolk:ri] \" -> (+ 5 2)"
-              "bg_color = \"7\" # [yolk:ri] \" -> (+ 5 2)")
-        (cons "bg_color = \"#ebdbb2\" # [yolk:r] \".*?\" -> \"\\\"12\\\"\""
-              "bg_color = \"12\" # [yolk:r] \".*?\" -> \"\\\"12\\\"\"")))
-    ;("bg_color = \"#ebdbb2\" # [yolk:r] /\".*\"/ -> (concat \"\\\"\" colors.background \"\\\"\")"
-    ; . "bg_color = \"#ff0000\" # [yolk:r] /\".*\"/ -> (concat \"\\\"\" colors.background \"\\\"\")")))
+(defmacro with-plist-vars (plist &body body)
+  `(let
+    ,(loop for (key val) on plist by #'cddr
+           collect `(,(intern (symbol-name key)) ,val))
+    ,@body))
 
 
-(defun dbg (x)
-  (print (describe x))
-  x)
-
-(defun* run-replacement-code ((input string))
+(defun* run-replacement-code ((data cons) (input string))
+  (declare (ignore data))
   (eval (read-from-string input)))
+  ;(eval (with-plist-vars data (read-from-string input))))
 
 
 (defun* within ((outer string) (inner string))
@@ -55,10 +49,11 @@
    (pattern :initarg :pattern :accessor pattern)
    (replacement :initarg :replacement :accessor replacement)))
 
-(defun* run-call ((call yolk-call) (input string))
+(defun* run-call ((data cons) (call yolk-call) (input string))
   (:returns string)
-  (let ((dir (read-directive (directive call))))
-    (funcall dir (pattern call) input (format nil "~a" (run-replacement-code (replacement call))))))
+  (let ((dir (read-directive (directive call)))
+        (replacement-output (run-replacement-code data (replacement call))))
+    (funcall dir (pattern call) input (format nil "~a" replacement-output))))
 
 
 (defun* read-inline-yolk-call ((input string))
@@ -71,17 +66,9 @@
 
 (defun* process-text ((data t) (text string))
   (:returns string)
-  (declare (ignore data))
   (str:unlines
-   (iter (for line in (str:lines text))
-    (collect (run-call (read-inline-yolk-call text) line)))))
-
-(defun tests ()
-  (format t "~%Running tests...~%")
-  (let ((data '()))
-    (iter (for (input . expected) in *tests*)
-      (let ((actual (process-text data input)))
-        (format t "Processing: ~a~%Expected: ~a~%Actual: ~a~%~%" input expected actual)))))
-
-#+(or)
-(tests)
+    (iter (for line in (str:lines text))
+      (collect
+        (if-let (call (read-inline-yolk-call text))
+          (run-call data call line)
+          line)))))

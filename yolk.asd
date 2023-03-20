@@ -9,3 +9,12 @@
                 :components ((:file "main"
                               :depends-on ("templating"))
                              (:file "templating")))))
+
+
+(asdf:defsystem "yolk/test"
+  :description "Test suite for the yolk system"
+  :author "ElKowar"
+  :depends-on (:yolk :fiveam)
+  :components ((:module "tests" :components ((:file "test-yolk"))))
+  :perform (test-op (op c)
+                    (symbol-call :fiveam :run-all-tests)))
