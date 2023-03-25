@@ -12,17 +12,18 @@
 ; TODO add more directives
 ; TODO add support for conditional inclusion of blocks of text
 
-(defmacro with-plist-vars (plist &body body)
-  `(let
-    ,(loop for (key val) on plist by #'cddr
-           collect `(,(intern (symbol-name key)) ,val))
-    ,@body))
-
 
 (defun* run-replacement-code ((data cons) (input string))
-  (declare (ignore data))
-  (eval (read-from-string input)))
-  ;(eval (with-plist-vars data (read-from-string input))))
+  "Evaluate the given string as a lisp expression, with each entry
+   of the given data plist in scope as a variable"
+  (eval (make-eval-arg data input)))
+
+(defun* make-eval-arg ((data cons) (input string))
+  `(let ,(loop for (key val) on data by #'cddr
+               collect (list (intern (symbol-name key)) val))
+     ,@(loop for (key val) on data by #'cddr
+             collect `(declare (ignorable ,(intern (symbol-name key)))))
+     ,(read-from-string input)))
 
 
 (defun* within ((outer string) (inner string))
