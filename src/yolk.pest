@@ -1,34 +1,25 @@
+//! Pest grammar for handlebars templating
 WHITESPACE = _{ " " | "\t" }
+YolkFile   = ${ SOI ~ Element+ ~ EOI }
 
-TagLine = ${ SOI ~ (!TagStart ~ ANY)* ~ (#tag = Tag) ~ ANY* ~ EOI }
-RawLine = ${ SOI ~ (!TagStart ~ ANY)* ~ EOI }
+Element = _{ Block | Raw }
 
-Tag = _{ DirectiveTag | IfTag | ElseTag | EndTag }
-
-TagStart = _{ "{%" }
-TagEnd   = _{ "%}" }
-
-DirectiveTag = { TagStart ~ WHITESPACE* ~ (#name = DirectiveName) ~ #content = (!TagEnd ~ ANY)* ~ WHITESPACE* ~ TagEnd }
-IfTag        = { TagStart ~ WHITESPACE* ~ "if" ~ #pred = (!TagEnd ~ ANY)+ ~ WHITESPACE* ~ TagEnd }
-ElseTag      = { TagStart ~ WHITESPACE* ~ "else" ~ WHITESPACE* ~ TagEnd }
-EndTag       = { TagStart ~ WHITESPACE* ~ "end" ~ WHITESPACE* ~ TagEnd }
+Block        = _{ IfBlock | DirectiveTag }
+IfBlock      =  { (#if = IfTag) ~ (#body = Raw?) ~ ((#else = ElseTag) ~ (#elsebody = Raw?))? ~ (#end = EndTag) }
+IfTag        =  { BeforeTag ~ "if" ~ #pred = TagInner ~ AfterTag }
+ElseTag      =  { BeforeTag ~ "else" ~ AfterTag }
+EndTag       =  { BeforeTag ~ "end" ~ AfterTag }
+DirectiveTag =  { BeforeTag ~ #name = DirectiveName ~ wsp* ~ #value = TagInner ~ wsp* ~ AfterTag }
 
 DirectiveName = { "CommentPrefix" }
 
-/*
-    //! Pest grammar for handlebars templating
-    WHITESPACE = _{ " " | "\t" }
-    YolkFile   = ${ SOI ~ Line+ ~ EOI }
+nl  = _{ NEWLINE }
+wsp = _{ WHITESPACE }
 
-    nl = { NEWLINE }
+TagStart  = _{ "{%" }
+TagEnd    = _{ "%}" }
+BeforeTag = _{ (!(TagStart | nl) ~ ANY)* ~ TagStart ~ wsp* }
+AfterTag  = _{ wsp* ~ TagEnd ~ (!(nl | EOI) ~ ANY)* ~ (nl | EOI) }
+TagInner  =  { (!TagEnd ~ ANY)+ }
 
-    TagStart  = _{ "{%" }
-    TagEnd    = _{ "%}" }
-    BeforeTag = @{ (nl | SOI) ~ (!(TagStart | nl) ~ ANY)* ~ TagStart ~ WHITESPACE* }
-    AfterTag  = @{ WHITESPACE* ~ TagEnd ~ (!(nl | EOI) ~ ANY)* ~ (nl | EOI) }
-    TagLine   =  { BeforeTag ~ TagInner ~ AfterTag }
-    TagInner  =  { (!TagEnd ~ ANY)+ }
-
-    Line    = _{ TagLine | RawLine }
-    RawLine = { (!TagLine ~ ANY)+ }
-*/
+Raw = { (!BeforeTag ~ ANY)+ }
