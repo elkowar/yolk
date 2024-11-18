@@ -1,4 +1,4 @@
-use crate::rendering_ctx;
+use crate::ctx;
 
 use anyhow::Result;
 use pest::iterators::Pair;
@@ -67,7 +67,7 @@ impl<'a> Element<'a> {
             _ => Ok(Element::Raw(pair.as_str())),
         }
     }
-    pub fn render(&self, render_ctx: &rendering_ctx::RenderingContext) -> Result<String> {
+    pub fn render(&self, render_ctx: &ctx::Context) -> Result<String> {
         match self {
             Element::Raw(s) => Ok(s.to_string()),
             Element::IfBlock {

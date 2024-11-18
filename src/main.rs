@@ -2,9 +2,9 @@ use anyhow::Result;
 use document::Document;
 use pest_derive::Parser;
 
+mod ctx;
 mod document;
 mod element;
-mod rendering_ctx;
 
 pub(crate) const COMMENT_START: &str = " ==x== ";
 

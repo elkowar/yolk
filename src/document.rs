@@ -1,5 +1,5 @@
+use crate::ctx;
 use crate::element;
-use crate::rendering_ctx;
 
 use super::Rule;
 
@@ -25,11 +25,11 @@ impl<'a> Default for Document<'a> {
 impl<'a> Document<'a> {
     pub fn render(&self) -> Result<String> {
         let mut output = String::new();
-        let render_ctx = rendering_ctx::RenderingContext {
+        let ctx = ctx::Context {
             comment_prefix: self.comment_prefix.clone(),
         };
         for element in &self.elements {
-            output.push_str(&element.render(&render_ctx)?);
+            output.push_str(&element.render(&ctx)?);
         }
         Ok(output)
     }
