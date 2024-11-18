@@ -1,26 +1,25 @@
 //! Pest grammar for handlebars templating
 WHITESPACE = _{ " " | "\t" }
-YolkFile   = ${ SOI ~ Element* ~ EOI }
+YolkFile   = ${ SOI ~ Element+ ~ EOI }
 
-// Element-level parsing
-Element = _{ TagBlock | Directive | Raw }
+Element = _{ Block | Raw }
 
-Directive     = { TagStart ~ WHITESPACE* ~ DirectiveName ~ WHITESPACE+ ~ TagCode ~ WHITESPACE* ~ TagEnd }
+Block        = _{ IfBlock | DirectiveTag }
+IfBlock      =  { (#if = IfTag) ~ (#body = Raw?) ~ ((#else = ElseTag) ~ (#elsebody = Raw?))? ~ (#end = EndTag) }
+IfTag        =  { BeforeTag ~ "if" ~ #pred = TagInner ~ AfterTag }
+ElseTag      =  { BeforeTag ~ "else" ~ AfterTag }
+EndTag       =  { BeforeTag ~ "end" ~ AfterTag }
+DirectiveTag =  { BeforeTag ~ #name = DirectiveName ~ wsp* ~ #value = TagInner ~ wsp* ~ AfterTag }
+
 DirectiveName = { "CommentPrefix" }
 
-TagStart = _{ "{%" }
-TagEnd   = _{ "%}" }
-TagBlock = !{ TagIfBlock }
+nl  = _{ NEWLINE }
+wsp = _{ WHITESPACE }
 
-TagIfBlock = {
-    (TagIf ~ Raw? ~ (TagElseIf ~ Raw?)* ~ (TagElse ~ Raw?)? ~ TagBlockEnd)
-}
+TagStart  = _{ "{%" }
+TagEnd    = _{ "%}" }
+BeforeTag = _{ (!(TagStart | nl) ~ ANY)* ~ TagStart ~ wsp* }
+AfterTag  = _{ wsp* ~ TagEnd ~ (!(nl | EOI) ~ ANY)* ~ (nl | EOI) }
+TagInner  =  { (!TagEnd ~ ANY)+ }
 
-TagIf       = { TagStart ~ WHITESPACE* ~ "if" ~ WHITESPACE* ~ TagCode ~ WHITESPACE* ~ TagEnd }
-TagElse     = { TagStart ~ WHITESPACE* ~ "else" ~ WHITESPACE* ~ WHITESPACE* ~ TagEnd }
-TagElseIf   = { TagStart ~ WHITESPACE* ~ "elif" ~ WHITESPACE* ~ TagCode ~ WHITESPACE* ~ TagEnd }
-TagBlockEnd = { TagStart ~ WHITESPACE* ~ "end" ~ WHITESPACE* ~ TagEnd }
-
-Raw = @{ (!TagStart ~ ANY)+ }
-
-TagCode = @{ (ANY ~ !(TagEnd))+ }
+Raw = { (!BeforeTag ~ ANY)+ }

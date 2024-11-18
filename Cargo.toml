@@ -5,8 +5,8 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.93"
-pest = "2.7.14"
-pest_derive = "2.7.14"
+pest = { version = "2.7.14" }
+pest_derive = { version = "2.7.14", features = ["grammar-extras"] }
 regex = "1.11.1"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
