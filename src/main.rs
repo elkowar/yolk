@@ -13,26 +13,24 @@ use regex::Regex;
 #[grammar = "yolk.pest"]
 pub struct YolkParser;
 
-pub enum ParsedLine {
+#[derive(Debug)]
+pub enum ParsedLine<'a> {
     Raw(&'a str),
-    Tag(&'a str),
+    If(&'a str, PTag<'a>),
+}
+
+#[derive(Debug)]
+pub enum PTag<'a> {
+    If { pred: &'a str },
+    Else,
+    End,
+    Directive { name: &'a str, content: &'a str },
 }
 
 pub struct State<'a, Lines: Iterator<Item = &'a str>> {
-    parsed: Vec<ParsedLine>,
+    parsed: Vec<ParsedLine<'a>>,
     input: Lines,
     comment_prefix: String,
-}
-
-pub enum Section<'a> {
-    Raw(&'a str),
-    If(IfBlock<'a>),
-}
-
-pub struct IfBlock<'a> {
-    tag_line: &'a str,
-    body: Box<Vec<Section<'a>>>,
-    end_line: &'a str,
 }
 
 pub fn main() -> Result<()> {
@@ -46,86 +44,53 @@ pub fn main() -> Result<()> {
         // {% end %}
     "#;
 
-    let mut state = State {
-        output: Vec::new(),
-        input: test_input.lines(),
-        comment_prefix: "#".to_string(),
-    };
+    let parsed = parse_lines(test_input.lines())?;
 
-    state.process()?;
-    println!("{}", state.output.join("\n"));
+    println!(
+        "{}",
+        parsed
+            .into_iter()
+            .map(|x| format!("{:?}", x))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
     Ok(())
 }
-impl<'a, Lines: Iterator<Item = &'a str>> State<'a, Lines> {
-    pub fn process(&mut self) -> Result<()> {
-        while let Some(line) = self.input.next() {
-            self.process_line(line)?;
-        }
-        Ok(())
-    }
 
-    fn process_line(&mut self, line: &'a str) -> Result<()> {
+pub fn parse_lines<'a>(mut input: impl Iterator<Item = &'a str>) -> Result<Vec<ParsedLine<'a>>> {
+    let mut parsed = Vec::new();
+    while let Some(line) = input.next() {
         if let Ok(raw_line) = YolkParser::parse(Rule::RawLine, line) {
-            self.output.push(Cow::from(raw_line.as_str()));
+            parsed.push(ParsedLine::Raw(raw_line.as_str()))
         } else {
-            let tag_line = YolkParser::parse(Rule::TagLine, line)?;
-            println!("{tag_line:#?}");
-            self.tag(tag_line)?;
-        }
-        Ok(())
-    }
-    fn tag(&mut self, mut tag_line: Pairs<'a, Rule>) -> Result<()> {
-        self.output.push(Cow::from(tag_line.as_str()));
-        let tag = tag_line.next().unwrap();
-        match tag.as_rule() {
-            Rule::IfTag => self.if_tag(tag)?,
-            Rule::DirectiveTag => self.directive(tag)?,
-            _ => unreachable!(),
-        }
-        Ok(())
-    }
-
-    fn if_tag(&mut self, tag: Pair<'a, Rule>) -> Result<()> {
-        let mut inner = tag.into_inner();
-        let condition = inner
-            .find_first_tagged("pred")
-            .context("Missing predicate")?;
-        if condition.as_str() == "true" {
-            while let Some(line) = self.input.next() {
-                let line: String = remove_comment(&self.comment_prefix, &line).into_owned();
-                if let Ok(_) = YolkParser::parse(Rule::RawLine, line.as_ref()) {
-                    self.output.push(Cow::Owned(line));
-                } else {
-                    // let mut tag_line = YolkParser::parse(Rule::TagLine, &line)?;
-                    // println!("{tag_line:#?}");
-                    // self.output.push(Cow::from(tag_line.as_str()));
-                    // let tag = tag_line.next().unwrap();
-                    // match tag.as_rule() {
-                    //     Rule::EndTag => {
-                    //         break;
-                    //     }
-                    //     _ => self.tag(tag_line)?,
-                    // }
+            let mut tag_line = YolkParser::parse(Rule::TagLine, line)?;
+            println!("{:#?}", tag_line);
+            let tag = tag_line.next().unwrap();
+            let tag = tag.into_inner().next().unwrap();
+            let tag = match tag.as_rule() {
+                Rule::IfTag => {
+                    let pred = tag_line.find_first_tagged("pred").unwrap();
+                    PTag::If {
+                        pred: pred.as_str(),
+                    }
                 }
-            }
-        }
-
-        Ok(())
-    }
-
-    fn directive(&mut self, pair: Pair<'a, Rule>) -> Result<()> {
-        let mut inner = pair.into_inner();
-        let next = inner.next().unwrap();
-        match next.as_rule() {
-            Rule::DirectiveName => {
-                if next.as_str() == "CommentPrefix" {
-                    self.comment_prefix = inner.next().unwrap().as_str().to_string();
+                Rule::ElseTag => PTag::Else,
+                Rule::EndTag => PTag::End,
+                Rule::DirectiveTag => {
+                    let name = tag_line.find_first_tagged("name").unwrap();
+                    let content = tag_line.find_first_tagged("content").unwrap();
+                    PTag::Directive {
+                        name: name.as_str(),
+                        content: content.as_str(),
+                    }
                 }
-            }
-            _ => unreachable!(),
+                Rule::EOI => continue,
+                other => unreachable!("{other:#?} in parse_lines"),
+            };
+            parsed.push(ParsedLine::If(tag_line.as_str(), tag))
         }
-        Ok(())
     }
+    Ok(parsed)
 }
 
 /// Remove a comment prefix from a line, if one exists

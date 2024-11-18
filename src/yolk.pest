@@ -1,6 +1,6 @@
 WHITESPACE = _{ " " | "\t" }
 
-TagLine = ${ SOI ~ (!TagStart ~ ANY)* ~ Tag ~ ANY* ~ EOI }
+TagLine = ${ SOI ~ (!TagStart ~ ANY)* ~ (#tag = Tag) ~ ANY* ~ EOI }
 RawLine = ${ SOI ~ (!TagStart ~ ANY)* ~ EOI }
 
 Tag = _{ DirectiveTag | IfTag | ElseTag | EndTag }
@@ -8,9 +8,27 @@ Tag = _{ DirectiveTag | IfTag | ElseTag | EndTag }
 TagStart = _{ "{%" }
 TagEnd   = _{ "%}" }
 
-DirectiveTag = { TagStart ~ WHITESPACE* ~ DirectiveName ~ (!TagEnd ~ ANY)* ~ WHITESPACE* ~ TagEnd }
+DirectiveTag = { TagStart ~ WHITESPACE* ~ (#name = DirectiveName) ~ #content = (!TagEnd ~ ANY)* ~ WHITESPACE* ~ TagEnd }
 IfTag        = { TagStart ~ WHITESPACE* ~ "if" ~ #pred = (!TagEnd ~ ANY)+ ~ WHITESPACE* ~ TagEnd }
 ElseTag      = { TagStart ~ WHITESPACE* ~ "else" ~ WHITESPACE* ~ TagEnd }
 EndTag       = { TagStart ~ WHITESPACE* ~ "end" ~ WHITESPACE* ~ TagEnd }
 
 DirectiveName = { "CommentPrefix" }
+
+/*
+    //! Pest grammar for handlebars templating
+    WHITESPACE = _{ " " | "\t" }
+    YolkFile   = ${ SOI ~ Line+ ~ EOI }
+
+    nl = { NEWLINE }
+
+    TagStart  = _{ "{%" }
+    TagEnd    = _{ "%}" }
+    BeforeTag = @{ (nl | SOI) ~ (!(TagStart | nl) ~ ANY)* ~ TagStart ~ WHITESPACE* }
+    AfterTag  = @{ WHITESPACE* ~ TagEnd ~ (!(nl | EOI) ~ ANY)* ~ (nl | EOI) }
+    TagLine   =  { BeforeTag ~ TagInner ~ AfterTag }
+    TagInner  =  { (!TagEnd ~ ANY)+ }
+
+    Line    = _{ TagLine | RawLine }
+    RawLine = { (!TagLine ~ ANY)+ }
+*/
