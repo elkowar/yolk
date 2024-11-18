@@ -1,0 +1,16 @@
+WHITESPACE = _{ " " | "\t" }
+
+TagLine = ${ SOI ~ (!TagStart ~ ANY)* ~ Tag ~ ANY* ~ EOI }
+RawLine = ${ SOI ~ (!TagStart ~ ANY)* ~ EOI }
+
+Tag = _{ DirectiveTag | IfTag | ElseTag | EndTag }
+
+TagStart = _{ "{%" }
+TagEnd   = _{ "%}" }
+
+DirectiveTag = { TagStart ~ WHITESPACE* ~ DirectiveName ~ (!TagEnd ~ ANY)* ~ WHITESPACE* ~ TagEnd }
+IfTag        = { TagStart ~ WHITESPACE* ~ "if" ~ #pred = (!TagEnd ~ ANY)+ ~ WHITESPACE* ~ TagEnd }
+ElseTag      = { TagStart ~ WHITESPACE* ~ "else" ~ WHITESPACE* ~ TagEnd }
+EndTag       = { TagStart ~ WHITESPACE* ~ "end" ~ WHITESPACE* ~ TagEnd }
+
+DirectiveName = { "CommentPrefix" }

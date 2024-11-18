@@ -1,0 +1,26 @@
+//! Pest grammar for handlebars templating
+WHITESPACE = _{ " " | "\t" }
+YolkFile   = ${ SOI ~ Element* ~ EOI }
+
+// Element-level parsing
+Element = _{ TagBlock | Directive | Raw }
+
+Directive     = { TagStart ~ WHITESPACE* ~ DirectiveName ~ WHITESPACE+ ~ TagCode ~ WHITESPACE* ~ TagEnd }
+DirectiveName = { "CommentPrefix" }
+
+TagStart = _{ "{%" }
+TagEnd   = _{ "%}" }
+TagBlock = !{ TagIfBlock }
+
+TagIfBlock = {
+    (TagIf ~ Raw? ~ (TagElseIf ~ Raw?)* ~ (TagElse ~ Raw?)? ~ TagBlockEnd)
+}
+
+TagIf       = { TagStart ~ WHITESPACE* ~ "if" ~ WHITESPACE* ~ TagCode ~ WHITESPACE* ~ TagEnd }
+TagElse     = { TagStart ~ WHITESPACE* ~ "else" ~ WHITESPACE* ~ WHITESPACE* ~ TagEnd }
+TagElseIf   = { TagStart ~ WHITESPACE* ~ "elif" ~ WHITESPACE* ~ TagCode ~ WHITESPACE* ~ TagEnd }
+TagBlockEnd = { TagStart ~ WHITESPACE* ~ "end" ~ WHITESPACE* ~ TagEnd }
+
+Raw = @{ (!TagStart ~ ANY)+ }
+
+TagCode = @{ (ANY ~ !(TagEnd))+ }
