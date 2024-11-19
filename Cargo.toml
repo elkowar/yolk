@@ -5,11 +5,11 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.93"
+indoc = "2.0.5"
 pest = { version = "2.7.14" }
 pest_derive = { version = "2.7.14", features = ["grammar-extras"] }
 regex = "1.11.1"
-rune = "0.13.4"
-rune-modules = "0.13.4"
-# rhai = "1.20.0"
+rhai = "1.20.0"
+tempdir = "0.3.7"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }

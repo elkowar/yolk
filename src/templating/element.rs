@@ -1,9 +1,9 @@
-use crate::ctx;
-
 use anyhow::Result;
 use pest::iterators::Pair;
 
-use super::Rule;
+use crate::eval_ctx::EvalCtx;
+
+use super::{document::Context, Rule};
 
 #[derive(Debug)]
 pub enum Element<'a> {
@@ -67,7 +67,8 @@ impl<'a> Element<'a> {
             _ => Ok(Element::Raw(pair.as_str())),
         }
     }
-    pub fn render(&self, render_ctx: &ctx::Context) -> Result<String> {
+
+    pub fn render(&self, render_ctx: &Context, eval_ctx: &mut EvalCtx<'_>) -> Result<String> {
         match self {
             Element::Raw(s) => Ok(s.to_string()),
             Element::IfBlock {
@@ -77,24 +78,25 @@ impl<'a> Element<'a> {
                 else_tag_and_body,
                 end_tag,
             } => {
-                let pred_true = pred.trim() == "true";
-                let rendered_body = body.render(render_ctx)?;
+                let pred_value: bool = eval_ctx.eval(pred.trim())?;
+
+                let rendered_body = body.render(render_ctx, eval_ctx)?;
                 let rendered_else_body = else_tag_and_body
                     .as_ref()
                     .map(|(else_tag, else_body)| {
-                        anyhow::Ok((else_tag, else_body.render(render_ctx)?))
+                        anyhow::Ok((else_tag, else_body.render(render_ctx, eval_ctx)?))
                     })
                     .transpose()?;
                 let mut output = String::new();
                 output.push_str(if_tag);
-                if pred_true {
+                if pred_value {
                     output.push_str(&render_ctx.enabled_str(&rendered_body));
                 } else {
                     output.push_str(&render_ctx.disabled_str(&rendered_body));
                 }
                 if let Some((else_tag, rendered_else_body)) = rendered_else_body {
                     output.push_str(else_tag);
-                    if pred_true {
+                    if pred_value {
                         output.push_str(&render_ctx.disabled_str(&rendered_else_body));
                     } else {
                         output.push_str(&render_ctx.enabled_str(&rendered_else_body));
