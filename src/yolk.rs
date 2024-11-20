@@ -1,7 +1,13 @@
-use anyhow::Result;
 use std::path::{Path, PathBuf};
 
-use crate::{util, yolk_paths::YolkPaths};
+use anyhow::Result;
+
+use crate::{
+    eval_ctx::{EvalCtx, SystemInfo},
+    templating::document::Document,
+    util,
+    yolk_paths::YolkPaths,
+};
 
 pub struct Yolk {
     yolk_paths: YolkPaths,
@@ -57,7 +63,42 @@ impl Yolk {
         Ok(())
     }
 
-    pub fn list_group_paths(&self) -> Result<Vec<PathBuf>> {
+    pub fn sync(&self) -> Result<()> {
+        let thing_paths = self.list_thing_paths()?;
+        for thing_dir in thing_paths {
+            let tmpl_list_file = thing_dir.join("yolk_templates");
+            if tmpl_list_file.is_file() {
+                let thing_canonical = thing_dir.canonicalize()?;
+                let tmpl_paths = std::fs::read_to_string(tmpl_list_file)?;
+                let tmpl_paths = tmpl_paths.lines().map(|x| thing_canonical.join(x));
+                for templated_file in tmpl_paths {
+                    if templated_file.is_file() {
+                        self.sync_file(&templated_file)?;
+                    }
+                    tracing::warn!(
+                        "{} was specified as templated file, but doesn't exist",
+                        templated_file.display()
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn eval_string(&self, _path: impl AsRef<Path>, content: &str) -> Result<String> {
+        let doc = Document::parse_string(&content)?;
+        let mut eval_ctx = EvalCtx::new(SystemInfo::generate());
+        Ok(doc.render(&mut eval_ctx)?)
+    }
+
+    pub fn sync_file(&self, path: impl AsRef<Path>) -> Result<()> {
+        let content = std::fs::read_to_string(&path)?;
+        let rendered = self.eval_string(&path, &content)?;
+        std::fs::write(&path, rendered)?;
+        Ok(())
+    }
+
+    pub fn list_thing_paths(&self) -> Result<Vec<PathBuf>> {
         let entries = self.yolk_paths.local_dir_path().read_dir()?;
         Ok(entries
             .filter_map(|entry| entry.ok().map(|x| x.path()))

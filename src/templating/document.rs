@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::eval_ctx::EvalCtx;
 use crate::templating::COMMENT_START;
 

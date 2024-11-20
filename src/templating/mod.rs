@@ -1,7 +1,7 @@
 use pest_derive::Parser;
 
-mod document;
-mod element;
+pub mod document;
+pub mod element;
 
 pub(crate) const COMMENT_START: &str = "<yolk> ";
 

@@ -32,6 +32,7 @@ enum Command {
         name: String,
         path: std::path::PathBuf,
     },
+    Sync,
 }
 
 pub(crate) fn main() -> Result<()> {
@@ -41,6 +42,7 @@ pub(crate) fn main() -> Result<()> {
         Command::Init => yolk.init_yolk()?,
         Command::Use { name } => yolk.use_thing(name)?,
         Command::Add { name, path } => yolk.add_thing(name, path)?,
+        Command::Sync => yolk.sync()?,
         Command::Eval { expr } => todo!(),
     }
     Ok(())

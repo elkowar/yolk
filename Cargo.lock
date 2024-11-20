@@ -1234,6 +1234,7 @@ dependencies = [
  "tempdir",
  "tracing",
  "tracing-subscriber",
+ "walkdir",
 ]
 
 [[package]]
