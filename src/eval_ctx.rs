@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use anyhow::{anyhow, Result};
 
 // TODO: Ensure an EvalCtx contains info about what file is being parsed,

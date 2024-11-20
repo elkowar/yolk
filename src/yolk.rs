@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 use crate::{
     eval_ctx::{EvalCtx, SystemInfo},
@@ -73,7 +73,7 @@ impl Yolk {
                 let tmpl_paths = tmpl_paths.lines().map(|x| thing_canonical.join(x));
                 for templated_file in tmpl_paths {
                     if templated_file.is_file() {
-                        self.sync_file(&templated_file)?;
+                        self.sync_file(EvalMode::Local, &templated_file)?;
                     }
                     tracing::warn!(
                         "{} was specified as templated file, but doesn't exist",
@@ -85,15 +85,37 @@ impl Yolk {
         Ok(())
     }
 
-    pub fn eval_string(&self, _path: impl AsRef<Path>, content: &str) -> Result<String> {
+    pub fn eval_template_file(
+        &self,
+        mode: EvalMode,
+        _path: impl AsRef<Path>,
+        content: &str,
+    ) -> Result<String> {
         let doc = Document::parse_string(&content)?;
         let mut eval_ctx = EvalCtx::new(SystemInfo::generate());
+        let engine = rhai::Engine::new();
+        // TODO: deal with errors better
+        let ast = engine
+            .compile_file(self.yolk_paths.rhai_path())
+            .map_err(|err| anyhow!(err.to_string()))?;
+        let state = match mode {
+            EvalMode::Canonical => {
+                engine.call_fn(eval_ctx.scope_mut(), &ast, "canonical_state", ())
+            }
+            EvalMode::Local => engine.call_fn(eval_ctx.scope_mut(), &ast, "local_state", ()),
+        };
+        let state: rhai::Map = match state {
+            Ok(x) => x,
+            Err(err) => anyhow::bail!(err.to_string()),
+        };
+
+        eval_ctx.scope_mut().push_constant("data", state);
         Ok(doc.render(&mut eval_ctx)?)
     }
 
-    pub fn sync_file(&self, path: impl AsRef<Path>) -> Result<()> {
+    pub fn sync_file(&self, mode: EvalMode, path: impl AsRef<Path>) -> Result<()> {
         let content = std::fs::read_to_string(&path)?;
-        let rendered = self.eval_string(&path, &content)?;
+        let rendered = self.eval_template_file(mode, &path, &content)?;
         std::fs::write(&path, rendered)?;
         Ok(())
     }
@@ -104,6 +126,12 @@ impl Yolk {
             .filter_map(|entry| entry.ok().map(|x| x.path()))
             .collect())
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EvalMode {
+    Local,
+    Canonical,
 }
 
 #[cfg(test)]
