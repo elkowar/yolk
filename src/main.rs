@@ -29,6 +29,10 @@ enum Command {
         path: std::path::PathBuf,
     },
     Sync,
+    Git {
+        #[clap(allow_hyphen_values = true)]
+        command: Vec<String>,
+    },
 }
 
 pub(crate) fn main() -> Result<()> {
@@ -41,6 +45,13 @@ pub(crate) fn main() -> Result<()> {
         Command::Sync => yolk.sync()?,
         Command::Eval { expr } => {
             println!("{}", yolk.eval_rhai(yolk::EvalMode::Local, expr)?);
+        }
+        Command::Git { command } => {
+            yolk.prepare_canonical()?;
+            std::process::Command::new("git")
+                .args(command)
+                .current_dir(yolk.paths().root_path())
+                .status()?;
         }
     }
     Ok(())

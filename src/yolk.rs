@@ -23,6 +23,9 @@ impl Yolk {
         self.yolk_paths.create()?;
         Ok(())
     }
+    pub fn paths(&self) -> &YolkPaths {
+        &self.yolk_paths
+    }
 
     pub fn use_thing(&self, thing_name: &str) -> Result<()> {
         let thing_path = self.yolk_paths.local_thing_path(&thing_name);
@@ -57,16 +60,8 @@ impl Yolk {
             .yolk_paths
             .local_thing_path(name)
             .join(relative_to_home);
-
-        let new_canonical_path = self
-            .yolk_paths
-            .canonical_dir_path()
-            .join(name)
-            .join(relative_to_home);
         fs_err::create_dir_all(new_local_path.parent().unwrap())?;
-        fs_err::create_dir_all(new_canonical_path.parent().unwrap())?;
         fs_err::rename(&original_path, &new_local_path)?;
-        fs_err::copy(&new_local_path, &new_canonical_path)?;
         util::create_symlink_dir(new_local_path, original_path)?;
         Ok(())
     }
@@ -241,8 +236,6 @@ mod test {
             .unwrap();
 
         home.child("yolk/local/foo/config/foo.toml")
-            .assert(is_file());
-        home.child("yolk/canonical/foo/config/foo.toml")
             .assert(is_file());
         home.child("config/foo.toml").assert(is_symlink());
 
