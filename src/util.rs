@@ -6,8 +6,8 @@ pub fn create_symlink_dir(
     link: impl AsRef<Path>,
 ) -> std::io::Result<()> {
     #[cfg(unix)]
-    std::os::unix::fs::symlink(original, link)?;
+    fs_err::os::unix::fs::symlink(original, link)?;
     #[cfg(target_os = "windows")]
-    std::os::windows::fs::symlink_dir(original, link)?;
+    fs_err::os::windows::fs::symlink_dir(original, link)?;
     Ok(())
 }
