@@ -1,3 +1,4 @@
+use anyhow::Context;
 use anyhow::{anyhow, Result};
 use rhai::CustomType;
 use rhai::TypeBuilder;
@@ -23,13 +24,11 @@ impl<'a> EvalCtx<'a> {
         Self { scope }
     }
 
-    pub fn eval<T: Clone + 'static>(&mut self, expr: &str) -> Result<T> {
+    pub fn eval<T: Clone + 'static + Send + Sync>(&mut self, expr: &str) -> Result<T> {
         let engine = make_engine();
-        let result = engine.eval_expression_with_scope::<T>(&mut self.scope, expr);
-        match result {
-            Ok(x) => Ok(x),
-            Err(err) => Err(anyhow!(err.to_string())),
-        }
+        Ok(engine
+            .eval_expression_with_scope::<T>(&mut self.scope, expr)
+            .with_context(|| format!("Failed to evaluate expression: {}", expr))?)
     }
 
     #[allow(unused)]

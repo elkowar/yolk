@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, Context as _, Result};
+use anyhow::{Context as _, Result};
 use rhai::Dynamic;
 
 use crate::{
@@ -72,7 +72,7 @@ impl Yolk {
             let tmpl_list_file = thing_dir.join("yolk_templates");
             if tmpl_list_file.is_file() {
                 let thing_canonical = thing_dir.canonicalize()?;
-                let tmpl_paths = std::fs::read_to_string(tmpl_list_file)?;
+                let tmpl_paths = fs_err::read_to_string(tmpl_list_file)?;
                 let tmpl_paths = tmpl_paths.lines().map(|x| thing_canonical.join(x));
                 for templated_file in tmpl_paths {
                     if templated_file.is_file() {
@@ -81,8 +81,8 @@ impl Yolk {
                                 format!("Failed to sync file {}", templated_file.display())
                             })?;
                     }
-                    tracing::warn!(
-                        "{} was specified as templated file, but doesn't exist",
+                    println!(
+                        "Warning: {} was specified as templated file, but doesn't exist",
                         templated_file.display()
                     );
                 }
@@ -93,16 +93,17 @@ impl Yolk {
 
     pub fn prepare_eval_ctx(&self, mode: EvalMode, engine: &rhai::Engine) -> Result<EvalCtx> {
         let mut eval_ctx = EvalCtx::new(SystemInfo::generate());
-        // TODO: deal with errors better
         let ast = engine
             .compile_file(self.yolk_paths.rhai_path())
-            .map_err(|err| anyhow!("Failed to compile rhai file: {}", err.to_string()))?;
+            .with_context(|| format!("Failed to compile rhai file"))?;
+        engine
+            .eval_ast_with_scope(eval_ctx.scope_mut(), &ast)
+            .context("Failed to evaluate rhai file")?;
         let data: Result<Dynamic, _> = match mode {
             EvalMode::Canonical => engine.call_fn(eval_ctx.scope_mut(), &ast, "canonical_data", ()),
             EvalMode::Local => engine.call_fn(eval_ctx.scope_mut(), &ast, "local_data", ("TODO",)),
         };
-        let data =
-            data.map_err(|err| anyhow!("Failed to call data function: {}", err.to_string()))?;
+        let data = data.with_context(|| format!("Failed to call data function"))?;
         eval_ctx.scope_mut().push_constant("data", data);
         Ok(eval_ctx)
     }
@@ -114,7 +115,6 @@ impl Yolk {
             .context("Failed to prepare eval_ctx")?;
         let result = engine
             .eval_expression_with_scope::<Dynamic>(eval_ctx.scope_mut(), expr)
-            .map_err(|e| anyhow!(e.to_string()))
             .with_context(|| format!("Failed to evaluate: {}", expr))?;
         Ok(result.to_string())
     }
@@ -134,13 +134,13 @@ impl Yolk {
     }
 
     pub fn sync_file(&self, mode: EvalMode, path: impl AsRef<Path>) -> Result<()> {
-        let content = std::fs::read_to_string(&path)?;
+        let content = fs_err::read_to_string(&path)?;
         let rendered = self
             .eval_template_file(mode, &path, &content)
             .with_context(|| {
                 format!("Failed to eval template file: {}", path.as_ref().display())
             })?;
-        std::fs::write(&path, rendered)?;
+        fs_err::write(&path, rendered)?;
         Ok(())
     }
 
@@ -149,7 +149,7 @@ impl Yolk {
         for thing_dir in thing_paths {
             let tmpl_list_file = thing_dir.join("yolk_templates");
             let tmpl_files = if tmpl_list_file.is_file() {
-                let tmpl_paths = std::fs::read_to_string(tmpl_list_file)?;
+                let tmpl_paths = fs_err::read_to_string(tmpl_list_file)?;
                 tmpl_paths
                     .lines()
                     .map(|x| thing_dir.join(x))
@@ -169,7 +169,7 @@ impl Yolk {
                     // TODO: this to_path_buf seems unnecesarily inefficient.
                     if tmpl_files.contains(&from.to_path_buf()) {
                         println!("is in tmpl_paths");
-                        let content = std::fs::read_to_string(&from)?;
+                        let content = fs_err::read_to_string(&from)?;
                         let rendered =
                             self.eval_template_file(EvalMode::Canonical, &from, &content)?;
                         fs_err::write(&to, rendered)?;
