@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use rhai::Dynamic;
 
 use crate::{
-    eval_ctx::{EvalCtx, SystemInfo},
+    eval_ctx::{self, EvalCtx, SystemInfo},
     templating::document::Document,
     util,
     yolk_paths::YolkPaths,
@@ -104,7 +104,7 @@ impl Yolk {
     }
 
     pub fn eval_rhai(&self, mode: EvalMode, expr: &str) -> Result<String> {
-        let engine = rhai::Engine::new();
+        let engine = eval_ctx::make_engine();
         let mut eval_ctx = self.prepare_eval_ctx(mode, &engine)?;
         let result = engine
             .eval_expression_with_scope::<Dynamic>(eval_ctx.scope_mut(), expr)
@@ -118,7 +118,7 @@ impl Yolk {
         _path: impl AsRef<Path>,
         content: &str,
     ) -> Result<String> {
-        let engine = rhai::Engine::new();
+        let engine = eval_ctx::make_engine();
         let mut eval_ctx = self.prepare_eval_ctx(mode, &engine)?;
         let doc = Document::parse_string(&content)?;
         Ok(doc.render(&mut eval_ctx)?)

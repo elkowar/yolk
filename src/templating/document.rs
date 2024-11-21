@@ -10,6 +10,7 @@ use anyhow::Result;
 use pest::Parser;
 use regex::Regex;
 
+#[derive(Debug)]
 pub struct Document<'a> {
     pub(crate) comment_prefix: String,
     pub(crate) elements: Vec<element::Element<'a>>,

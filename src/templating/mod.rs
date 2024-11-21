@@ -11,10 +11,28 @@ pub struct YolkParser;
 
 #[cfg(test)]
 mod test {
+    use pest::parses_to;
+
     use crate::{
         eval_ctx::{EvalCtx, SystemInfo},
-        templating::document::{self},
+        templating::{
+            document::{self},
+            Rule, YolkParser,
+        },
     };
+
+    #[test]
+    pub fn test_parse_directive() {
+        use pest::consumes_to;
+        parses_to! {
+            parser: YolkParser,
+            input: "{% CommentPrefix // %}",
+            rule: Rule::DirectiveTag,
+            tokens: [
+                DirectiveTag(0, 22, [DirectiveName(3, 16), TagInner(17, 19), EOI(22, 22)]),
+            ]
+        };
+    }
 
     #[test]
     pub fn test_template_if() {
@@ -48,14 +66,15 @@ mod test {
         let mut eval_ctx = EvalCtx::new(SystemInfo::mock());
 
         let example = indoc::indoc! {r#"
-            # {% replace(/".*"/, '"${system.hostname}"')%}
+            # {% replace /".*"/ `"${system.hostname}"` %}
             name = "foo"
         "#};
         let document = document::Document::parse_string(example).unwrap();
+        println!("{:#?}", document);
         let result = document.render(&mut eval_ctx).unwrap();
         assert_eq!(
             indoc::indoc! { r#"
-                # {% replace(/".*"/, `"${system.hostname}"`)%}
+                # {% replace /".*"/ `"${system.hostname}"` %}
                 name = "host"
             "#},
             result

@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use anyhow::Result;
 
 const DEFAULT_RHAI: &str = indoc::indoc! {r#"
@@ -30,6 +28,7 @@ impl YolkPaths {
         Self::new(base_dir.join("yolk"), base_dir)
     }
 
+    #[allow(unused)]
     pub fn from_env() -> Self {
         Self {
             root_path: dirs::config_dir()
@@ -39,6 +38,7 @@ impl YolkPaths {
         }
     }
 
+    #[allow(unused)]
     pub fn check(&self) -> Result<()> {
         if !self.root_path().exists() {
             anyhow::bail!(
@@ -99,6 +99,7 @@ impl YolkPaths {
     pub fn local_thing_path(&self, thing: &str) -> std::path::PathBuf {
         self.local_dir_path().join(thing)
     }
+    #[allow(unused)]
     pub fn canonical_thing_path(&self, thing: &str) -> std::path::PathBuf {
         self.canonical_dir_path().join(thing)
     }

@@ -1,6 +1,14 @@
-use std::path::Path;
-
 use anyhow::{anyhow, Result};
+use rhai::CustomType;
+use rhai::TypeBuilder;
+
+pub fn make_engine() -> rhai::Engine {
+    let mut engine = rhai::Engine::new();
+    engine
+        .register_type::<SystemInfo>()
+        .build_type::<SystemInfo>();
+    engine
+}
 
 // TODO: Ensure an EvalCtx contains info about what file is being parsed,
 // the thing name, etc etc
@@ -16,7 +24,7 @@ impl<'a> EvalCtx<'a> {
     }
 
     pub fn eval<T: Clone + 'static>(&mut self, expr: &str) -> Result<T> {
-        let engine = rhai::Engine::new();
+        let engine = make_engine();
         let result = engine.eval_expression_with_scope::<T>(&mut self.scope, expr);
         match result {
             Ok(x) => Ok(x),
@@ -24,6 +32,7 @@ impl<'a> EvalCtx<'a> {
         }
     }
 
+    #[allow(unused)]
     pub fn scope(&self) -> &rhai::Scope<'a> {
         &self.scope
     }
@@ -32,7 +41,7 @@ impl<'a> EvalCtx<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, CustomType)]
 pub struct SystemInfo {
     hostname: String,
     username: String,
@@ -47,6 +56,7 @@ impl SystemInfo {
         }
     }
 
+    #[cfg(test)]
     pub fn mock() -> Self {
         Self {
             hostname: "host".to_string(),
@@ -55,19 +65,5 @@ impl SystemInfo {
     }
 }
 
-pub fn foo() -> Result<()> {
-    let engine = rhai::Engine::new();
-    let mut scope = rhai::Scope::new();
-    let mut obj = rhai::Map::new();
-    obj.insert("bar".into(), rhai::Dynamic::from_int(10));
-    scope.set_value("foo", obj);
-
-    let result = engine
-        .eval_expression_with_scope::<i64>(&mut scope, "foo.bar * 2")
-        .unwrap();
-    println!("{}", result);
-
-    Ok(())
-}
 #[cfg(test)]
 mod test {}

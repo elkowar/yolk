@@ -1,5 +1,6 @@
 use anyhow::Result;
 use pest::iterators::Pair;
+use regex::Regex;
 
 use crate::eval_ctx::EvalCtx;
 
@@ -14,6 +15,12 @@ pub enum Element<'a> {
         body: Box<Element<'a>>,
         else_tag_and_body: Option<(&'a str, Box<Element<'a>>)>,
         end_tag: &'a str,
+    },
+    ReplaceBlock {
+        tag: &'a str,
+        regex_pattern: &'a str,
+        expr: &'a str,
+        affected_line: &'a str,
     },
     Directive {
         tag: &'a str,
@@ -48,6 +55,30 @@ impl<'a> Element<'a> {
                     body,
                     else_tag_and_body,
                     end_tag: end_tag.as_str(),
+                })
+            }
+            Rule::ReplaceBlock => {
+                let block_inner = pair.into_inner();
+                let tag = block_inner
+                    .find_first_tagged("replace_tag")
+                    .expect("no tag");
+                let tag_str = tag.as_str();
+                let tag_inner = tag.into_inner();
+                Ok(Element::ReplaceBlock {
+                    tag: tag_str,
+                    regex_pattern: tag_inner
+                        .find_first_tagged("regexp")
+                        .expect("No regex")
+                        .into_inner()
+                        .as_str(),
+                    expr: tag_inner
+                        .find_first_tagged("expr")
+                        .expect("No expr")
+                        .as_str(),
+                    affected_line: block_inner
+                        .find_first_tagged("affected")
+                        .expect("No affected line")
+                        .as_str(),
                 })
             }
             Rule::DirectiveTag => {
@@ -103,6 +134,19 @@ impl<'a> Element<'a> {
                     }
                 }
                 output.push_str(end_tag);
+                Ok(output)
+            }
+            Element::ReplaceBlock {
+                tag,
+                regex_pattern,
+                expr,
+                affected_line,
+            } => {
+                let replacement: rhai::Dynamic = eval_ctx.eval(expr.trim())?;
+                let replacement = replacement.to_string();
+                let mut output = tag.to_string();
+                let regex = Regex::new(regex_pattern)?;
+                output.push_str(regex.replace_all(affected_line, replacement).as_ref());
                 Ok(output)
             }
             Element::Directive { tag, .. } => Ok(tag.to_string()),

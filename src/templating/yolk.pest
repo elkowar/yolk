@@ -4,14 +4,26 @@ YolkFile   = ${ SOI ~ Element+ ~ EOI }
 
 Element = _{ Block | Raw }
 
-Block        = _{ IfBlock | DirectiveTag }
-IfBlock      =  { (#if = IfTag) ~ (#body = Raw?) ~ ((#else = ElseTag) ~ (#elsebody = Raw?))? ~ (#end = EndTag) }
-IfTag        =  { BeforeTag ~ "if" ~ #pred = TagInner ~ AfterTag }
-ElseTag      =  { BeforeTag ~ "else" ~ AfterTag }
-EndTag       =  { BeforeTag ~ "end" ~ AfterTag }
-DirectiveTag =  { BeforeTag ~ #name = DirectiveName ~ wsp* ~ #value = TagInner ~ wsp* ~ AfterTag }
+Block = _{ IfBlock | ReplaceBlock | DirectiveTag }
+
+IfBlock = !{ (#if = IfTag) ~ (#body = Raw?) ~ ((#else = ElseTag) ~ (#elsebody = Raw?))? ~ (#end = EndTag) }
+IfTag   =  { BeforeTag ~ "if" ~ #pred = TagInner ~ AfterTag }
+ElseTag =  { BeforeTag ~ "else" ~ AfterTag }
+EndTag  =  { BeforeTag ~ "end" ~ AfterTag }
+
+DirectiveTag = !{ BeforeTag ~ #name = DirectiveName ~ #value = TagInner ~ AfterTag }
+
+ReplaceTag   =  { BeforeTag ~ "replace" ~ #regexp = Regexp ~ #expr = TagInner ~ AfterTag }
+ReplaceBlock = !{ #replace_tag = ReplaceTag ~ #affected = SingleLine }
 
 DirectiveName = { "CommentPrefix" }
+
+SingleLine = { (!nl ~ ANY)* }
+
+Regexp            =  { "/" ~ (RawRegexp | RegexpEscape)* ~ "/" }
+RawRegexp         = !{ (!("/" | "\\") ~ ANY)+ }
+RegexpEscape      = _{ "\\" ~ RegexpEscapeThing }
+RegexpEscapeThing = !{ "/" | "\\" }
 
 nl  = _{ NEWLINE }
 wsp = _{ WHITESPACE }
