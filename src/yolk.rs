@@ -92,19 +92,23 @@ impl Yolk {
     }
 
     pub fn prepare_eval_ctx(&self, mode: EvalMode, engine: &rhai::Engine) -> Result<EvalCtx> {
-        let mut eval_ctx = EvalCtx::new(SystemInfo::generate());
+        let sysinfo = match mode {
+            EvalMode::Canonical => SystemInfo::canonical(),
+            EvalMode::Local => SystemInfo::generate(),
+        };
+        let mut eval_ctx = EvalCtx::new();
         let ast = engine
             .compile_file(self.yolk_paths.rhai_path())
             .with_context(|| format!("Failed to compile rhai file"))?;
-        engine
-            .eval_ast_with_scope(eval_ctx.scope_mut(), &ast)
-            .context("Failed to evaluate rhai file")?;
         let data: Result<Dynamic, _> = match mode {
             EvalMode::Canonical => engine.call_fn(eval_ctx.scope_mut(), &ast, "canonical_data", ()),
-            EvalMode::Local => engine.call_fn(eval_ctx.scope_mut(), &ast, "local_data", ("TODO",)),
+            EvalMode::Local => {
+                engine.call_fn(eval_ctx.scope_mut(), &ast, "local_data", (sysinfo.clone(),))
+            }
         };
         let data = data.with_context(|| format!("Failed to call data function"))?;
         eval_ctx.scope_mut().push_constant("data", data);
+        eval_ctx.scope_mut().push_constant("system", sysinfo);
         Ok(eval_ctx)
     }
 
@@ -252,10 +256,11 @@ mod test {
             .assert(is_file());
         home.child("config/foo.toml").assert(is_symlink());
 
-        fs_err::remove_file(home.join("config").join("foo.toml")).unwrap();
-        home.child("config/foo.toml").assert(exists().not());
+        fs_err::remove_file(home.child("config/foo.toml")).unwrap();
+        fs_err::remove_dir(home.child("config")).unwrap();
+        home.child("config").assert(exists().not());
         yolk.use_thing("foo").unwrap();
-        home.child("config/foo.toml").assert(is_symlink());
+        home.child("config").assert(is_symlink());
     }
 
     #[test]
@@ -275,7 +280,7 @@ mod test {
         home.child("yolk/yolk.rhai")
             .write_str(indoc::indoc! {r#"
                 fn canonical_data() { #{value: "canonical"} }
-                fn local_data(machine_name) { #{value: "local"} }
+                fn local_data(system) { #{value: "local"} }
             "#})
             .unwrap();
         yolk.add_thing("foo", home.join("config").join("foo.toml"))
@@ -300,7 +305,7 @@ mod test {
         home.child("yolk/yolk.rhai")
             .write_str(indoc::indoc! {r#"
                 fn canonical_data() { #{value: "new canonical"} }
-                fn local_data(machine_name) { #{value: "new local"} }
+                fn local_data(system) { #{value: "new local"} }
             "#})
             .unwrap();
         yolk.sync().unwrap();

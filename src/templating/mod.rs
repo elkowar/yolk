@@ -14,7 +14,7 @@ mod test {
     use pest::parses_to;
 
     use crate::{
-        eval_ctx::{EvalCtx, SystemInfo},
+        eval_ctx::EvalCtx,
         templating::{
             document::{self},
             Rule, YolkParser,
@@ -36,7 +36,7 @@ mod test {
 
     #[test]
     pub fn test_template_if() {
-        let mut eval_ctx = EvalCtx::new(SystemInfo::mock());
+        let mut eval_ctx = EvalCtx::new();
 
         let example = indoc::indoc! {r#"
             // {% CommentPrefix // %}
@@ -63,10 +63,9 @@ mod test {
 
     #[test]
     pub fn test_template_replace() {
-        let mut eval_ctx = EvalCtx::new(SystemInfo::mock());
-
+        let mut eval_ctx = EvalCtx::new();
         let example = indoc::indoc! {r#"
-            # {% replace /".*"/ `"${system.hostname}"` %}
+            # {% replace /".*"/ `"${2+2}"` %}
             name = "foo"
         "#};
         let document = document::Document::parse_string(example).unwrap();
@@ -74,8 +73,8 @@ mod test {
         let result = document.render(&mut eval_ctx).unwrap();
         assert_eq!(
             indoc::indoc! { r#"
-                # {% replace /".*"/ `"${system.hostname}"` %}
-                name = "host"
+                # {% replace /".*"/ `"${2+2}"` %}
+                name = "4"
             "#},
             result
         )

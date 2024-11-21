@@ -4,7 +4,7 @@ const DEFAULT_RHAI: &str = indoc::indoc! {r#"
     fn canonical_data() {
         #{}
     }
-    fn local_data(machine_name) {
+    fn local_data(system) {
         canonical_data()
     }
 "#};

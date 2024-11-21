@@ -1,5 +1,5 @@
 use anyhow::Context;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use rhai::CustomType;
 use rhai::TypeBuilder;
 
@@ -18,9 +18,8 @@ pub struct EvalCtx<'a> {
 }
 
 impl<'a> EvalCtx<'a> {
-    pub fn new(sysinfo: SystemInfo) -> Self {
-        let mut scope = rhai::Scope::new();
-        scope.push_constant("system", sysinfo);
+    pub fn new() -> Self {
+        let scope = rhai::Scope::new();
         Self { scope }
     }
 
@@ -55,11 +54,10 @@ impl SystemInfo {
         }
     }
 
-    #[cfg(test)]
-    pub fn mock() -> Self {
+    pub fn canonical() -> Self {
         Self {
-            hostname: "host".to_string(),
-            username: "johndoe".to_string(),
+            hostname: "canonical-hostname".to_string(),
+            username: "canonical-username".to_string(),
         }
     }
 }
