@@ -11,7 +11,6 @@ use super::YolkParser;
 use anyhow::Result;
 use pest::Parser;
 use regex::Regex;
-use rhai::EvalContext;
 
 pub struct Document<'a> {
     pub(crate) comment_prefix: String,

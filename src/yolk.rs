@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Result};
+use rhai::Dynamic;
 
 use crate::{
     eval_ctx::{EvalCtx, SystemInfo},
@@ -31,7 +32,14 @@ impl Yolk {
             let entry_path = entry.path();
             let relative_path = entry_path.strip_prefix(&thing_path)?;
             let new_path = self.yolk_paths.home_path().join(relative_path);
-            util::create_symlink_dir(entry.path(), &new_path)?;
+            if !new_path.exists() {
+                util::create_symlink_dir(entry.path(), &new_path)?;
+            } else {
+                println!(
+                    "Warning: file {} already exists, skipping...",
+                    new_path.display()
+                );
+            }
         }
         Ok(())
     }
@@ -85,31 +93,39 @@ impl Yolk {
         Ok(())
     }
 
+    pub fn prepare_eval_ctx(&self, mode: EvalMode, engine: &rhai::Engine) -> Result<EvalCtx> {
+        let mut eval_ctx = EvalCtx::new(SystemInfo::generate());
+        // TODO: deal with errors better
+        let ast = engine
+            .compile_file(self.yolk_paths.rhai_path())
+            .map_err(|err| anyhow!(err.to_string()))?;
+        let state = match mode {
+            EvalMode::Canonical => engine.call_fn(eval_ctx.scope_mut(), &ast, "canonical_data", ()),
+            EvalMode::Local => engine.call_fn(eval_ctx.scope_mut(), &ast, "local_data", ("TODO",)),
+        };
+        let state = state.map_err(|err| anyhow!(err.to_string()))?;
+        eval_ctx.scope_mut().push_constant("data", state);
+        Ok(eval_ctx)
+    }
+
+    pub fn eval_rhai(&self, mode: EvalMode, expr: &str) -> Result<String> {
+        let engine = rhai::Engine::new();
+        let mut eval_ctx = self.prepare_eval_ctx(mode, &engine)?;
+        let result = engine
+            .eval_expression_with_scope::<Dynamic>(eval_ctx.scope_mut(), expr)
+            .map_err(|e| anyhow!(e.to_string()))?;
+        Ok(result.to_string())
+    }
+
     pub fn eval_template_file(
         &self,
         mode: EvalMode,
         _path: impl AsRef<Path>,
         content: &str,
     ) -> Result<String> {
-        let doc = Document::parse_string(&content)?;
-        let mut eval_ctx = EvalCtx::new(SystemInfo::generate());
         let engine = rhai::Engine::new();
-        // TODO: deal with errors better
-        let ast = engine
-            .compile_file(self.yolk_paths.rhai_path())
-            .map_err(|err| anyhow!(err.to_string()))?;
-        let state = match mode {
-            EvalMode::Canonical => {
-                engine.call_fn(eval_ctx.scope_mut(), &ast, "canonical_state", ())
-            }
-            EvalMode::Local => engine.call_fn(eval_ctx.scope_mut(), &ast, "local_state", ()),
-        };
-        let state: rhai::Map = match state {
-            Ok(x) => x,
-            Err(err) => anyhow::bail!(err.to_string()),
-        };
-
-        eval_ctx.scope_mut().push_constant("data", state);
+        let mut eval_ctx = self.prepare_eval_ctx(mode, &engine)?;
+        let doc = Document::parse_string(&content)?;
         Ok(doc.render(&mut eval_ctx)?)
     }
 
@@ -120,12 +136,74 @@ impl Yolk {
         Ok(())
     }
 
+    pub fn prepare_canonical(&self) -> Result<()> {
+        let thing_paths = self.list_thing_paths()?;
+        for thing_dir in thing_paths {
+            let tmpl_list_file = thing_dir.join("yolk_templates");
+            let tmpl_files = if tmpl_list_file.is_file() {
+                let tmpl_paths = std::fs::read_to_string(tmpl_list_file)?;
+                tmpl_paths
+                    .lines()
+                    .map(|x| thing_dir.join(x))
+                    .collect::<Vec<_>>()
+            } else {
+                vec![]
+            };
+            dbg!(&tmpl_files);
+
+            let thing_dir = thing_dir.canonicalize()?;
+            let within_local = thing_dir.strip_prefix(self.yolk_paths.local_dir_path())?;
+            copy_dir_all(
+                &thing_dir,
+                self.yolk_paths.canonical_dir_path().join(within_local),
+                &|from, to| {
+                    println!("Looking at copying {} to {}", from.display(), to.display());
+                    // TODO: this to_path_buf seems unnecesarily inefficient.
+                    if tmpl_files.contains(&from.to_path_buf()) {
+                        println!("is in tmpl_paths");
+                        let content = std::fs::read_to_string(&from)?;
+                        let rendered =
+                            self.eval_template_file(EvalMode::Canonical, &from, &content)?;
+                        fs_err::write(&to, rendered)?;
+                    } else {
+                        fs_err::copy(from, to)?;
+                    }
+
+                    Ok(())
+                },
+            )?;
+        }
+        Ok(())
+    }
+
     pub fn list_thing_paths(&self) -> Result<Vec<PathBuf>> {
         let entries = self.yolk_paths.local_dir_path().read_dir()?;
         Ok(entries
             .filter_map(|entry| entry.ok().map(|x| x.path()))
             .collect())
     }
+}
+
+/// Recursively copy a directory using a user-provided file copy function.
+fn copy_dir_all<F: Fn(&Path, &Path) -> Result<()>>(
+    src: impl AsRef<Path>,
+    dst: impl AsRef<Path>,
+    copy_file: &F,
+) -> Result<()> {
+    fs_err::create_dir_all(&dst)?;
+    for entry in fs_err::read_dir(src.as_ref())? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() {
+            copy_dir_all(
+                entry.path(),
+                dst.as_ref().join(entry.file_name()),
+                copy_file,
+            )?;
+        } else {
+            copy_file(&entry.path(), &dst.as_ref().join(entry.file_name()))?;
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -140,6 +218,7 @@ mod test {
         assert::PathAssert,
         prelude::{FileWriteStr, PathChild},
     };
+    use p::path::{exists, is_dir, is_file, is_symlink};
     use predicates as p;
     use predicates::prelude::PredicateBooleanExt;
 
@@ -155,22 +234,69 @@ mod test {
         let yolk = Yolk::new(yp);
         yolk.init_yolk().unwrap();
 
-        home.child("yolk/yolk.rhai").assert(p::path::is_file());
-        home.child("yolk/local").assert(p::path::is_dir());
+        home.child("yolk/yolk.rhai").assert(is_file());
+        home.child("yolk/local").assert(is_dir());
 
-        yolk.add_thing("foo", home.join("config").join("foo.toml"))
+        yolk.add_thing("foo", home.child("config/foo.toml"))
             .unwrap();
 
         home.child("yolk/local/foo/config/foo.toml")
-            .assert(p::path::is_file());
+            .assert(is_file());
         home.child("yolk/canonical/foo/config/foo.toml")
-            .assert(p::path::is_file());
-        home.child("config/foo.toml").assert(p::path::is_symlink());
+            .assert(is_file());
+        home.child("config/foo.toml").assert(is_symlink());
 
         fs_err::remove_file(home.join("config").join("foo.toml")).unwrap();
-        home.child("config/foo.toml")
-            .assert(p::path::exists().not());
+        home.child("config/foo.toml").assert(exists().not());
         yolk.use_thing("foo").unwrap();
-        home.child("config/foo.toml").assert(p::path::is_symlink());
+        home.child("config/foo.toml").assert(is_symlink());
+    }
+
+    #[test]
+    fn test_syncing() {
+        let home = assert_fs::TempDir::new().unwrap();
+        // deliberately non-sense state -- both parts need to change at one point, depending on canonical vs local
+        let foo_toml_initial = indoc::indoc! {r"
+            # {% if data.is_local %}
+            foo = 1
+            # {% else %}
+            bar = 1
+            # {% end %}
+        "};
+        home.child("config/foo.toml")
+            .write_str(&foo_toml_initial)
+            .unwrap();
+        let yp = YolkPaths::new(home.join("yolk"), home.to_path_buf());
+        let yolk = Yolk::new(yp);
+        yolk.init_yolk().unwrap();
+        home.child("yolk/yolk.rhai")
+            .write_str(indoc::indoc! {r"
+                fn canonical_data() { #{is_local: false} }
+                fn local_data(machine_name) { #{is_local: true} }
+            "})
+            .unwrap();
+        yolk.add_thing("foo", home.join("config").join("foo.toml"))
+            .unwrap();
+        home.child("yolk/local/foo/yolk_templates")
+            .write_str("config/foo.toml")
+            .unwrap();
+        home.child("config/foo.toml").assert(foo_toml_initial);
+        yolk.sync().unwrap();
+        home.child("config/foo.toml").assert(indoc::indoc! {r"
+            # {% if data.is_local %}
+            foo = 1
+            # {% else %}
+            #<yolk> bar = 1
+            # {% end %}
+        "});
+        yolk.prepare_canonical().unwrap();
+        home.child("yolk/canonical/foo/config/foo.toml")
+            .assert(indoc::indoc! {r"
+            # {% if data.is_local %}
+            #<yolk> foo = 1
+            # {% else %}
+            bar = 1
+            # {% end %}
+        "});
     }
 }

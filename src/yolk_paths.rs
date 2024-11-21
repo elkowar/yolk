@@ -107,20 +107,20 @@ impl YolkPaths {
 #[cfg(test)]
 mod test {
 
-    use tempdir::TempDir;
+    use assert_fs::{assert::PathAssert, prelude::PathChild};
+    use predicates::path::exists;
 
     use super::YolkPaths;
 
     #[test]
     pub fn test_setup() {
-        let tmp_root = TempDir::new("yolk-setup").unwrap();
-        let tmp_home = TempDir::new("yolk-home").unwrap();
-        let root = tmp_root.path().to_path_buf();
-        let home = tmp_home.path().to_path_buf();
-
-        let yolk_paths = YolkPaths::new(root.clone(), home.clone());
+        let root = assert_fs::TempDir::new().unwrap();
+        let yolk_paths = YolkPaths::new(root.child("yolk").to_path_buf(), root.to_path_buf());
         assert!(yolk_paths.check().is_err());
         yolk_paths.create().unwrap();
         assert!(yolk_paths.check().is_ok());
+        root.child("yolk/local").assert(exists());
+        root.child("yolk/yolk.rhai").assert(exists());
+        root.child("yolk/.gitignore").assert("/local");
     }
 }

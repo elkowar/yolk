@@ -8,10 +8,6 @@ mod util;
 mod yolk;
 mod yolk_paths;
 
-pub struct App {
-    paths: yolk_paths::YolkPaths,
-}
-
 #[derive(clap::Parser, Debug)]
 #[command(version, about)]
 struct Args {
@@ -43,7 +39,9 @@ pub(crate) fn main() -> Result<()> {
         Command::Use { name } => yolk.use_thing(name)?,
         Command::Add { name, path } => yolk.add_thing(name, path)?,
         Command::Sync => yolk.sync()?,
-        Command::Eval { expr } => todo!(),
+        Command::Eval { expr } => {
+            println!("{}", yolk.eval_rhai(yolk::EvalMode::Local, expr)?);
+        }
     }
     Ok(())
 }
