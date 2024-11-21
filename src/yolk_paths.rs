@@ -28,7 +28,6 @@ impl YolkPaths {
         Self::new(base_dir.join("yolk"), base_dir)
     }
 
-    #[allow(unused)]
     pub fn from_env() -> Self {
         Self {
             root_path: dirs::config_dir()

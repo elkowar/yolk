@@ -37,7 +37,7 @@ enum Command {
 
 pub(crate) fn main() -> Result<()> {
     let args = Args::parse();
-    let yolk = Yolk::new(yolk_paths::YolkPaths::testing());
+    let yolk = Yolk::new(yolk_paths::YolkPaths::from_env());
     match &args.command {
         Command::Init => yolk.init_yolk()?,
         Command::Use { name } => yolk.use_thing(name)?,
