@@ -33,6 +33,12 @@ enum Command {
         #[clap(allow_hyphen_values = true)]
         command: Vec<String>,
     },
+    /// Make the given file template capable, by adding it to the yolk_templates file
+    #[clap(name = "tmpl")]
+    MakeTemplate {
+        thing: String,
+        paths: Vec<std::path::PathBuf>,
+    },
 }
 
 pub(crate) fn main() -> Result<()> {
@@ -52,6 +58,9 @@ pub(crate) fn main() -> Result<()> {
                 .args(command)
                 .current_dir(yolk.paths().root_path())
                 .status()?;
+        }
+        Command::MakeTemplate { thing, paths } => {
+            yolk.add_to_templated_files(thing, paths)?;
         }
     }
     Ok(())

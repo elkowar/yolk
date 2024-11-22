@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context as _, Result};
+use anyhow::{bail, Context as _, Result};
+use fs_err::PathExt;
 use rhai::Dynamic;
 
 use crate::{
@@ -80,11 +81,12 @@ impl Yolk {
                             .with_context(|| {
                                 format!("Failed to sync file {}", templated_file.display())
                             })?;
+                    } else {
+                        println!(
+                            "Warning: {} was specified as templated file, but doesn't exist",
+                            templated_file.display()
+                        );
                     }
-                    println!(
-                        "Warning: {} was specified as templated file, but doesn't exist",
-                        templated_file.display()
-                    );
                 }
             }
         }
@@ -186,6 +188,45 @@ impl Yolk {
             )?;
         }
         Ok(())
+    }
+
+    pub fn add_to_templated_files(&self, thing: &str, paths: &Vec<PathBuf>) -> Result<()> {
+        let thing_dir = self.yolk_paths.local_thing_path(thing);
+        let yolk_templates_path = self.yolk_paths.yolk_templates_file_path_for(thing);
+        if !yolk_templates_path.is_file() {
+            fs_err::File::create(&yolk_templates_path)?;
+        }
+        let yolk_templates = fs_err::read_to_string(&yolk_templates_path)?;
+        let mut yolk_templates: Vec<_> = yolk_templates.lines().map(|x| x.to_string()).collect();
+        for path in paths {
+            let path = path.fs_err_canonicalize()?;
+            if !path.starts_with(&thing_dir) {
+                bail!("The given file path is not within {}", thing_dir.display());
+            }
+            let path_relative = path.strip_prefix(&thing_dir)?;
+            let path_str = path_relative.to_str().unwrap().to_string();
+            yolk_templates.push(path_str);
+        }
+        fs_err::write(&yolk_templates_path, yolk_templates.join("\n"))?;
+        Ok(())
+    }
+
+    pub fn list_things(&self) -> Result<Vec<(PathBuf, bool)>> {
+        let thing_dirs = self.list_thing_paths()?;
+        thing_dirs
+            .into_iter()
+            .map(|thing_dir| {
+                let relative = thing_dir.strip_prefix(self.yolk_paths.local_dir_path())?;
+                let in_home = self.yolk_paths.home_path().join(relative);
+                let is_used = if in_home.is_symlink() {
+                    let link = in_home.read_link()?;
+                    link.fs_err_canonicalize()? == thing_dir.fs_err_canonicalize()?
+                } else {
+                    false
+                };
+                Ok((thing_dir, is_used))
+            })
+            .collect::<Result<Vec<_>>>()
     }
 
     pub fn list_thing_paths(&self) -> Result<Vec<PathBuf>> {

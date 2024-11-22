@@ -98,6 +98,10 @@ impl YolkPaths {
     pub fn local_thing_path(&self, thing: &str) -> std::path::PathBuf {
         self.local_dir_path().join(thing)
     }
+    pub fn yolk_templates_file_path_for(&self, thing: &str) -> std::path::PathBuf {
+        self.local_thing_path(thing).join("yolk_templates")
+    }
+
     #[allow(unused)]
     pub fn canonical_thing_path(&self, thing: &str) -> std::path::PathBuf {
         self.canonical_dir_path().join(thing)
