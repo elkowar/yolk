@@ -39,6 +39,8 @@ enum Command {
         thing: String,
         paths: Vec<std::path::PathBuf>,
     },
+    /// List all things in your yolk setup
+    List,
 }
 
 pub(crate) fn main() -> Result<()> {
@@ -61,6 +63,20 @@ pub(crate) fn main() -> Result<()> {
         }
         Command::MakeTemplate { thing, paths } => {
             yolk.add_to_templated_files(thing, paths)?;
+        }
+        Command::List => {
+            println!(
+                "{}",
+                yolk.list_things()?
+                    .into_iter()
+                    .map(|(path, active)| format!(
+                        "{} [{}]",
+                        path.display(),
+                        if active { "active" } else { "inactive" }
+                    ))
+                    .collect::<Vec<String>>()
+                    .join("\n")
+            );
         }
     }
     Ok(())

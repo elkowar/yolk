@@ -99,6 +99,7 @@ impl YolkPaths {
         self.local_dir_path().join(thing)
     }
     pub fn yolk_templates_file_path_for(&self, thing: &str) -> std::path::PathBuf {
+        // TODO: The yolk_templates file must go somewhere else, as now it's indistinguishable from the folders that should be used.
         self.local_thing_path(thing).join("yolk_templates")
     }
 

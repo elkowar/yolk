@@ -212,16 +212,27 @@ impl Yolk {
     }
 
     pub fn list_things(&self) -> Result<Vec<(PathBuf, bool)>> {
+        // TODO: This seems broken right now.
+        // Also: the yolk_templates file definitely needs to be moved somewhere else
         let thing_dirs = self.list_thing_paths()?;
         thing_dirs
             .into_iter()
             .map(|thing_dir| {
                 let relative = thing_dir.strip_prefix(self.yolk_paths.local_dir_path())?;
+                println!(
+                    "checking {} (relative: {})",
+                    thing_dir.display(),
+                    relative.display()
+                );
                 let in_home = self.yolk_paths.home_path().join(relative);
+                println!("would be {}", in_home.display());
                 let is_used = if in_home.is_symlink() {
                     let link = in_home.read_link()?;
+                    println!("file exists and points to {}", link.display());
                     link.fs_err_canonicalize()? == thing_dir.fs_err_canonicalize()?
                 } else {
+                    println!("File does not exist");
+
                     false
                 };
                 Ok((thing_dir, is_used))
