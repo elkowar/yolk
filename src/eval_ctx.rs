@@ -28,9 +28,9 @@ impl<'a> EvalCtx<'a> {
 
     pub fn eval<T: Clone + 'static + Send + Sync>(&mut self, expr: &str) -> Result<T> {
         let engine = make_engine();
-        Ok(engine
+        engine
             .eval_expression_with_scope::<T>(&mut self.scope, expr)
-            .with_context(|| format!("Failed to evaluate expression: {}", expr))?)
+            .with_context(|| format!("Failed to evaluate expression: {}", expr))
     }
 
     #[allow(unused)]

@@ -56,7 +56,7 @@ impl Yolk {
                     let entry = entry?;
                     self.use_recursively(thing_name, &entry.path())?;
                 }
-            } else if in_home.is_symlink() == false {
+            } else if !in_home.is_symlink() {
                 bail!("File {} already exists", in_home.display());
             } else if in_home.is_dir() || path.is_dir() {
                 bail!(
@@ -74,7 +74,7 @@ impl Yolk {
 
     pub fn use_thing(&self, thing_name: &str) -> Result<()> {
         tracing::info!("Using thing {}", thing_name);
-        let thing_path = self.yolk_paths.local_thing_path(&thing_name);
+        let thing_path = self.yolk_paths.local_thing_path(thing_name);
 
         for entry in fs_err::read_dir(&thing_path)? {
             let entry = entry?;
@@ -104,7 +104,7 @@ impl Yolk {
         fs_err::rename(&original_path, &new_local_path)?;
         // TODO: This can be optimized a lot, as we assume we only need to re-use that one entry we just added.
         // However, we can't just naively create a symlink, as we don't know on that dir level to start symlinking.
-        self.use_thing(&thing_name)?;
+        self.use_thing(thing_name)?;
         Ok(())
     }
 
@@ -150,14 +150,14 @@ impl Yolk {
         let mut eval_ctx = EvalCtx::new();
         let ast = engine
             .compile_file(self.yolk_paths.rhai_path())
-            .with_context(|| format!("Failed to compile rhai file"))?;
+            .with_context(|| "Failed to compile rhai file".to_string())?;
         let data: Result<Dynamic, _> = match mode {
             EvalMode::Canonical => engine.call_fn(eval_ctx.scope_mut(), &ast, "canonical_data", ()),
             EvalMode::Local => {
                 engine.call_fn(eval_ctx.scope_mut(), &ast, "local_data", (sysinfo.clone(),))
             }
         };
-        let data = data.with_context(|| format!("Failed to call data function"))?;
+        let data = data.with_context(|| "Failed to call data function".to_string())?;
         eval_ctx.scope_mut().push_constant("data", data);
         eval_ctx.scope_mut().push_constant("system", sysinfo);
         Ok(eval_ctx)
@@ -176,8 +176,8 @@ impl Yolk {
 
     /// Evaluate a templated file
     pub fn eval_template(&self, eval_ctx: &mut EvalCtx, content: &str) -> Result<String> {
-        let doc = Document::parse_string(&content)?;
-        Ok(doc.render(eval_ctx)?)
+        let doc = Document::parse_string(content)?;
+        doc.render(eval_ctx)
     }
 
     pub fn sync_file(&self, eval_ctx: &mut EvalCtx, path: impl AsRef<Path>) -> Result<()> {
@@ -222,9 +222,9 @@ impl Yolk {
                     tracing::debug!("Looking at copying {} to {}", from.display(), to.display());
                     // TODO: this to_path_buf seems unnecesarily inefficient.
                     if tmpl_files.contains(&from.to_path_buf()) {
-                        let content = fs_err::read_to_string(&from)?;
+                        let content = fs_err::read_to_string(from)?;
                         let rendered = self.eval_template(&mut eval_ctx, &content)?;
-                        fs_err::write(&to, rendered)?;
+                        fs_err::write(to, rendered)?;
                     } else {
                         fs_err::copy(from, to)?;
                     }
@@ -390,7 +390,7 @@ mod test {
             # {% replace /'.*'/ `'${data.value}'` %}
             value = 'local'
         "#};
-        home.child("config/foo.toml").write_str(&foo_toml_initial)?;
+        home.child("config/foo.toml").write_str(foo_toml_initial)?;
         let yp = YolkPaths::new(home.join("yolk"), home.to_path_buf());
         let yolk = Yolk::new(yp);
         yolk.init_yolk()?;

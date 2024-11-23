@@ -157,7 +157,7 @@ impl<'a> Element<'a> {
                             regex_pattern, affected_line
                         );
                         // TODO fail here instead
-                        output.push_str(&affected_line);
+                        output.push_str(affected_line);
                         return Ok(output);
                     }
                 }
@@ -172,7 +172,7 @@ impl<'a> Element<'a> {
     #[allow(unused)]
     pub fn parse(s: &'a str) -> Result<Self> {
         let mut pairs = YolkParser::parse(Rule::Element, s)?;
-        Ok(Self::try_from_pair(pairs.next().context("No content")?)?)
+        Self::try_from_pair(pairs.next().context("No content")?)
     }
 }
 

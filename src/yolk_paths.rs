@@ -81,9 +81,9 @@ impl YolkPaths {
         if path.exists() && path.is_dir() && fs_err::read_dir(path)?.next().is_some() {
             anyhow::bail!("Yolk directory already exists at {}", path.display());
         }
-        fs_err::create_dir_all(&path)?;
-        fs_err::create_dir_all(&self.local_dir_path())?;
-        fs_err::create_dir_all(&self.canonical_dir_path())?;
+        fs_err::create_dir_all(path)?;
+        fs_err::create_dir_all(self.local_dir_path())?;
+        fs_err::create_dir_all(self.canonical_dir_path())?;
         fs_err::write(self.root_path().join(".gitignore"), "/local")?;
         fs_err::write(self.rhai_path(), DEFAULT_RHAI)?;
 
