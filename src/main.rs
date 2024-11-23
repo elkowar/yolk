@@ -1,9 +1,9 @@
-use std::str::FromStr;
+use std::{io::Read as _, str::FromStr};
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
-use yolk::Yolk;
+use yolk::{EvalMode, Yolk};
 
 mod eval_ctx;
 mod templating;
@@ -48,12 +48,15 @@ enum Command {
         command: Vec<String>,
     },
     /// Make the given file template capable, by adding it to the yolk_templates file
-    #[clap(name = "tmpl")]
+    #[clap(name = "mktmpl")]
     MakeTemplate {
         thing: String,
         #[arg(required = true)]
         paths: Vec<std::path::PathBuf>,
     },
+    /// Evaluate a given templated file, or read a templated string from stdin
+    #[clap(name = "eval-template")]
+    EvalTemplate { path: Option<std::path::PathBuf> },
 }
 
 pub(crate) fn main() -> Result<()> {
@@ -93,6 +96,20 @@ pub(crate) fn main() -> Result<()> {
         }
         Command::MakeTemplate { thing, paths } => {
             yolk.add_to_templated_files(thing, paths)?;
+        }
+        Command::EvalTemplate { path } => {
+            let text = match path {
+                Some(path) => std::fs::read_to_string(path)?,
+                None => {
+                    let mut buffer = String::new();
+                    std::io::stdin().read_to_string(&mut buffer)?;
+                    buffer
+                }
+            };
+            let engine = eval_ctx::make_engine();
+            let mut eval_ctx = yolk.prepare_eval_ctx(EvalMode::Local, &engine)?;
+            let result = yolk.eval_template(&mut eval_ctx, &text)?;
+            println!("{}", result);
         }
     }
     Ok(())

@@ -17,8 +17,8 @@ font="Fira Code"
 
 [colors]
 # Load your colors from your yolk configuration
-# {% replace /".*"/ `"${colors.background}"` %}
+# {% replace /".*"/ `"${data.colors.background}"` %}
 background="#282828"
-# {% replace /".*"/ `"${colors.foreground}"` %}
+# {% replace /".*"/ `"${data.colors.foreground}"` %}
 foreground="#ebdbb2"
 ```
