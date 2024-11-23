@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{bail, Context as _, Result};
 use fs_err::PathExt;
@@ -211,11 +214,15 @@ impl Yolk {
             } else {
                 vec![]
             };
-            dbg!(&tmpl_files);
+            tracing::debug!(
+                "tmp_files in thing {}: {:?}",
+                thing_dir.display(),
+                tmpl_files
+            );
 
             let thing_dir = thing_dir.canonicalize()?;
             let within_local = thing_dir.strip_prefix(self.yolk_paths.local_dir_path())?;
-            copy_dir_via(
+            copy_dir_for_vcs_via(
                 &thing_dir,
                 self.yolk_paths.canonical_dir_path().join(within_local),
                 &mut |from, to| {
@@ -265,23 +272,57 @@ impl Yolk {
     }
 }
 
+/// Check if a given path is gitignored, by running `git check-ignore` on the given `path` within the given `in_dir`.
+fn git_is_ignored(in_dir: impl AsRef<Path>, path: impl AsRef<Path>) -> bool {
+    false
+    // tracing::info!(
+    //     "Running git check-ignore {} within {}",
+    //     path.as_ref().display(),
+    //     in_dir.as_ref().display()
+    // );
+    // let handle = std::process::Command::new("git")
+    //     .args(&["check-ignore", &path.as_ref().display().to_string()])
+    //     .current_dir(in_dir)
+    //     .stdin(std::process::Stdio::null())
+    //     .stdout(std::process::Stdio::null())
+    //     .spawn();
+    // match handle {
+    //     Ok(mut handle) => handle.wait().map_or(false, |status| status.success()),
+    //     Err(e) => {
+    //         tracing::warn!("Failed to run git check-ignore: {}", e);
+    //         false
+    //     }
+    // }
+}
+
 /// Recursively copy a directory using a user-provided file copy function.
-fn copy_dir_via<F: FnMut(&Path, &Path) -> Result<()>>(
+/// Only copies files and directories that are not ignored by git.
+fn copy_dir_for_vcs_via<F: FnMut(&Path, &Path) -> Result<()>>(
     src: impl AsRef<Path>,
     dst: impl AsRef<Path>,
     copy_file: &mut F,
 ) -> Result<()> {
     fs_err::create_dir_all(&dst)?;
     for entry in fs_err::read_dir(src.as_ref())? {
-        let entry = entry?;
-        if entry.file_type()?.is_dir() {
-            copy_dir_via(
-                entry.path(),
-                dst.as_ref().join(entry.file_name()),
-                copy_file,
-            )?;
-        } else {
-            copy_file(&entry.path(), &dst.as_ref().join(entry.file_name()))?;
+        let result: Result<()> = (|| {
+            let entry = entry?;
+            if !git_is_ignored(src.as_ref(), dst.as_ref().join(entry.file_name())) {
+                if entry.file_type()?.is_dir() {
+                    copy_dir_for_vcs_via(
+                        entry.path(),
+                        dst.as_ref().join(entry.file_name()),
+                        copy_file,
+                    )?;
+                } else {
+                    copy_file(&entry.path(), &dst.as_ref().join(entry.file_name()))?;
+                }
+            } else {
+                tracing::debug!("Skipping gitignored entry {}", entry.path().display());
+            }
+            Ok(())
+        })();
+        if let Err(err) = result {
+            eprintln!("Error copying file: {:?}", err);
         }
     }
     Ok(())
