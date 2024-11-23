@@ -83,6 +83,7 @@ impl Yolk {
             }
             self.use_recursively(thing_name, &entry.path())?;
         }
+        self.sync()?;
         Ok(())
     }
 
@@ -109,6 +110,11 @@ impl Yolk {
 
     pub fn sync(&self) -> Result<()> {
         let thing_paths = self.list_thing_paths()?;
+        let engine = eval_ctx::make_engine();
+        let mut eval_ctx = self
+            .prepare_eval_ctx(EvalMode::Local, &engine)
+            .context("Failed to prepare eval_ctx")?;
+
         for thing_dir in thing_paths {
             let tmpl_list_file = thing_dir.join("yolk_templates");
             if tmpl_list_file.is_file() {
@@ -117,10 +123,13 @@ impl Yolk {
                 let tmpl_paths = tmpl_paths.lines().map(|x| thing_canonical.join(x));
                 for templated_file in tmpl_paths {
                     if templated_file.is_file() {
-                        self.sync_file(EvalMode::Local, &templated_file)
-                            .with_context(|| {
-                                format!("Failed to sync file {}", templated_file.display())
-                            })?;
+                        if let Err(err) = self.sync_file(&mut eval_ctx, &templated_file) {
+                            eprintln!(
+                                "Warning: Failed to sync templated file {}: {}",
+                                templated_file.display(),
+                                err
+                            );
+                        }
                     } else {
                         println!(
                             "Warning: {} was specified as templated file, but doesn't exist",
@@ -166,18 +175,15 @@ impl Yolk {
     }
 
     /// Evaluate a templated file
-    pub fn eval_template(&self, mode: EvalMode, content: &str) -> Result<String> {
-        let engine = eval_ctx::make_engine();
-        let mut eval_ctx = self
-            .prepare_eval_ctx(mode, &engine)
-            .context("Failed to prepare eval_ctx")?;
+    pub fn eval_template(&self, eval_ctx: &mut EvalCtx, content: &str) -> Result<String> {
         let doc = Document::parse_string(&content)?;
-        Ok(doc.render(&mut eval_ctx)?)
+        Ok(doc.render(eval_ctx)?)
     }
 
-    pub fn sync_file(&self, mode: EvalMode, path: impl AsRef<Path>) -> Result<()> {
+    pub fn sync_file(&self, eval_ctx: &mut EvalCtx, path: impl AsRef<Path>) -> Result<()> {
+        tracing::info!("Syncing file {}", path.as_ref().display());
         let content = fs_err::read_to_string(&path)?;
-        let rendered = self.eval_template(mode, &content).with_context(|| {
+        let rendered = self.eval_template(eval_ctx, &content).with_context(|| {
             format!("Failed to eval template file: {}", path.as_ref().display())
         })?;
         fs_err::write(&path, rendered)?;
@@ -186,6 +192,12 @@ impl Yolk {
 
     pub fn prepare_canonical(&self) -> Result<()> {
         let thing_paths = self.list_thing_paths()?;
+
+        let engine = eval_ctx::make_engine();
+        let mut eval_ctx = self
+            .prepare_eval_ctx(EvalMode::Canonical, &engine)
+            .context("Failed to prepare eval_ctx")?;
+
         for thing_dir in thing_paths {
             // TODO: just append to the file here?
             // However, then what if there isn't a newline at the end?
@@ -206,13 +218,13 @@ impl Yolk {
             copy_dir_via(
                 &thing_dir,
                 self.yolk_paths.canonical_dir_path().join(within_local),
-                &|from, to| {
+                &mut |from, to| {
                     println!("Looking at copying {} to {}", from.display(), to.display());
                     // TODO: this to_path_buf seems unnecesarily inefficient.
                     if tmpl_files.contains(&from.to_path_buf()) {
                         println!("is in tmpl_paths");
                         let content = fs_err::read_to_string(&from)?;
-                        let rendered = self.eval_template(EvalMode::Canonical, &content)?;
+                        let rendered = self.eval_template(&mut eval_ctx, &content)?;
                         fs_err::write(&to, rendered)?;
                     } else {
                         fs_err::copy(from, to)?;
@@ -255,10 +267,10 @@ impl Yolk {
 }
 
 /// Recursively copy a directory using a user-provided file copy function.
-fn copy_dir_via<F: Fn(&Path, &Path) -> Result<()>>(
+fn copy_dir_via<F: FnMut(&Path, &Path) -> Result<()>>(
     src: impl AsRef<Path>,
     dst: impl AsRef<Path>,
-    copy_file: &F,
+    copy_file: &mut F,
 ) -> Result<()> {
     fs_err::create_dir_all(&dst)?;
     for entry in fs_err::read_dir(src.as_ref())? {
