@@ -67,12 +67,6 @@ impl YolkPaths {
                 self.local_dir_path().display()
             );
         }
-        if !self.canonical_dir_path().exists() {
-            anyhow::bail!(
-                "Yolk directory does not contain a canonical directory at {}",
-                self.canonical_dir_path().display()
-            );
-        }
         Ok(())
     }
 
@@ -83,8 +77,6 @@ impl YolkPaths {
         }
         fs_err::create_dir_all(path)?;
         fs_err::create_dir_all(self.local_dir_path())?;
-        fs_err::create_dir_all(self.canonical_dir_path())?;
-        fs_err::write(self.root_path().join(".gitignore"), "/local")?;
         fs_err::write(self.rhai_path(), DEFAULT_RHAI)?;
 
         Ok(())
@@ -102,20 +94,12 @@ impl YolkPaths {
     pub fn local_dir_path(&self) -> std::path::PathBuf {
         self.root_path.join("local")
     }
-    pub fn canonical_dir_path(&self) -> std::path::PathBuf {
-        self.root_path.join("canonical")
-    }
     pub fn local_thing_path(&self, thing: &str) -> std::path::PathBuf {
         self.local_dir_path().join(thing)
     }
     pub fn yolk_templates_file_path_for(&self, thing: &str) -> std::path::PathBuf {
         // TODO: Do we like this being next to regular directories, and just being treated magically based on the name?
         self.local_thing_path(thing).join("yolk_templates")
-    }
-
-    #[allow(unused)]
-    pub fn canonical_thing_path(&self, thing: &str) -> std::path::PathBuf {
-        self.canonical_dir_path().join(thing)
     }
 }
 
@@ -136,6 +120,5 @@ mod test {
         assert!(yolk_paths.check().is_ok());
         root.child("yolk/local").assert(exists());
         root.child("yolk/yolk.rhai").assert(exists());
-        root.child("yolk/.gitignore").assert("/local");
     }
 }

@@ -1,7 +1,4 @@
-use std::{
-    io::Write,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context as _, Result};
 use fs_err::PathExt;
@@ -86,7 +83,7 @@ impl Yolk {
             }
             self.use_recursively(thing_name, &entry.path())?;
         }
-        self.sync()?;
+        self.sync_to_mode(EvalMode::Local)?;
         Ok(())
     }
 
@@ -111,11 +108,11 @@ impl Yolk {
         Ok(())
     }
 
-    pub fn sync(&self) -> Result<()> {
+    pub fn sync_to_mode(&self, mode: EvalMode) -> Result<()> {
         let thing_paths = self.list_thing_paths()?;
         let engine = eval_ctx::make_engine();
         let mut eval_ctx = self
-            .prepare_eval_ctx(EvalMode::Local, &engine)
+            .prepare_eval_ctx(mode, &engine)
             .context("Failed to prepare eval_ctx")?;
 
         for thing_dir in thing_paths {
@@ -126,7 +123,9 @@ impl Yolk {
                 let tmpl_paths = tmpl_paths.lines().map(|x| thing_canonical.join(x));
                 for templated_file in tmpl_paths {
                     if templated_file.is_file() {
-                        if let Err(err) = self.sync_file(&mut eval_ctx, &templated_file) {
+                        if let Err(err) =
+                            self.eval_template_file_in_place(&mut eval_ctx, &templated_file)
+                        {
                             eprintln!(
                                 "Warning: Failed to sync templated file {}: {}",
                                 templated_file.display(),
@@ -183,7 +182,11 @@ impl Yolk {
         doc.render(eval_ctx)
     }
 
-    pub fn sync_file(&self, eval_ctx: &mut EvalCtx, path: impl AsRef<Path>) -> Result<()> {
+    pub fn eval_template_file_in_place(
+        &self,
+        eval_ctx: &mut EvalCtx,
+        path: impl AsRef<Path>,
+    ) -> Result<()> {
         tracing::info!("Syncing file {}", path.as_ref().display());
         let content = fs_err::read_to_string(&path)?;
         let rendered = self.eval_template(eval_ctx, &content).with_context(|| {
@@ -193,54 +196,13 @@ impl Yolk {
         Ok(())
     }
 
-    pub fn prepare_canonical(&self) -> Result<()> {
-        let thing_paths = self.list_thing_paths()?;
-
-        let engine = eval_ctx::make_engine();
-        let mut eval_ctx = self
-            .prepare_eval_ctx(EvalMode::Canonical, &engine)
-            .context("Failed to prepare eval_ctx")?;
-
-        for thing_dir in thing_paths {
-            // TODO: just append to the file here?
-            // However, then what if there isn't a newline at the end?
-            let tmpl_list_file = thing_dir.join("yolk_templates");
-            let tmpl_files = if tmpl_list_file.is_file() {
-                let tmpl_paths = fs_err::read_to_string(tmpl_list_file)?;
-                tmpl_paths
-                    .lines()
-                    .map(|x| thing_dir.join(x))
-                    .collect::<Vec<_>>()
-            } else {
-                vec![]
-            };
-            tracing::debug!(
-                "tmp_files in thing {}: {:?}",
-                thing_dir.display(),
-                tmpl_files
-            );
-
-            let thing_dir = thing_dir.canonicalize()?;
-            let within_local = thing_dir.strip_prefix(self.yolk_paths.local_dir_path())?;
-            copy_dir_for_vcs_via(
-                &thing_dir,
-                self.yolk_paths.canonical_dir_path().join(within_local),
-                &mut |from, to| {
-                    tracing::debug!("Looking at copying {} to {}", from.display(), to.display());
-                    // TODO: this to_path_buf seems unnecesarily inefficient.
-                    if tmpl_files.contains(&from.to_path_buf()) {
-                        let content = fs_err::read_to_string(from)?;
-                        let rendered = self.eval_template(&mut eval_ctx, &content)?;
-                        fs_err::write(to, rendered)?;
-                    } else {
-                        fs_err::copy(from, to)?;
-                    }
-
-                    Ok(())
-                },
-            )?;
-        }
-        Ok(())
+    pub fn with_canonical_state<T>(&self, f: impl FnOnce() -> Result<T>) -> Result<T> {
+        println!("Converting all templates into their canonical state");
+        self.sync_to_mode(EvalMode::Canonical)?;
+        let result = f();
+        println!("Converting all templates back to the local state");
+        self.sync_to_mode(EvalMode::Local)?;
+        result
     }
 
     pub fn add_to_templated_files(&self, thing: &str, paths: &[PathBuf]) -> Result<()> {
@@ -261,6 +223,7 @@ impl Yolk {
             yolk_templates.push(path_str);
         }
         fs_err::write(&yolk_templates_path, yolk_templates.join("\n"))?;
+        self.sync_to_mode(EvalMode::Local)?;
         Ok(())
     }
 
@@ -270,62 +233,6 @@ impl Yolk {
             .filter_map(|entry| entry.ok().map(|x| x.path()))
             .collect())
     }
-}
-
-/// Check if a given path is gitignored, by running `git check-ignore` on the given `path` within the given `in_dir`.
-fn git_is_ignored(in_dir: impl AsRef<Path>, path: impl AsRef<Path>) -> bool {
-    false
-    // tracing::info!(
-    //     "Running git check-ignore {} within {}",
-    //     path.as_ref().display(),
-    //     in_dir.as_ref().display()
-    // );
-    // let handle = std::process::Command::new("git")
-    //     .args(&["check-ignore", &path.as_ref().display().to_string()])
-    //     .current_dir(in_dir)
-    //     .stdin(std::process::Stdio::null())
-    //     .stdout(std::process::Stdio::null())
-    //     .spawn();
-    // match handle {
-    //     Ok(mut handle) => handle.wait().map_or(false, |status| status.success()),
-    //     Err(e) => {
-    //         tracing::warn!("Failed to run git check-ignore: {}", e);
-    //         false
-    //     }
-    // }
-}
-
-/// Recursively copy a directory using a user-provided file copy function.
-/// Only copies files and directories that are not ignored by git.
-fn copy_dir_for_vcs_via<F: FnMut(&Path, &Path) -> Result<()>>(
-    src: impl AsRef<Path>,
-    dst: impl AsRef<Path>,
-    copy_file: &mut F,
-) -> Result<()> {
-    fs_err::create_dir_all(&dst)?;
-    for entry in fs_err::read_dir(src.as_ref())? {
-        let result: Result<()> = (|| {
-            let entry = entry?;
-            if !git_is_ignored(src.as_ref(), dst.as_ref().join(entry.file_name())) {
-                if entry.file_type()?.is_dir() {
-                    copy_dir_for_vcs_via(
-                        entry.path(),
-                        dst.as_ref().join(entry.file_name()),
-                        copy_file,
-                    )?;
-                } else {
-                    copy_file(&entry.path(), &dst.as_ref().join(entry.file_name()))?;
-                }
-            } else {
-                tracing::debug!("Skipping gitignored entry {}", entry.path().display());
-            }
-            Ok(())
-        })();
-        if let Err(err) = result {
-            eprintln!("Error copying file: {:?}", err);
-        }
-    }
-    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -352,7 +259,7 @@ mod test {
 
     use crate::yolk_paths::YolkPaths;
 
-    use super::Yolk;
+    use super::{EvalMode, Yolk};
 
     fn is_direct_file(
     ) -> AndPredicate<FileTypePredicate, NotPredicate<FileTypePredicate, Path>, Path> {
@@ -443,36 +350,41 @@ mod test {
         home.child("yolk/local/foo/yolk_templates")
             .write_str("config/foo.toml")?;
         home.child("config/foo.toml").assert(foo_toml_initial);
-        yolk.sync()?;
+        yolk.sync_to_mode(EvalMode::Local)?;
         home.child("config/foo.toml").assert(indoc::indoc! {r#"
             # {% replace /'.*'/ `'${data.value}'` %}
             value = 'local'
         "#});
-        yolk.prepare_canonical()?;
-        home.child("yolk/canonical/foo/config/foo.toml")
-            .assert(indoc::indoc! {r#"
+        yolk.with_canonical_state(|| {
+            home.child("yolk/local/foo/config/foo.toml")
+                .assert(indoc::indoc! {r#"
                 # {% replace /'.*'/ `'${data.value}'` %}
                 value = 'canonical'
             "#});
+            Ok(())
+        })?;
 
         // Update the state, to see if applying again just works :tm:
         home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
                 fn canonical_data() { #{value: "new canonical"} }
                 fn local_data(system) { #{value: "new local"} }
             "#})?;
-        yolk.sync()?;
+        yolk.sync_to_mode(EvalMode::Local)?;
         home.child("config/foo.toml").assert(indoc::indoc! {r#"
             # {% replace /'.*'/ `'${data.value}'` %}
             value = 'new local'
         "#});
-        yolk.prepare_canonical()?;
-        home.child("yolk/canonical/foo/config/foo.toml")
-            .assert(indoc::indoc! {r#"
+        yolk.with_canonical_state(|| {
+            home.child("yolk/local/foo/config/foo.toml")
+                .assert(indoc::indoc! {r#"
                 # {% replace /'.*'/ `'${data.value}'` %}
                 value = 'new canonical'
             "#});
+            Ok(())
+        })?;
         Ok(())
     }
+
     #[test]
     fn test_add_to_templated_files() -> TestResult {
         let home = assert_fs::TempDir::new()?;
