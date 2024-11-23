@@ -1,5 +1,8 @@
+use std::str::FromStr;
+
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 use yolk::Yolk;
 
 mod eval_ctx;
@@ -17,6 +20,10 @@ struct Args {
     /// Provide a custom yolk directory
     #[arg(short = 'd', long, env = "YOLK_DIR")]
     yolk_dir: Option<std::path::PathBuf>,
+
+    /// Enable debug logging
+    #[arg(long)]
+    debug: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -51,6 +58,16 @@ enum Command {
 
 pub(crate) fn main() -> Result<()> {
     let args = Args::parse();
+
+    let env_filter = if args.debug {
+        tracing_subscriber::EnvFilter::from_str("debug").unwrap()
+    } else {
+        tracing_subscriber::EnvFilter::from_default_env()
+    };
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .with(env_filter)
+        .init();
 
     let yolk_paths = if let Some(yolk_dir) = args.yolk_dir {
         yolk_paths::YolkPaths::from_env_with_root(yolk_dir)

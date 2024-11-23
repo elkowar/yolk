@@ -37,7 +37,7 @@ impl Yolk {
     fn use_recursively(&self, thing_name: &str, path: &impl AsRef<Path>) -> Result<()> {
         let path = path.as_ref();
         let path = path.fs_err_canonicalize()?;
-        println!("use_recursively({}, {})", thing_name, path.display());
+        tracing::debug!("use_recursively({}, {})", thing_name, path.display());
         let path_relative = path.strip_prefix(self.yolk_paths.local_thing_path(thing_name))?;
 
         // Ensure that we skip the yolk_templates file, but only when it's a direct child of the thing dir.
@@ -73,6 +73,7 @@ impl Yolk {
     }
 
     pub fn use_thing(&self, thing_name: &str) -> Result<()> {
+        tracing::info!("Using thing {}", thing_name);
         let thing_path = self.yolk_paths.local_thing_path(&thing_name);
 
         for entry in fs_err::read_dir(&thing_path)? {
