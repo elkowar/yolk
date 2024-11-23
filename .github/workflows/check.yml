@@ -2,9 +2,15 @@ name: check
 
 on:
   push:
-    branches: [main]
+    tags-ignore:
+      - "v*.*.*"
+    branches:
+      - "*"
   pull_request:
-    branches: [main]
+    branches:
+      - "*"
+    tags-ignore:
+      - "v*.*.*"
   workflow_call: {}
 env:
   CARGO_TERM_COLOR: always
