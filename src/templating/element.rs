@@ -1,10 +1,10 @@
-use anyhow::Result;
-use pest::iterators::Pair;
+use anyhow::{Context as _, Result};
+use pest::{iterators::Pair, Parser};
 use regex::Regex;
 
 use crate::eval_ctx::EvalCtx;
 
-use super::{document::Context, Rule};
+use super::{document::Context, Rule, YolkParser};
 
 #[derive(Debug)]
 pub enum Element<'a> {
@@ -146,10 +146,64 @@ impl<'a> Element<'a> {
                 let replacement = replacement.to_string();
                 let mut output = tag.to_string();
                 let regex = Regex::new(regex_pattern)?;
-                output.push_str(regex.replace_all(affected_line, replacement).as_ref());
+
+                let after_replacement = regex.replace(affected_line, &replacement);
+                let original_value = regex.find(affected_line);
+                if let Some(original_value) = original_value {
+                    let reverted_line = regex.replace(&after_replacement, original_value.as_str());
+                    if &reverted_line != affected_line {
+                        eprintln!(
+                            "Warning: Refusing to apply non-reversible `replace` action: `{}` in `{}`",
+                            regex_pattern, affected_line
+                        );
+                        // TODO fail here instead
+                        output.push_str(&affected_line);
+                        return Ok(output);
+                    }
+                }
+
+                output.push_str(&after_replacement);
                 Ok(output)
             }
             Element::Directive { tag, .. } => Ok(tag.to_string()),
         }
+    }
+
+    #[allow(unused)]
+    pub fn parse(s: &'a str) -> Result<Self> {
+        let mut pairs = YolkParser::parse(Rule::Element, s)?;
+        Ok(Self::try_from_pair(pairs.next().context("No content")?)?)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use testresult::TestResult;
+
+    use crate::eval_ctx;
+    use crate::templating::document::Context;
+    use crate::templating::element::Element;
+    #[test]
+    pub fn test_render_replace() -> TestResult {
+        let element = Element::parse("{% replace /'.*'/ `'new'` %}\nfoo: 'original'")?;
+        let render_ctx = Context::default();
+        let mut eval_ctx = eval_ctx::EvalCtx::new();
+        assert_eq!(
+            "{% replace /'.*'/ `'new'` %}\nfoo: 'new'",
+            element.render(&render_ctx, &mut eval_ctx)?
+        );
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_render_replace_refuse_nonreversible() -> TestResult {
+        let element = Element::parse("{% replace /'.*'/ `no quotes` %}\nfoo: 'original'")?;
+        let render_ctx = Context::default();
+        let mut eval_ctx = eval_ctx::EvalCtx::new();
+        assert_eq!(
+            "{% replace /'.*'/ `no quotes` %}\nfoo: 'original'",
+            element.render(&render_ctx, &mut eval_ctx)?
+        );
+        Ok(())
     }
 }

@@ -64,7 +64,19 @@ pub struct Context {
     pub(crate) comment_prefix: String,
 }
 
+impl Default for Context {
+    fn default() -> Self {
+        Self {
+            comment_prefix: "#".to_string(),
+        }
+    }
+}
+
 impl Context {
+    #[allow(unused)]
+    pub fn new(comment_prefix: String) -> Self {
+        Self { comment_prefix }
+    }
     pub fn enabled_str(&self, s: &str) -> String {
         let re = Regex::new(&format!("{}{}", self.comment_prefix, COMMENT_START)).unwrap();
         let lines: Vec<_> = s.split('\n').map(|line| re.replace_all(line, "")).collect();
