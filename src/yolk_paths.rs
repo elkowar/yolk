@@ -61,10 +61,10 @@ impl YolkPaths {
                 self.rhai_path().display()
             );
         }
-        if !self.local_dir_path().exists() {
+        if !self.eggs_dir_path().exists() {
             anyhow::bail!(
-                "Yolk directory does not contain a local directory at {}",
-                self.local_dir_path().display()
+                "Yolk directory does not contain an eggs directory at {}",
+                self.eggs_dir_path().display()
             );
         }
         Ok(())
@@ -76,7 +76,7 @@ impl YolkPaths {
             anyhow::bail!("Yolk directory already exists at {}", path.display());
         }
         fs_err::create_dir_all(path)?;
-        fs_err::create_dir_all(self.local_dir_path())?;
+        fs_err::create_dir_all(self.eggs_dir_path())?;
         fs_err::write(self.rhai_path(), DEFAULT_RHAI)?;
 
         Ok(())
@@ -91,15 +91,15 @@ impl YolkPaths {
     pub fn rhai_path(&self) -> std::path::PathBuf {
         self.root_path.join("yolk.rhai")
     }
-    pub fn local_dir_path(&self) -> std::path::PathBuf {
-        self.root_path.join("local")
+    pub fn eggs_dir_path(&self) -> std::path::PathBuf {
+        self.root_path.join("eggs")
     }
-    pub fn local_thing_path(&self, thing: &str) -> std::path::PathBuf {
-        self.local_dir_path().join(thing)
+    pub fn egg_path(&self, egg_name: &str) -> std::path::PathBuf {
+        self.eggs_dir_path().join(egg_name)
     }
-    pub fn yolk_templates_file_path_for(&self, thing: &str) -> std::path::PathBuf {
+    pub fn yolk_templates_file_path_for(&self, egg_name: &str) -> std::path::PathBuf {
         // TODO: Do we like this being next to regular directories, and just being treated magically based on the name?
-        self.local_thing_path(thing).join("yolk_templates")
+        self.egg_path(egg_name).join("yolk_templates")
     }
 }
 
@@ -118,7 +118,7 @@ mod test {
         assert!(yolk_paths.check().is_err());
         yolk_paths.create().unwrap();
         assert!(yolk_paths.check().is_ok());
-        root.child("yolk/local").assert(exists());
+        root.child("yolk/eggs").assert(exists());
         root.child("yolk/yolk.rhai").assert(exists());
     }
 }

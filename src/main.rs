@@ -30,11 +30,11 @@ struct Args {
 enum Command {
     /// Initialize the yolk directory
     Init,
-    /// Use a thing
+    /// Use an egg
     Use { name: String },
     /// Evaluate an expression in the local context
     Eval { expr: String },
-    /// Add a file or directory to a thing in yolk
+    /// Add a file or directory to an egg in yolk
     Add {
         name: String,
         path: std::path::PathBuf,
@@ -50,7 +50,7 @@ enum Command {
     /// Make the given file template capable, by adding it to the yolk_templates file
     #[clap(name = "mktmpl")]
     MakeTemplate {
-        thing: String,
+        egg: String,
         #[arg(required = true)]
         paths: Vec<std::path::PathBuf>,
     },
@@ -81,8 +81,8 @@ pub(crate) fn main() -> Result<()> {
     let yolk = Yolk::new(yolk_paths);
     match &args.command {
         Command::Init => yolk.init_yolk()?,
-        Command::Use { name } => yolk.use_thing(name)?,
-        Command::Add { name, path } => yolk.add_thing(name, path)?,
+        Command::Use { name } => yolk.use_egg(name)?,
+        Command::Add { name, path } => yolk.add_egg(name, path)?,
         Command::Sync => yolk.sync_to_mode(EvalMode::Local)?,
         Command::Eval { expr } => {
             println!("{}", yolk.eval_rhai(yolk::EvalMode::Local, expr)?);
@@ -96,8 +96,8 @@ pub(crate) fn main() -> Result<()> {
                 Ok(())
             })?;
         }
-        Command::MakeTemplate { thing, paths } => {
-            yolk.add_to_templated_files(thing, paths)?;
+        Command::MakeTemplate { egg, paths } => {
+            yolk.add_to_templated_files(egg, paths)?;
         }
         Command::EvalTemplate { path } => {
             let text = match path {

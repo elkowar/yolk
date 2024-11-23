@@ -10,12 +10,22 @@ pub fn make_engine() -> rhai::Engine {
         .build_type::<SystemInfo>()
         .register_fn("env", |name: &str, default: String| {
             std::env::var(name).unwrap_or(default)
-        });
+        })
+        .register_fn(
+            "command_available",
+            |command: &str| match which::which_all_global(command) {
+                Ok(mut iter) => iter.next().is_some(),
+                Err(err) => {
+                    tracing::warn!("Error checking if command is available: {}", err);
+                    false
+                }
+            },
+        );
     engine
 }
 
 // TODO: Ensure an EvalCtx contains info about what file is being parsed,
-// the thing name, etc etc
+// the egg name, etc etc
 pub struct EvalCtx<'a> {
     scope: rhai::Scope<'a>,
 }

@@ -20,6 +20,7 @@ testresult = "0.4.1"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 walkdir = "2.5.0"
+which = "7.0.0"
 
 # The profile that 'cargo dist' will build with
 [profile.dist]
