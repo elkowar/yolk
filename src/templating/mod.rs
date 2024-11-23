@@ -69,7 +69,6 @@ mod test {
             name = "foo"
         "#};
         let document = document::Document::parse_string(example).unwrap();
-        println!("{:#?}", document);
         let result = document.render(&mut eval_ctx).unwrap();
         assert_eq!(
             indoc::indoc! { r#"

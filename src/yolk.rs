@@ -219,10 +219,9 @@ impl Yolk {
                 &thing_dir,
                 self.yolk_paths.canonical_dir_path().join(within_local),
                 &mut |from, to| {
-                    println!("Looking at copying {} to {}", from.display(), to.display());
+                    tracing::debug!("Looking at copying {} to {}", from.display(), to.display());
                     // TODO: this to_path_buf seems unnecesarily inefficient.
                     if tmpl_files.contains(&from.to_path_buf()) {
-                        println!("is in tmpl_paths");
                         let content = fs_err::read_to_string(&from)?;
                         let rendered = self.eval_template(&mut eval_ctx, &content)?;
                         fs_err::write(&to, rendered)?;

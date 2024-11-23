@@ -7,7 +7,10 @@ pub fn make_engine() -> rhai::Engine {
     let mut engine = rhai::Engine::new();
     engine
         .register_type::<SystemInfo>()
-        .build_type::<SystemInfo>();
+        .build_type::<SystemInfo>()
+        .register_fn("env", |name: &str, default: String| {
+            std::env::var(name).unwrap_or(default)
+        });
     engine
 }
 
