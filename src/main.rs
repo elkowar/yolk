@@ -13,6 +13,10 @@ mod yolk_paths;
 struct Args {
     #[command(subcommand)]
     command: Command,
+
+    /// Provide a custom yolk directory
+    #[arg(short = 'd', long, env = "YOLK_DIR")]
+    yolk_dir: Option<std::path::PathBuf>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -30,7 +34,8 @@ enum Command {
     },
     /// Re-evaluate all local templates to ensure that they are in a consistent state
     Sync,
-    /// Run a git-command while ensuring that the canonical directory is up-to-date
+    /// Run a git-command within the yolk directory,
+    /// while ensuring that the canonical directory is up-to-date
     Git {
         #[clap(allow_hyphen_values = true)]
         command: Vec<String>,
@@ -39,13 +44,21 @@ enum Command {
     #[clap(name = "tmpl")]
     MakeTemplate {
         thing: String,
+        #[arg(required = true)]
         paths: Vec<std::path::PathBuf>,
     },
 }
 
 pub(crate) fn main() -> Result<()> {
     let args = Args::parse();
-    let yolk = Yolk::new(yolk_paths::YolkPaths::from_env());
+
+    let yolk_paths = if let Some(yolk_dir) = args.yolk_dir {
+        yolk_paths::YolkPaths::from_env_with_root(yolk_dir)
+    } else {
+        yolk_paths::YolkPaths::from_env()
+    };
+
+    let yolk = Yolk::new(yolk_paths);
     match &args.command {
         Command::Init => yolk.init_yolk()?,
         Command::Use { name } => yolk.use_thing(name)?,

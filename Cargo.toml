@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.93"
 assert_fs = "1.1.2"
-clap = { version = "4.5.21", features = ["derive"] }
+clap = { version = "4.5.21", features = ["derive", "env"] }
 dirs = "5.0.1"
 fs-err = "3.0.0"
 indoc = "2.0.5"

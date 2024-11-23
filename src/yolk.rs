@@ -49,7 +49,9 @@ impl Yolk {
 
         let in_home = self.yolk_paths.home_path().join(path_relative);
         if in_home.exists() {
-            if in_home.is_dir() && path.is_dir() {
+            if in_home.is_symlink() && in_home.fs_err_read_link()? == path {
+                return Ok(());
+            } else if in_home.is_dir() && path.is_dir() {
                 for entry in fs_err::read_dir(path)? {
                     let entry = entry?;
                     self.use_recursively(thing_name, &entry.path())?;
@@ -162,12 +164,8 @@ impl Yolk {
         Ok(result.to_string())
     }
 
-    pub fn eval_template_file(
-        &self,
-        mode: EvalMode,
-        _path: impl AsRef<Path>,
-        content: &str,
-    ) -> Result<String> {
+    /// Evaluate a templated file
+    pub fn eval_template(&self, mode: EvalMode, content: &str) -> Result<String> {
         let engine = eval_ctx::make_engine();
         let mut eval_ctx = self
             .prepare_eval_ctx(mode, &engine)
@@ -178,11 +176,9 @@ impl Yolk {
 
     pub fn sync_file(&self, mode: EvalMode, path: impl AsRef<Path>) -> Result<()> {
         let content = fs_err::read_to_string(&path)?;
-        let rendered = self
-            .eval_template_file(mode, &path, &content)
-            .with_context(|| {
-                format!("Failed to eval template file: {}", path.as_ref().display())
-            })?;
+        let rendered = self.eval_template(mode, &content).with_context(|| {
+            format!("Failed to eval template file: {}", path.as_ref().display())
+        })?;
         fs_err::write(&path, rendered)?;
         Ok(())
     }
@@ -190,6 +186,8 @@ impl Yolk {
     pub fn prepare_canonical(&self) -> Result<()> {
         let thing_paths = self.list_thing_paths()?;
         for thing_dir in thing_paths {
+            // TODO: just append to the file here?
+            // However, then what if there isn't a newline at the end?
             let tmpl_list_file = thing_dir.join("yolk_templates");
             let tmpl_files = if tmpl_list_file.is_file() {
                 let tmpl_paths = fs_err::read_to_string(tmpl_list_file)?;
@@ -213,8 +211,7 @@ impl Yolk {
                     if tmpl_files.contains(&from.to_path_buf()) {
                         println!("is in tmpl_paths");
                         let content = fs_err::read_to_string(&from)?;
-                        let rendered =
-                            self.eval_template_file(EvalMode::Canonical, &from, &content)?;
+                        let rendered = self.eval_template(EvalMode::Canonical, &content)?;
                         fs_err::write(&to, rendered)?;
                     } else {
                         fs_err::copy(from, to)?;
@@ -286,18 +283,28 @@ pub enum EvalMode {
 
 #[cfg(test)]
 mod test {
+    use std::path::Path;
+
     use assert_fs::{
         assert::PathAssert,
         prelude::{FileWriteStr, PathChild, PathCreateDir},
     };
     use p::path::{exists, is_dir, is_file, is_symlink};
-    use predicates as p;
-    use predicates::prelude::PredicateBooleanExt;
+    use predicates::{self as p, path::FileTypePredicate};
+    use predicates::{
+        boolean::{AndPredicate, NotPredicate},
+        prelude::PredicateBooleanExt,
+    };
     use testresult::TestResult;
 
     use crate::yolk_paths::YolkPaths;
 
     use super::Yolk;
+
+    fn is_direct_file(
+    ) -> AndPredicate<FileTypePredicate, NotPredicate<FileTypePredicate, Path>, Path> {
+        is_file().and(is_symlink().not())
+    }
 
     #[test]
     fn test_setup() -> TestResult {
@@ -355,9 +362,9 @@ mod test {
         yolk.add_thing("foo", home.child("config/foo2.toml"))?;
 
         home.child("yolk/local/foo/config/foo.toml")
-            .assert(is_file());
+            .assert(is_direct_file());
         home.child("yolk/local/foo/config/foo2.toml")
-            .assert(is_file());
+            .assert(is_direct_file());
         home.child("config/foo.toml").assert(is_symlink());
         home.child("config/foo2.toml").assert(is_symlink());
         Ok(())
@@ -433,13 +440,37 @@ mod test {
     #[test]
     fn test_re_use_thing() -> TestResult {
         let home = assert_fs::TempDir::new()?;
-        home.child("config/foo.toml").write_str("")?;
         let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
         yolk.init_yolk()?;
-        yolk.add_thing("foo", home.child("config/foo.toml"))?;
-        home.child("yolk/local/foo/config/bar.toml").write_str("")?;
+        home.child("foo.toml").write_str("")?;
+        home.child("test/foo.toml").write_str("")?;
+        yolk.add_thing("foo", home.child("foo.toml"))?;
+        yolk.add_thing("foo", home.child("test"))?;
+        home.child("yolk/local/foo/bar.toml").write_str("")?;
+        home.child("yolk/local/foo/test/bar.toml").write_str("")?;
         yolk.use_thing("foo")?;
-        home.child("config/bar.toml").assert(is_symlink());
+        home.child("bar.toml").assert(is_symlink());
+        home.child("test").assert(is_symlink());
+        home.child("test/foo.toml").assert(is_direct_file());
+        home.child("test/bar.toml").assert(is_direct_file());
+        Ok(())
+    }
+
+    #[test]
+    fn test_add_to_existing_thing() -> TestResult {
+        let home = assert_fs::TempDir::new()?;
+        let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
+        yolk.init_yolk()?;
+        home.child("foo_dir").create_dir_all()?;
+        home.child("foo_dir/foo").write_str("")?;
+        yolk.add_thing("foo", home.child("foo_dir"))?;
+        home.child("foo_dir").assert(is_symlink());
+        home.child("foo_dir/foo").assert(is_direct_file());
+
+        home.child("foo.toml").write_str("")?;
+        yolk.add_thing("foo", home.child("foo.toml"))?;
+        home.child("foo.toml").assert(is_symlink());
+
         Ok(())
     }
 
@@ -457,7 +488,8 @@ mod test {
             .write_str("")?;
         yolk.use_thing("foo")?;
         home.child("new-dir").assert(is_symlink());
-        home.child("existing-dir").assert(is_symlink().not());
+        home.child("existing-dir")
+            .assert(is_symlink().not().and(is_dir()));
         home.child("existing-dir/new-subdir").assert(is_symlink());
         home.child("existing-dir/new-file.toml")
             .assert(is_symlink());
