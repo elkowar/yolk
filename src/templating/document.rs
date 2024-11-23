@@ -45,10 +45,11 @@ impl<'a> Document<'a> {
         for rule in yolk_file.into_inner() {
             let element = element::Element::try_from_pair(rule)?;
             if let element::Element::Directive {
-                    name: "CommentPrefix",
-                    content,
-                    ..
-                } = element {
+                name: "CommentPrefix",
+                content,
+                ..
+            } = element
+            {
                 document.comment_prefix = content.trim().to_string();
             }
             document.elements.push(element);
