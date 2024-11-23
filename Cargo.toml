@@ -15,6 +15,7 @@ pest_derive = { version = "2.7.14", features = ["grammar-extras"] }
 predicates = "3.1.2"
 regex = "1.11.1"
 rhai = { version = "1.20.0", features = ["sync"] }
+testresult = "0.4.1"
 # tracing = "0.1.40"
 # tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 walkdir = "2.5.0"

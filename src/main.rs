@@ -17,18 +17,20 @@ struct Args {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Initialize the yolk directory
     Init,
-    Use {
-        name: String,
-    },
-    Eval {
-        expr: String,
-    },
+    /// Use a thing
+    Use { name: String },
+    /// Evaluate an expression in the local context
+    Eval { expr: String },
+    /// Add a file or directory to a thing in yolk
     Add {
         name: String,
         path: std::path::PathBuf,
     },
+    /// Re-evaluate all local templates to ensure that they are in a consistent state
     Sync,
+    /// Run a git-command while ensuring that the canonical directory is up-to-date
     Git {
         #[clap(allow_hyphen_values = true)]
         command: Vec<String>,
@@ -39,8 +41,6 @@ enum Command {
         thing: String,
         paths: Vec<std::path::PathBuf>,
     },
-    /// List all things in your yolk setup
-    List,
 }
 
 pub(crate) fn main() -> Result<()> {
@@ -63,20 +63,6 @@ pub(crate) fn main() -> Result<()> {
         }
         Command::MakeTemplate { thing, paths } => {
             yolk.add_to_templated_files(thing, paths)?;
-        }
-        Command::List => {
-            println!(
-                "{}",
-                yolk.list_things()?
-                    .into_iter()
-                    .map(|(path, active)| format!(
-                        "{} [{}]",
-                        path.display(),
-                        if active { "active" } else { "inactive" }
-                    ))
-                    .collect::<Vec<String>>()
-                    .join("\n")
-            );
         }
     }
     Ok(())
