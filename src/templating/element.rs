@@ -5,6 +5,10 @@ use regex::Regex;
 use crate::eval_ctx::EvalCtx;
 
 use super::{document::Context, Rule, YolkParser};
+// TODO: Instead of parsing separate specific syntax per element, what if
+// we just parsed {% rhai %}, and made a set of rhai functions that return objects that tell us _what_ that tag does?
+// that might make a lot of things a lot easier...
+// However, how would that work with conditionals and their `else` blocks? are those just magic syntax again?
 
 #[derive(Debug)]
 pub enum Element<'a> {
@@ -16,9 +20,29 @@ pub enum Element<'a> {
         else_tag_and_body: Option<(&'a str, Box<Element<'a>>)>,
         end_tag: &'a str,
     },
+    ReplaceInline {
+        before_tag: &'a str,
+        tag: &'a str,
+        regex_pattern: &'a str,
+        expr: &'a str,
+    },
     ReplaceBlock {
         tag: &'a str,
         regex_pattern: &'a str,
+        expr: &'a str,
+        affected_line: &'a str,
+    },
+    ReplaceInInline {
+        before_tag: &'a str,
+        tag: &'a str,
+        left: &'a str,
+        right: &'a str,
+        expr: &'a str,
+    },
+    ReplaceInBlock {
+        tag: &'a str,
+        left: &'a str,
+        right: &'a str,
         expr: &'a str,
         affected_line: &'a str,
     },
@@ -78,6 +102,29 @@ impl<'a> Element<'a> {
                     affected_line: block_inner
                         .find_first_tagged("affected")
                         .expect("No affected line")
+                        .as_str(),
+                })
+            }
+            Rule::ReplaceInlineBlock => {
+                let block_inner = pair.into_inner();
+                let before = block_inner
+                    .find_first_tagged("before")
+                    .expect("no before tag");
+                let tag = block_inner.find_first_tagged("tagContent").expect("no tag");
+                let before_str = before.as_str();
+                let tag_str = tag.as_str();
+                let tag_inner = tag.into_inner();
+                Ok(Element::ReplaceInline {
+                    before_tag: before_str,
+                    tag: tag_str,
+                    regex_pattern: block_inner
+                        .find_first_tagged("regexp")
+                        .expect("No regex")
+                        .into_inner()
+                        .as_str(),
+                    expr: tag_inner
+                        .find_first_tagged("expr")
+                        .expect("No expr")
                         .as_str(),
                 })
             }
@@ -156,13 +203,101 @@ impl<'a> Element<'a> {
                             "Warning: Refusing to apply non-reversible `replace` action: `{}` in `{}`",
                             regex_pattern, affected_line
                         );
-                        // TODO fail here instead
                         output.push_str(affected_line);
                         return Ok(output);
                     }
                 }
 
                 output.push_str(&after_replacement);
+                Ok(output)
+            }
+            Element::ReplaceInBlock {
+                tag,
+                left,
+                right,
+                expr,
+                affected_line,
+            } => {
+                let replacement: rhai::Dynamic = eval_ctx.eval(expr.trim())?;
+                let replacement = replacement.to_string();
+                let mut output = tag.to_string();
+                let regex = Regex::new(&format!("{}[^{}]*{}", left, right, right))?;
+
+                let after_replacement = regex.replace(affected_line, &replacement);
+                let original_value = regex.find(affected_line);
+                if let Some(original_value) = original_value {
+                    let reverted_line = regex.replace(&after_replacement, original_value.as_str());
+                    if &reverted_line != affected_line {
+                        eprintln!(
+                            "Warning: Refusing to apply non-reversible `replace_in` action in `{affected_line}`",
+                        );
+                        output.push_str(affected_line);
+                        return Ok(output);
+                    }
+                }
+
+                output.push_str(&after_replacement);
+                Ok(output)
+            }
+            Element::ReplaceInline {
+                before_tag,
+                tag,
+                regex_pattern,
+                expr,
+            } => {
+                let replacement: rhai::Dynamic = eval_ctx.eval(expr.trim())?;
+                let replacement = replacement.to_string();
+                let mut output = String::new();
+                let regex = Regex::new(regex_pattern)?;
+
+                let after_replacement = regex.replace(before_tag, &replacement);
+                let original_value = regex.find(before_tag);
+                if let Some(original_value) = original_value {
+                    let reverted_line = regex.replace(&after_replacement, original_value.as_str());
+                    if &reverted_line != before_tag {
+                        eprintln!(
+                            "Warning: Refusing to apply non-reversible `replace` action: `{}` in `{}`",
+                            regex_pattern, before_tag
+                        );
+                        output.push_str(before_tag);
+                    } else {
+                        output.push_str(&after_replacement);
+                    }
+                } else {
+                    output.push_str(&after_replacement);
+                }
+                output.push_str(tag);
+                Ok(output)
+            }
+            Element::ReplaceInInline {
+                before_tag,
+                tag,
+                left,
+                right,
+                expr,
+            } => {
+                let replacement: rhai::Dynamic = eval_ctx.eval(expr.trim())?;
+                let replacement = replacement.to_string();
+                let mut output = String::new();
+                let regex = Regex::new(&format!("{}[^{}]*{}", left, right, right))?;
+
+                let after_replacement = regex.replace(before_tag, &replacement);
+                let original_value = regex.find(before_tag);
+                if let Some(original_value) = original_value {
+                    let reverted_line = regex.replace(&after_replacement, original_value.as_str());
+                    if &reverted_line != before_tag {
+                        eprintln!(
+                            "Warning: Refusing to apply non-reversible `replace_in` action in `{before_tag}`",
+                        );
+                        output.push_str(before_tag);
+                    } else {
+                        output.push_str(&after_replacement);
+                    }
+                } else {
+                    output.push_str(&after_replacement);
+                }
+
+                output.push_str(tag);
                 Ok(output)
             }
             Element::Directive { tag, .. } => Ok(tag.to_string()),
@@ -190,6 +325,18 @@ mod test {
         let mut eval_ctx = eval_ctx::EvalCtx::new();
         assert_eq!(
             "{% replace /'.*'/ `'new'` %}\nfoo: 'new'",
+            element.render(&render_ctx, &mut eval_ctx)?
+        );
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_render_replace_inline() -> TestResult {
+        let element = Element::parse("foo: 'original' # {<< replace /'.*'/ `'new'` >>}")?;
+        let render_ctx = Context::default();
+        let mut eval_ctx = eval_ctx::EvalCtx::new();
+        assert_eq!(
+            "foo: 'new' # {<< replace /'.*'/ `'new'` >>}",
             element.render(&render_ctx, &mut eval_ctx)?
         );
         Ok(())
