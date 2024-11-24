@@ -1,10 +1,10 @@
-//! Pest grammar for handlebars templating
+
 WHITESPACE = _{ " " | "\t" }
 YolkFile   = ${ SOI ~ Element+ ~ EOI }
 
 Element = _{ Block | Raw }
 
-Block = _{ IfBlock | ReplaceBlock | DirectiveTag }
+Block = _{ IfBlock | ReplaceBlock| ReplaceInBlock | DirectiveTag | ReplaceInlineBlock | ReplaceInInlineBlock }
 
 IfBlock = !{ (#if = IfTag) ~ (#body = Raw?) ~ ((#else = ElseTag) ~ (#elsebody = Raw?))? ~ (#end = EndTag) }
 IfTag   =  { BeforeTag ~ "if" ~ #pred = TagInner ~ AfterTag }
@@ -13,8 +13,16 @@ EndTag  =  { BeforeTag ~ "end" ~ AfterTag }
 
 DirectiveTag = !{ BeforeTag ~ #name = DirectiveName ~ #value = TagInner ~ AfterTag }
 
-ReplaceTag   =  { BeforeTag ~ "replace" ~ #regexp = Regexp ~ #expr = TagInner ~ AfterTag }
-ReplaceBlock = !{ #replace_tag = ReplaceTag ~ #affected = SingleLine }
+replace   = _{ "replace" | "r" }
+replaceIn = _{ "replace_in" | "ri" }
+
+ReplaceTag     =  { BeforeTag ~ replace ~ #regexp = Regexp ~ #expr = TagInner ~ AfterTag }
+ReplaceBlock   = !{ #replace_tag = ReplaceTag ~ #affected = SingleLine }
+ReplaceInTag   =  { BeforeTag ~ replaceIn ~ #left = any ~ wsp+ ~ #right = any ~ #expr = TagInner ~ AfterTag }
+ReplaceInBlock = !{ #replace_tag = ReplaceTag ~ #affected = SingleLine }
+
+ReplaceInlineBlock   = !{ #before = BeforeInlineTag ~ #tagContent = (replace ~ #regexp = Regexp ~ #expr = InlineTagInner) ~ AfterInlineTag }
+ReplaceInInlineBlock = !{ #before = BeforeInlineTag ~ #tagContent = (replaceIn ~ #left = any ~ #right = any ~ #expr = InlineTagInner) ~ AfterInlineTag }
 
 DirectiveName = { "CommentPrefix" }
 
@@ -27,11 +35,18 @@ RegexpEscapeThing = !{ "/" | "\\" }
 
 nl  = _{ NEWLINE }
 wsp = _{ WHITESPACE }
+any = {ANY}
 
 TagStart  = _{ "{%" }
 TagEnd    = _{ "%}" }
 BeforeTag = _{ (!(TagStart | nl) ~ ANY)* ~ TagStart ~ wsp* }
 AfterTag  = _{ wsp* ~ TagEnd ~ (!(nl | EOI) ~ ANY)* ~ (nl | EOI) }
-TagInner  =  { (!TagEnd ~ ANY)+ }
+
+BeforeInlineTagContent = { (!("{<<" | nl) ~ ANY)* }
+BeforeInlineTag        = @{ BeforeInlineTagContent ~ ("{<<" ~ wsp*) }
+AfterInlineTag         = { wsp* ~ ">>}" ~ (!(nl | EOI) ~ ANY)* ~ (nl | EOI) }
+
+TagInner       = { (!TagEnd ~ ANY)+ }
+InlineTagInner = { (!">>}" ~ ANY)+ }
 
 Raw = { (!BeforeTag ~ ANY)+ }
