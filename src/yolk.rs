@@ -5,7 +5,8 @@ use fs_err::PathExt;
 use rhai::Dynamic;
 
 use crate::{
-    eval_ctx::{self, EvalCtx, SystemInfo},
+    eval_ctx::EvalCtx,
+    script::{self, sysinfo::SystemInfo},
     templating::document::Document,
     util,
     yolk_paths::YolkPaths,
@@ -107,7 +108,7 @@ impl Yolk {
 
     pub fn sync_to_mode(&self, mode: EvalMode) -> Result<()> {
         let egg_paths = self.list_egg_paths()?;
-        let engine = eval_ctx::make_engine();
+        let engine = script::make_engine();
         let mut eval_ctx = self
             .prepare_eval_ctx(mode, &engine)
             .context("Failed to prepare eval_ctx")?;
@@ -163,7 +164,7 @@ impl Yolk {
     }
 
     pub fn eval_rhai(&self, mode: EvalMode, expr: &str) -> Result<String> {
-        let engine = eval_ctx::make_engine();
+        let engine = script::make_engine();
         let mut eval_ctx = self
             .prepare_eval_ctx(mode, &engine)
             .context("Failed to prepare eval_ctx")?;

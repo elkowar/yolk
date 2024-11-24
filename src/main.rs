@@ -2,10 +2,11 @@ use std::{io::Read as _, str::FromStr};
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use script::eval_ctx;
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 use yolk::{EvalMode, Yolk};
 
-mod eval_ctx;
+pub mod script;
 mod templating;
 mod util;
 mod yolk;
@@ -108,7 +109,7 @@ pub(crate) fn main() -> Result<()> {
                     buffer
                 }
             };
-            let engine = eval_ctx::make_engine();
+            let engine = script::make_engine();
             let mut eval_ctx = yolk.prepare_eval_ctx(EvalMode::Local, &engine)?;
             let result = yolk.eval_template(&mut eval_ctx, &text)?;
             println!("{}", result);

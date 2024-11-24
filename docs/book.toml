@@ -1,0 +1,6 @@
+[book]
+authors = ["elkowar"]
+language = "en"
+multilingual = false
+src = "src"
+title = "Yolk"
