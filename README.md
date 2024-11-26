@@ -7,6 +7,13 @@
 Yolk is a dotfile management tool with a unique spin on templating,
 sitting somewhere in between [GNU Stow](https://www.gnu.org/software/stow/) and [chezmoi](https://www.chezmoi.io/).
 
+## WARNING
+
+This is pre-alpha software. In its current state, do not trust it. At all.
+Always make backups of everything before trying to use yolk, until it's in a stable state.
+
+You have been warned.
+
 ## The Concept
 
 Yolk allows you to use simple templates in your configuration files without having to worry about keeping a separate template file and the generated config file in sync.

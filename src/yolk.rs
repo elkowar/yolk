@@ -205,6 +205,9 @@ impl Yolk {
 
     pub fn add_to_templated_files(&self, egg_name: &str, paths: &[PathBuf]) -> Result<()> {
         let egg_dir = self.yolk_paths.egg_path(egg_name);
+        if !egg_dir.is_dir() {
+            bail!("Egg {} does not exist", egg_name);
+        }
         let yolk_templates_path = self.yolk_paths.yolk_templates_file_path_for(egg_name);
         if !yolk_templates_path.is_file() {
             fs_err::File::create(&yolk_templates_path)?;
@@ -397,6 +400,20 @@ mod test {
         home.child("yolk_templates").assert(exists().not());
         yolk.use_egg("foo")?;
         home.child("yolk_templates").assert(exists().not());
+        Ok(())
+    }
+
+    #[test]
+    fn test_add_template_inexistant_egg() -> TestResult {
+        let home = assert_fs::TempDir::new()?;
+        home.child("config/foo.toml")
+            .write_str("# {% replace /'.*'/ `bar` %}\nvalue = 'foo'")?;
+        let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
+        yolk.init_yolk()?;
+        assert!(yolk
+            .add_to_templated_files("foo", &[home.child("config/foo.toml").to_path_buf()])
+            .is_err());
+        home.child("config/foo.toml").assert(is_direct_file());
         Ok(())
     }
 
