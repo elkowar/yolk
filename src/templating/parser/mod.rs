@@ -3,49 +3,75 @@ use std::str::Chars;
 
 #[derive(Debug)]
 pub enum Element<'a> {
+    /// A block of raw text without any tags
     Raw(&'a str),
-    IfBlock {
-        pred: &'a str,
-        if_tag: &'a str,
-        body: Box<Element<'a>>,
-        else_tag_and_body: Option<(&'a str, Box<Element<'a>>)>,
-        end_tag: &'a str,
-    },
-    ReplaceInline {
-        before_tag: &'a str,
+    InlineBlock {
+        left_of_tag: &'a str,
         tag: &'a str,
-        regex_pattern: &'a str,
+        right_of_tag: &'a str,
         expr: &'a str,
     },
-    ReplaceBlock {
+    NextLineBlock {
+        left_of_tag: &'a str,
         tag: &'a str,
-        regex_pattern: &'a str,
+        right_of_tag: &'a str,
         expr: &'a str,
-        affected_line: &'a str,
+        next_line: &'a str,
     },
-    ReplaceInInline {
-        before_tag: &'a str,
+    MultiLineBlock {
+        left_of_tag: &'a str,
         tag: &'a str,
-        left: &'a str,
-        right: &'a str,
+        right_of_tag: &'a str,
         expr: &'a str,
-    },
-    ReplaceInBlock {
-        tag: &'a str,
-        left: &'a str,
-        right: &'a str,
-        expr: &'a str,
-        affected_line: &'a str,
-    },
-    Directive {
-        tag: &'a str,
-        name: &'a str,
-        content: &'a str,
+        body: Vec<Element<'a>>,
     },
 }
 
+#[derive(Clone, Debug)]
+struct Input<'a> {
+    text: &'a str,
+    chars: Chars<'a>,
+    offset: usize,
+}
+
+impl<'a> Input<'a> {
+    pub fn new(text: &'a str) -> Self {
+        Self {
+            text,
+            chars: text.chars(),
+            offset: 0,
+        }
+    }
+    pub fn next(&mut self) -> Option<char> {
+        self.chars.next().map(|c| {
+            self.offset += c.len_utf8();
+            c
+        })
+    }
+
+    pub fn start_str(&self) -> Self {
+        Self {
+            text: &self.text[self.offset..],
+            chars: self.text[self.offset..].chars(),
+            offset: 0,
+        }
+    }
+
+    pub fn current_to_str(&self) -> &'a str {
+        &self.text[..self.offset]
+    }
+
+    pub fn read_n(&mut self, n: usize) -> Option<&'a str> {
+        let start = self.offset;
+        for _ in 0..n {
+            self.next()?;
+        }
+        Some(&self.text[start..self.offset])
+    }
+}
+
 struct Parser<'a> {
-    input: Chars<'a>,
+    input: Input<'a>,
 }
 
 impl<'a> Parser<'a> {
@@ -55,20 +81,24 @@ impl<'a> Parser<'a> {
     pub fn parse_element(&mut self) -> Result<Element<'a>> {
         todo!()
     }
-    pub fn parse_raw(&mut self) -> Result<Element<'a>> {
-        let mut current = self.input.clone();
+
+    pub fn parse_inline_tag(&mut self) -> Result<Element<'a>> {
+        let _ = self.parse_literal("{<")?;
+        self.parse_until(">}")
     }
-    pub fn parse_tag_start(&mut self) -> Result<()> {
+
+    pub fn parse_literal(&mut self, lit: &str) -> Result<()> {
         let mut current = self.input.clone();
-        match (current.next(), current.next()) {
-            (Some('{'), Some('%')) => {
-                self.input = current;
-                Ok(())
-            }
-            _ => bail!("Expected tag start"),
+        let did_match = current.read_n(2) == Some(lit);
+        if did_match {
+            self.input = current;
+            Ok(())
+        } else {
+            bail!("Expected literal `{}`", lit);
         }
     }
 }
+
 /*
 
 # {% replace_in " " `${cringe}` %}
