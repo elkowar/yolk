@@ -1,32 +1,42 @@
 WHITESPACE = _{ " " | "\t" }
 
-nl  =  { NEWLINE }
-wsp =  { WHITESPACE }
-ws  = @{ wsp* }
-any =  { ANY }
+nl  = { NEWLINE }
+wsp = { WHITESPACE }
+ws  = { wsp* }
+any = { ANY }
 
-InlineTag    = { "{<" ~ (!(">}" | nl) ~ ANY)* ~ ">}" }
-MultiLineTag = { "{%" ~ (MultiLineTagElseInner | MultiLineTagRegularInner) ~ "%}" }
-NextLineTag  = { "{#" ~ (!("#}" | nl) ~ ANY)* ~ "#}" }
+InlineTag    = !{ "{<" ~ InlineTagInner ~ ">}" }
+MultiLineTag = !{ "{%" ~ MultiLineTagInner ~ "%}" }
+NextLineTag  = !{ "{#" ~ NextLineTagInner ~ "#}" }
 
-MultiLineTagRegularInner = { (!("%}" | nl) ~ ANY)* }
-MultiLineTagElseInner    = { "else" }
-MultiLineTagIfInner      = { "if" ~ (!("%}" | nl) ~ ANY)* }
-MultiLineTagElseIfInner  = { "else" ~ "if" ~ (!("%}" | nl) ~ ANY)* }
+MultiLineTagInner        = _{ #kind = (MultiLineTagEndInner | MultiLineTagElseIfInner | MultiLineTagIfInner | MultiLineTagElseInner | MultiLineTagRegularInner) }
+MultiLineTagRegularInner =  { (!("%}" | nl) ~ ANY)* }
+MultiLineTagElseInner    =  { "else" }
+MultiLineTagEndInner     =  { "end" }
+MultiLineTagIfInner      =  { "if" ~ #expr = MultiLineTagRegularInner }
+MultiLineTagElseIfInner  =  { "elif" ~ #expr = MultiLineTagRegularInner }
+
+InlineTagInner        = { #kind = (InlineTagIfInner | InlineTagRegularInner) }
+InlineTagRegularInner = { (!(">}" | nl) ~ ANY)* }
+InlineTagIfInner      = { "if" ~ #expr = InlineTagRegularInner }
+
+NextLineTagInner        = { #kind = (NextLineTagIfInner | NextLineTagRegularInner) }
+NextLineTagRegularInner = { (!("#}" | nl) ~ ANY)* }
+NextLineTagIfInner      = { "if" ~ #expr = NextLineTagRegularInner }
 
 TagEnd = @{ (!nl ~ any)* }
 
-LineInlineTag      =  { LineInlineTagStart ~ InlineTag ~ TagEnd }
+LineInlineTag      = ${ LineInlineTagStart ~ #tag = InlineTag ~ TagEnd }
 LineInlineTagStart = @{ (!(nl | "{#" | "{%" | "{<") ~ any)* }
 
-LineNextLineTag      =  { LineNextLineTagStart ~ NextLineTag ~ TagEnd }
+LineNextLineTag      = ${ LineNextLineTagStart ~ #tag = NextLineTag ~ TagEnd }
 LineNextLineTagStart = @{ (!(nl | "{#" | "{%" | "{<") ~ any)* }
 
-LineMultiLineTag      =  { LineMultiLineTagStart ~ MultiLineTag ~ TagEnd }
+LineMultiLineTag      = ${ LineMultiLineTagStart ~ #tag = MultiLineTag ~ TagEnd }
 LineMultiLineTagStart = @{ (!(nl | "{#" | "{%" | "{<") ~ any)* }
 
 Raw = @{ (!nl ~ any)* }
 
 Line = { LineMultiLineTag | LineNextLineTag | LineInlineTag | Raw }
 
-Document = { (Line ~ nl)* }
+Document = { (Line ~ nl)* ~ Line? ~ (EOI | nl) }
