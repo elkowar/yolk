@@ -2,9 +2,16 @@ use pest_derive::Parser;
 
 pub mod document;
 pub mod element;
-mod parser;
+mod linewise;
 
 pub(crate) const COMMENT_START: &str = "<yolk> ";
+
+#[derive(Debug)]
+pub struct TaggedLine<'a> {
+    left: &'a str,
+    tag: &'a str,
+    right: &'a str,
+}
 
 #[derive(Parser)]
 #[grammar = "templating/yolk.pest"]
