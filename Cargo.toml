@@ -8,7 +8,6 @@ repository = "https://github.com/elkowar/yolk"
 anyhow = "1.0.93"
 ariadne = "0.5.0"
 assert_fs = "1.1.2"
-chumsky = "0.9.3"
 clap = { version = "4.5.21", features = ["derive", "env"] }
 dirs = "5.0.1"
 fs-err = "3.0.0"
