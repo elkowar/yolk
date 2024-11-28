@@ -32,28 +32,28 @@ impl<'a> Document<'a> {
             comment_prefix: self.comment_prefix.clone(),
         };
         for element in &self.elements {
-            output.push_str(&element.render(&ctx, eval_ctx)?);
+            // output.push_str(&element.render(&ctx, eval_ctx)?);
         }
         Ok(output)
     }
 
     pub fn parse_string(s: &'a str) -> Result<Self> {
         let mut document = Document::default();
-        let mut result = YolkParser::parse(Rule::YolkFile, s)?;
-        let yolk_file = result.next().unwrap();
+        // let mut result = YolkParser::parse(Rule::YolkFile, s)?;
+        // let yolk_file = result.next().unwrap();
 
-        for rule in yolk_file.into_inner() {
-            let element = element::Element::try_from_pair(rule)?;
-            if let element::Element::Directive {
-                name: "CommentPrefix",
-                content,
-                ..
-            } = element
-            {
-                document.comment_prefix = content.trim().to_string();
-            }
-            document.elements.push(element);
-        }
+        // for rule in yolk_file.into_inner() {
+        //     let element = element::Element::try_from_pair(rule)?;
+        //     if let element::Element::Directive {
+        //         name: "CommentPrefix",
+        //         content,
+        //         ..
+        //     } = element
+        //     {
+        //         document.comment_prefix = content.trim().to_string();
+        //     }
+        //     document.elements.push(element);
+        // }
         Ok(document)
     }
 }

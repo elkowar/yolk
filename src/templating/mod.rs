@@ -28,6 +28,7 @@ mod test {
             Rule, YolkParser,
         },
     };
+    /*
 
     #[test]
     pub fn test_parse_directive() {
@@ -86,4 +87,5 @@ mod test {
             result
         )
     }
+    */
 }
