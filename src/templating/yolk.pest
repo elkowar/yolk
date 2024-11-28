@@ -1,52 +1,32 @@
-
 WHITESPACE = _{ " " | "\t" }
-YolkFile   = ${ SOI ~ Element+ ~ EOI }
 
-Element = _{ Block | Raw }
+nl  =  { NEWLINE }
+wsp =  { WHITESPACE }
+ws  = @{ wsp* }
+any =  { ANY }
 
-Block = _{ IfBlock | ReplaceBlock| ReplaceInBlock | DirectiveTag | ReplaceInlineBlock | ReplaceInInlineBlock }
+InlineTag    = { "{<" ~ (!(">}" | nl) ~ ANY)* ~ ">}" }
+MultiLineTag = { "{%" ~ (MultiLineTagElseInner | MultiLineTagRegularInner) ~ "%}" }
+NextLineTag  = { "{#" ~ (!("#}" | nl) ~ ANY)* ~ "#}" }
 
-IfBlock = !{ (#if = IfTag) ~ (#body = Raw?) ~ ((#else = ElseTag) ~ (#elsebody = Raw?))? ~ (#end = EndTag) }
-IfTag   =  { BeforeTag ~ "if" ~ #pred = TagInner ~ AfterTag }
-ElseTag =  { BeforeTag ~ "else" ~ AfterTag }
-EndTag  =  { BeforeTag ~ "end" ~ AfterTag }
+MultiLineTagRegularInner = { (!("%}" | nl) ~ ANY)* }
+MultiLineTagElseInner    = { "else" }
+MultiLineTagIfInner      = { "if" ~ (!("%}" | nl) ~ ANY)* }
+MultiLineTagElseIfInner  = { "else" ~ "if" ~ (!("%}" | nl) ~ ANY)* }
 
-DirectiveTag = !{ BeforeTag ~ #name = DirectiveName ~ #value = TagInner ~ AfterTag }
+TagEnd = @{ (!nl ~ any)* }
 
-replace   = _{ "replace" | "r" }
-replaceIn = _{ "replace_in" | "ri" }
+LineInlineTag      =  { LineInlineTagStart ~ InlineTag ~ TagEnd }
+LineInlineTagStart = @{ (!(nl | "{#" | "{%" | "{<") ~ any)* }
 
-ReplaceTag     =  { BeforeTag ~ replace ~ #regexp = Regexp ~ #expr = TagInner ~ AfterTag }
-ReplaceBlock   = !{ #replace_tag = ReplaceTag ~ #affected = SingleLine }
-ReplaceInTag   =  { BeforeTag ~ replaceIn ~ #left = any ~ wsp+ ~ #right = any ~ #expr = TagInner ~ AfterTag }
-ReplaceInBlock = !{ #replace_tag = ReplaceTag ~ #affected = SingleLine }
+LineNextLineTag      =  { LineNextLineTagStart ~ NextLineTag ~ TagEnd }
+LineNextLineTagStart = @{ (!(nl | "{#" | "{%" | "{<") ~ any)* }
 
-ReplaceInlineBlock   = !{ #before = BeforeInlineTag ~ #tagContent = (replace ~ #regexp = Regexp ~ #expr = InlineTagInner) ~ AfterInlineTag }
-ReplaceInInlineBlock = !{ #before = BeforeInlineTag ~ #tagContent = (replaceIn ~ #left = any ~ #right = any ~ #expr = InlineTagInner) ~ AfterInlineTag }
+LineMultiLineTag      =  { LineMultiLineTagStart ~ MultiLineTag ~ TagEnd }
+LineMultiLineTagStart = @{ (!(nl | "{#" | "{%" | "{<") ~ any)* }
 
-DirectiveName = { "CommentPrefix" }
+Raw = @{ (!nl ~ any)* }
 
-SingleLine = { (!nl ~ ANY)* }
+Line = { LineMultiLineTag | LineNextLineTag | LineInlineTag | Raw }
 
-Regexp            =  { "/" ~ (RawRegexp | RegexpEscape)* ~ "/" }
-RawRegexp         = !{ (!("/" | "\\") ~ ANY)+ }
-RegexpEscape      = _{ "\\" ~ RegexpEscapeThing }
-RegexpEscapeThing = !{ "/" | "\\" }
-
-nl  = _{ NEWLINE }
-wsp = _{ WHITESPACE }
-any = {ANY}
-
-TagStart  = _{ "{%" }
-TagEnd    = _{ "%}" }
-BeforeTag = _{ (!(TagStart | nl) ~ ANY)* ~ TagStart ~ wsp* }
-AfterTag  = _{ wsp* ~ TagEnd ~ (!(nl | EOI) ~ ANY)* ~ (nl | EOI) }
-
-BeforeInlineTagContent = { (!("{<<" | nl) ~ ANY)* }
-BeforeInlineTag        = @{ BeforeInlineTagContent ~ ("{<<" ~ wsp*) }
-AfterInlineTag         = { wsp* ~ ">>}" ~ (!(nl | EOI) ~ ANY)* ~ (nl | EOI) }
-
-TagInner       = { (!TagEnd ~ ANY)+ }
-InlineTagInner = { (!">>}" ~ ANY)+ }
-
-Raw = { (!BeforeTag ~ ANY)+ }
+Document = { (Line ~ nl)* }
