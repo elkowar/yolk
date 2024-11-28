@@ -24,19 +24,18 @@ NextLineTagInner        = { #kind = (NextLineTagIfInner | NextLineTagRegularInne
 NextLineTagRegularInner = { (!("#}" | nl) ~ ANY)* }
 NextLineTagIfInner      = { "if" ~ #expr = NextLineTagRegularInner }
 
-TagEnd = @{ (!nl ~ any)* }
+TagEnd = @{ (!nl ~ any)* ~ nl }
 
-LineInlineTag      = ${ LineInlineTagStart ~ #tag = InlineTag ~ TagEnd }
+LineInlineTag      = ${ #left = LineInlineTagStart ~ #tag = InlineTag ~ #right = TagEnd }
 LineInlineTagStart = @{ (!(nl | "{#" | "{%" | "{<") ~ any)* }
 
-LineNextLineTag      = ${ LineNextLineTagStart ~ #tag = NextLineTag ~ TagEnd }
+LineNextLineTag      = ${ #left = LineNextLineTagStart ~ #tag = NextLineTag ~ #right = TagEnd }
 LineNextLineTagStart = @{ (!(nl | "{#" | "{%" | "{<") ~ any)* }
 
-LineMultiLineTag      = ${ LineMultiLineTagStart ~ #tag = MultiLineTag ~ TagEnd }
+LineMultiLineTag      = ${ #left = LineMultiLineTagStart ~ #tag = MultiLineTag ~ #right = TagEnd }
 LineMultiLineTagStart = @{ (!(nl | "{#" | "{%" | "{<") ~ any)* }
 
-Raw = @{ (!nl ~ any)* }
+Raw = @{ (!nl ~ any)* ~ nl }
 
-Line = { LineMultiLineTag | LineNextLineTag | LineInlineTag | Raw }
-
-Document = { (Line ~ nl)* ~ Line? ~ (EOI | nl) }
+Line     = _{ LineMultiLineTag | LineNextLineTag | LineInlineTag | Raw }
+Document = _{ Line* }
