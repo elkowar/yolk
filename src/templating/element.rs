@@ -246,6 +246,20 @@ impl<'a> ElementParser<'a> {
 }
 
 impl<'a> Element<'a> {
+    #[allow(unused)]
+    pub fn parse(s: &'a str) -> Result<Vec<Self>> {
+        let mut pairs = YolkParser::parse(Rule::Document, s)?;
+        let lines = pairs
+            .into_iter()
+            .map(|pair| linewise::ParsedLine::try_from_pair(pair))
+            .collect::<Result<_>>()?;
+        println!("{:#?}", &lines);
+        ElementParser::new(lines).parse()
+    }
+}
+
+/*
+impl<'a> Element<'a> {
     pub fn render(&self, render_ctx: &Context, eval_ctx: &mut EvalCtx<'_>) -> Result<String> {
         match self {
             Element::Raw(s) => Ok(s.to_string()),
@@ -415,12 +429,8 @@ impl<'a> Element<'a> {
         }
     }
 
-    #[allow(unused)]
-    pub fn parse(s: &'a str) -> Result<Self> {
-        let mut pairs = YolkParser::parse(Rule::Element, s)?;
-        Self::try_from_pair(pairs.next().context("No content")?)
-    }
 }
+*/
 
 #[cfg(test)]
 mod test {
@@ -430,38 +440,45 @@ mod test {
     use crate::templating::document::Context;
     use crate::templating::element::Element;
     #[test]
-    pub fn test_render_replace() -> TestResult {
-        let element = Element::parse("{% replace /'.*'/ `'new'` %}\nfoo: 'original'")?;
-        let render_ctx = Context::default();
-        let mut eval_ctx = eval_ctx::EvalCtx::new();
-        assert_eq!(
-            "{% replace /'.*'/ `'new'` %}\nfoo: 'new'",
-            element.render(&render_ctx, &mut eval_ctx)?
-        );
+    pub fn test_parse_if() -> TestResult {
+        let element = Element::parse("{%if foo %}\nfoo: 'original'\n{% end %}\n")?;
+        println!("{:#?}", element);
+        panic!();
         Ok(())
     }
+    // #[test]
+    // pub fn test_render_replace() -> TestResult {
+    //     let element = Element::parse("{% replace /'.*'/ `'new'` %}\nfoo: 'original'")?;
+    //     let render_ctx = Context::default();
+    //     let mut eval_ctx = eval_ctx::EvalCtx::new();
+    //     assert_eq!(
+    //         "{% replace /'.*'/ `'new'` %}\nfoo: 'new'",
+    //         element.render(&render_ctx, &mut eval_ctx)?
+    //     );
+    //     Ok(())
+    // }
 
-    #[test]
-    pub fn test_render_replace_inline() -> TestResult {
-        let element = Element::parse("foo: 'original' # {<< replace /'.*'/ `'new'` >>}")?;
-        let render_ctx = Context::default();
-        let mut eval_ctx = eval_ctx::EvalCtx::new();
-        assert_eq!(
-            "foo: 'new' # {<< replace /'.*'/ `'new'` >>}",
-            element.render(&render_ctx, &mut eval_ctx)?
-        );
-        Ok(())
-    }
+    // #[test]
+    // pub fn test_render_replace_inline() -> TestResult {
+    //     let element = Element::parse("foo: 'original' # {<< replace /'.*'/ `'new'` >>}")?;
+    //     let render_ctx = Context::default();
+    //     let mut eval_ctx = eval_ctx::EvalCtx::new();
+    //     assert_eq!(
+    //         "foo: 'new' # {<< replace /'.*'/ `'new'` >>}",
+    //         element.render(&render_ctx, &mut eval_ctx)?
+    //     );
+    //     Ok(())
+    // }
 
-    #[test]
-    pub fn test_render_replace_refuse_nonreversible() -> TestResult {
-        let element = Element::parse("{% replace /'.*'/ `no quotes` %}\nfoo: 'original'")?;
-        let render_ctx = Context::default();
-        let mut eval_ctx = eval_ctx::EvalCtx::new();
-        assert_eq!(
-            "{% replace /'.*'/ `no quotes` %}\nfoo: 'original'",
-            element.render(&render_ctx, &mut eval_ctx)?
-        );
-        Ok(())
-    }
+    // #[test]
+    // pub fn test_render_replace_refuse_nonreversible() -> TestResult {
+    //     let element = Element::parse("{% replace /'.*'/ `no quotes` %}\nfoo: 'original'")?;
+    //     let render_ctx = Context::default();
+    //     let mut eval_ctx = eval_ctx::EvalCtx::new();
+    //     assert_eq!(
+    //         "{% replace /'.*'/ `no quotes` %}\nfoo: 'original'",
+    //         element.render(&render_ctx, &mut eval_ctx)?
+    //     );
+    //     Ok(())
+    // }
 }
