@@ -11,6 +11,7 @@ pub struct TaggedLine<'a> {
     left: &'a str,
     tag: &'a str,
     right: &'a str,
+    full_line: &'a str,
 }
 
 #[derive(Parser)]

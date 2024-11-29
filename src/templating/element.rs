@@ -256,6 +256,75 @@ impl<'a> Element<'a> {
         println!("{:#?}", &lines);
         ElementParser::new(lines).parse()
     }
+
+    pub fn render(&self, render_ctx: &Context, eval_ctx: &mut EvalCtx<'_>) -> Result<String> {
+        match self {
+            Element::Raw(s) => Ok(s.to_string()),
+            Element::Inline {
+                line,
+                expr,
+                is_if: false,
+            } => {
+                let mut output = run_transformation_expr(render_ctx, eval_ctx, line.left, expr)?;
+                output.push_str(line.tag);
+                output.push_str(line.right);
+                Ok(output)
+            }
+            Element::NextLine {
+                line,
+                expr,
+                next_line,
+                is_if: false,
+            } => {
+                let mut output = line.full_line.to_string();
+                let new_affected = run_transformation_expr(render_ctx, eval_ctx, next_line, expr)?;
+                output.push_str(&new_affected);
+                Ok(output)
+            }
+            Element::Inline {
+                line,
+                expr,
+                is_if: true,
+            } => {
+                todo!()
+            }
+            Element::NextLine {
+                line,
+                expr,
+                next_line,
+                is_if: true,
+            } => {
+                todo!()
+            }
+            Element::MultiLine {
+                line,
+                expr,
+                body,
+                end,
+            } => {
+                let rendered_body = body
+                    .iter()
+                    .map(|x| x.render(render_ctx, eval_ctx))
+                    .collect::<Result<String>>()?;
+                let mut output = line.full_line.to_string();
+                let new_body = run_transformation_expr(eval_ctx, &rendered_body, expr)?;
+                output.push_str(&new_body);
+                output.push_str(end.full_line);
+                Ok(output)
+            }
+            Element::Conditional {
+                if_block,
+                elifs,
+                else_block,
+                end,
+            } => todo!(),
+            Element::Eof => todo!(),
+        }
+    }
+}
+
+fn run_transformation_expr(eval_ctx: &mut EvalCtx<'_>, text: &str, expr: &str) -> Result<String> {
+    eval_ctx.eval_tag_inner(text, expr)
 }
 
 /*
@@ -444,6 +513,21 @@ mod test {
         let element = Element::parse("{%if foo %}\nfoo: 'original'\n{% end %}\n")?;
         println!("{:#?}", element);
         panic!();
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_render_inline() -> TestResult {
+        let render_ctx = Context::default();
+        let mut eval_ctx = eval_ctx::EvalCtx::new();
+
+        let element = Element::parse("color=red /* {< id() >} */\n")?
+            .pop()
+            .unwrap();
+        assert_eq!(
+            "color=red /* {< id() >} */\n",
+            element.render(&render_ctx, &mut eval_ctx)?
+        );
         Ok(())
     }
     // #[test]

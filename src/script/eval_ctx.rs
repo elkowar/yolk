@@ -22,6 +22,17 @@ impl<'a> EvalCtx<'a> {
             .with_context(|| format!("Failed to evaluate expression: {}", expr))
     }
 
+    pub fn eval_text_transformation(&mut self, text: &str, expr: &str) -> Result<String> {
+        let engine = make_engine();
+        let scope_before = self.scope.len();
+        self.scope.push_constant("TAG_BLOCK", text.to_string());
+        let new_text = engine
+            .eval_expression_with_scope::<String>(&mut self.scope, expr)
+            .with_context(|| format!("Failed to evaluate expression: {}", expr))?;
+        self.scope.rewind(scope_before);
+        Ok(new_text)
+    }
+
     #[allow(unused)]
     pub fn scope(&self) -> &rhai::Scope<'a> {
         &self.scope

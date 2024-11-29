@@ -1,6 +1,14 @@
 use anyhow::Result;
-use rhai::EvalAltResult;
+use rhai::{EvalAltResult, EvalContext, NativeCallContext};
 use std::path::PathBuf;
+
+pub fn register_tag_functions(engine: &mut rhai::Engine) {
+    engine
+        .register_fn("__transform_id", |input_str: &str| input_str.to_string())
+        .register_fn("__transform_reverse", |input_str: &str| {
+            input_str.chars().rev().collect::<String>()
+        });
+}
 
 // TODO: Potentially turn this into a rhai module instead
 pub fn register(engine: &mut rhai::Engine) {

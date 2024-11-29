@@ -50,28 +50,30 @@ impl<'a> ParsedLine<'a> {
             Rule::nl => Ok(Self::Raw(pair.as_str())),
             Rule::LineNextLineTag => {
                 let inner = pair.into_inner();
-                let expr = inner.find_first_tagged("expr").unwrap();
                 let kind = inner.find_first_tagged("kind").unwrap();
                 Ok(Self::NextLineTag {
-                    line: parse_tagged_line(inner),
                     kind: match kind.as_rule() {
-                        Rule::NextLineTagIfInner => TagKind::If(expr.as_str()),
+                        Rule::NextLineTagIfInner => {
+                            TagKind::If(inner.find_first_tagged("expr").unwrap().as_str())
+                        }
                         Rule::NextLineTagRegularInner => TagKind::Regular(kind.as_str()),
                         _ => unreachable!(),
                     },
+                    line: parse_tagged_line(inner),
                 })
             }
             Rule::LineInlineTag => {
                 let inner = pair.into_inner();
-                let expr = inner.find_first_tagged("expr").unwrap();
                 let kind = inner.find_first_tagged("kind").unwrap();
                 Ok(Self::InlineTag {
-                    line: parse_tagged_line(inner),
                     kind: match kind.as_rule() {
-                        Rule::InlineTagIfInner => TagKind::If(expr.as_str()),
+                        Rule::InlineTagIfInner => {
+                            TagKind::If(inner.find_first_tagged("expr").unwrap().as_str())
+                        }
                         Rule::InlineTagRegularInner => TagKind::Regular(kind.as_str()),
                         _ => unreachable!(),
                     },
+                    line: parse_tagged_line(inner),
                 })
             }
 
@@ -110,5 +112,6 @@ fn parse_tagged_line<'a>(inner: Pairs<'a, Rule>) -> TaggedLine<'a> {
         left: left.as_str(),
         tag: tag.as_str(),
         right: right.as_str(),
+        full_line: inner.as_str(),
     }
 }
