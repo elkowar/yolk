@@ -138,9 +138,9 @@ mod test {
     #[test]
     pub fn test_render_inline() -> TestResult {
         let mut eval_ctx = eval_ctx::EvalCtx::new_for_tag()?;
-        let doc = Document::parse_string("color=red /* {< `_{YOLK_TEXT}_` >} */\n")?;
+        let doc = Document::parse_string("foo /* {< string.upper(YOLK_TEXT) >} */\n")?;
         assert_eq!(
-            "_color=red /* _{< `_{YOLK_TEXT}_` >} */\n",
+            "FOO /* {< string.upper(YOLK_TEXT) >} */\n",
             doc.render(&mut eval_ctx)?
         );
         Ok(())
@@ -149,10 +149,10 @@ mod test {
     #[test]
     pub fn test_render_next_line() -> TestResult {
         let mut eval_ctx = eval_ctx::EvalCtx::new_for_tag()?;
-        let doc = Document::parse_string("/* {# `_{YOLK_TEXT}_` #} */\nfoo\n")?;
+        let doc = Document::parse_string("/* {# string.upper(YOLK_TEXT) #} */\nfoo\n")?;
         // TODO: Fix the fact that appending at the end here goes after the \n???
         assert_eq!(
-            "/* {# `_{YOLK_TEXT}_` #} */\n_foo\n_",
+            "/* {# string.upper(YOLK_TEXT) #} */\nFOO\n",
             doc.render(&mut eval_ctx)?
         );
         Ok(())

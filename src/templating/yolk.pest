@@ -1,8 +1,8 @@
 WHITESPACE = _{ " " | "\t" }
 
-nl  = { NEWLINE }
-wsp = { WHITESPACE }
-ws  = { wsp* }
+nl = { NEWLINE }
+// wsp = { WHITESPACE }
+// ws  = { wsp* }
 any = { ANY }
 
 InlineTag    = !{ "{<" ~ InlineTagInner ~ ">}" }
@@ -24,7 +24,7 @@ NextLineTagInner        = { #kind = (NextLineTagIfInner | NextLineTagRegularInne
 NextLineTagRegularInner = { (!("#}" | nl) ~ ANY)* }
 NextLineTagIfInner      = { "if" ~ #expr = NextLineTagRegularInner }
 
-TagEnd = @{ (!nl ~ any)* ~ nl }
+TagEnd = @{ (!nl ~ any)* ~ (nl | EOI) }
 
 LineInlineTag      = ${ #left = LineInlineTagStart ~ #tag = InlineTag ~ #right = TagEnd }
 LineInlineTagStart = @{ (!(nl | "{#" | "{%" | "{<") ~ any)* }
@@ -35,7 +35,9 @@ LineNextLineTagStart = @{ (!(nl | "{#" | "{%" | "{<") ~ any)* }
 LineMultiLineTag      = ${ #left = LineMultiLineTagStart ~ #tag = MultiLineTag ~ #right = TagEnd }
 LineMultiLineTagStart = @{ (!(nl | "{#" | "{%" | "{<") ~ any)* }
 
-Raw = @{ (!nl ~ any)* ~ nl }
+// We have the alternative here to ensure that when this is the last line, it at least contains SOMETHING.
+// Otherwise, this rule would accept the empty string
+Raw = @{ ((!nl ~ any)* ~ nl) | ((!nl ~ any)+ ~ EOI) }
 
 Line     = _{ LineMultiLineTag | LineNextLineTag | LineInlineTag | Raw }
 Document = _{ Line* }

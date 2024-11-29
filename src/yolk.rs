@@ -2,13 +2,10 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context as _, Result};
 use fs_err::PathExt;
-use mlua::{Function, Lua, Value};
+use mlua::{Function, Value};
 
 use crate::{
-    eval_ctx::EvalCtx,
-    script::{self, sysinfo::SystemInfo},
-    templating::document::Document,
-    util,
+    eval_ctx::EvalCtx, script::sysinfo::SystemInfo, templating::document::Document, util,
     yolk_paths::YolkPaths,
 };
 
@@ -336,8 +333,8 @@ mod test {
         let home = assert_fs::TempDir::new()?;
         // deliberately non-sense state -- both parts need to change at one point, depending on canonical vs local
         let foo_toml_initial = indoc::indoc! {r#"
-            # {# replace(`'.*'`, `'${data.value}'`) #}
-            value = 'local'
+            # {# replace(`'.*'`, `'{data.value}'`) #}
+            value = 'foo'
         "#};
         home.child("config/foo.toml").write_str(&foo_toml_initial)?;
         let yp = YolkPaths::new(home.join("yolk"), home.to_path_buf());
@@ -353,13 +350,13 @@ mod test {
         home.child("config/foo.toml").assert(foo_toml_initial);
         yolk.sync_to_mode(EvalMode::Local)?;
         home.child("config/foo.toml").assert(indoc::indoc! {r#"
-            # {# replace(`'.*'`, `'${data.value}'`) #}
+            # {# replace(`'.*'`, `'{data.value}'`) #}
             value = 'local'
         "#});
         yolk.with_canonical_state(|| {
             home.child("yolk/eggs/foo/config/foo.toml")
                 .assert(indoc::indoc! {r#"
-                    # {# replace(`'.*'`, `'${data.value}'`) #}
+                    # {# replace(`'.*'`, `'{data.value}'`) #}
                     value = 'canonical'
                 "#});
             Ok(())
@@ -372,13 +369,13 @@ mod test {
             "#})?;
         yolk.sync_to_mode(EvalMode::Local)?;
         home.child("config/foo.toml").assert(indoc::indoc! {r#"
-            # {# replace(`'.*'`, `'${data.value}'`) #}
+            # {# replace(`'.*'`, `'{data.value}'`) #}
             value = 'new local'
         "#});
         yolk.with_canonical_state(|| {
             home.child("yolk/eggs/foo/config/foo.toml")
                 .assert(indoc::indoc! {r#"
-                # {# replace(`'.*'`, `'${data.value}'`) #}
+                # {# replace(`'.*'`, `'{data.value}'`) #}
                 value = 'new canonical'
             "#});
             Ok(())
