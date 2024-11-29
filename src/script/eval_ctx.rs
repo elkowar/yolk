@@ -1,43 +1,56 @@
 use anyhow::Context;
 use anyhow::Result;
+use mlua::FromLuaMulti;
+use mlua::Lua;
+use mlua::Value;
 
-use super::make_engine;
+use super::stdlib;
+
+pub const YOLK_TEXT_NAME: &str = "YOLK_TEXT";
 
 // TODO: Ensure an EvalCtx contains info about what file is being parsed,
 // the egg name, etc etc
-pub struct EvalCtx<'a> {
-    scope: rhai::Scope<'a>,
+pub struct EvalCtx {
+    lua: Lua,
 }
 
-impl<'a> EvalCtx<'a> {
+impl EvalCtx {
     pub fn new() -> Self {
-        let scope = rhai::Scope::new();
-        Self { scope }
+        let lua = Lua::new();
+        Self { lua }
+    }
+    pub fn new_for_tag() -> Result<Self> {
+        let lua = Lua::new();
+        stdlib::setup_tag_functions(&lua)?;
+        Ok(Self { lua })
     }
 
-    pub fn eval<T: Clone + 'static + Send + Sync>(&mut self, expr: &str) -> Result<T> {
-        let engine = make_engine();
-        engine
-            .eval_expression_with_scope::<T>(&mut self.scope, expr)
-            .with_context(|| format!("Failed to evaluate expression: {}", expr))
+    pub fn eval_expr<T: FromLuaMulti>(&mut self, expr: &str) -> Result<T> {
+        Ok(self
+            .lua
+            .load(expr)
+            .set_name("Expression")
+            .eval::<T>()
+            .with_context(|| format!("Failed to evaluate expression `{expr}`"))?)
     }
 
     pub fn eval_text_transformation(&mut self, text: &str, expr: &str) -> Result<String> {
-        let engine = make_engine();
-        let scope_before = self.scope.len();
-        self.scope.push_constant("TAG_BLOCK", text.to_string());
-        let new_text = engine
-            .eval_expression_with_scope::<String>(&mut self.scope, expr)
-            .with_context(|| format!("Failed to evaluate expression: {}", expr))?;
-        self.scope.rewind(scope_before);
-        Ok(new_text)
+        let globals = self.lua.globals();
+        let old_text = globals.get::<Value>(YOLK_TEXT_NAME)?;
+        self.lua.globals().set(YOLK_TEXT_NAME, text)?;
+        let result = self
+            .lua
+            .load(expr)
+            .set_name("text transformation expr")
+            .eval::<String>()?;
+        self.lua.globals().set(YOLK_TEXT_NAME, old_text)?;
+        Ok(result)
     }
 
-    #[allow(unused)]
-    pub fn scope(&self) -> &rhai::Scope<'a> {
-        &self.scope
+    pub fn lua(&self) -> &Lua {
+        &self.lua
     }
-    pub fn scope_mut(&mut self) -> &mut rhai::Scope<'a> {
-        &mut self.scope
+    pub fn lua_mut(&mut self) -> &mut Lua {
+        &mut self.lua
     }
 }

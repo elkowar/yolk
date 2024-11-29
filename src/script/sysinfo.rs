@@ -1,10 +1,17 @@
-use rhai::CustomType;
-use rhai::TypeBuilder;
+use mlua::IntoLua;
 
-#[derive(Debug, Clone, CustomType)]
+#[derive(Debug, Clone)]
 pub struct SystemInfo {
     hostname: String,
     username: String,
+}
+impl IntoLua for SystemInfo {
+    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
+        let table = lua.create_table()?;
+        table.set("hostname", self.hostname)?;
+        table.set("username", self.username)?;
+        Ok(mlua::Value::Table(table))
+    }
 }
 
 impl SystemInfo {

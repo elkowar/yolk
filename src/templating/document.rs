@@ -1,13 +1,11 @@
 use crate::eval_ctx::EvalCtx;
+use crate::templating::parser::linewise::ParsedLine;
 use crate::templating::COMMENT_START;
 
-use super::element;
-use super::Rule;
-
-use super::YolkParser;
+use super::{element, parser::document_parser::DocumentParser, Rule, YolkParser};
 
 use anyhow::Result;
-use pest::Parser;
+use pest::Parser as _;
 use regex::Regex;
 
 #[derive(Debug)]
@@ -32,29 +30,24 @@ impl<'a> Document<'a> {
             comment_prefix: self.comment_prefix.clone(),
         };
         for element in &self.elements {
-            // output.push_str(&element.render(&ctx, eval_ctx)?);
+            output.push_str(&element.render(&ctx, eval_ctx)?);
         }
         Ok(output)
     }
 
     pub fn parse_string(s: &'a str) -> Result<Self> {
-        let mut document = Document::default();
-        // let mut result = YolkParser::parse(Rule::YolkFile, s)?;
-        // let yolk_file = result.next().unwrap();
-
-        // for rule in yolk_file.into_inner() {
-        //     let element = element::Element::try_from_pair(rule)?;
-        //     if let element::Element::Directive {
-        //         name: "CommentPrefix",
-        //         content,
-        //         ..
-        //     } = element
-        //     {
-        //         document.comment_prefix = content.trim().to_string();
-        //     }
-        //     document.elements.push(element);
-        // }
-        Ok(document)
+        let result_lines = YolkParser::parse(Rule::Document, s)?;
+        let lines = result_lines
+            .into_iter()
+            .map(|pair| ParsedLine::try_from_pair(pair))
+            .collect::<Result<_>>()?;
+        let parser = DocumentParser::new(lines);
+        let elements = parser.parse()?;
+        // TODO: properly detect comment prefix automatically,
+        Ok(Self {
+            elements,
+            ..Default::default()
+        })
     }
 }
 
@@ -75,6 +68,15 @@ impl Context {
     pub fn new(comment_prefix: String) -> Self {
         Self { comment_prefix }
     }
+
+    pub fn string_toggled(&self, s: &str, enable: bool) -> String {
+        if enable {
+            self.enabled_str(s)
+        } else {
+            self.disabled_str(s)
+        }
+    }
+
     pub fn enabled_str(&self, s: &str) -> String {
         let re = Regex::new(&format!("{}{}", self.comment_prefix, COMMENT_START)).unwrap();
         let lines: Vec<_> = s.split('\n').map(|line| re.replace_all(line, "")).collect();

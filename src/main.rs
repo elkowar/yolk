@@ -86,7 +86,7 @@ pub(crate) fn main() -> Result<()> {
         Command::Add { name, path } => yolk.add_egg(name, path)?,
         Command::Sync => yolk.sync_to_mode(EvalMode::Local)?,
         Command::Eval { expr } => {
-            println!("{}", yolk.eval_rhai(yolk::EvalMode::Local, expr)?);
+            println!("{}", yolk.eval_lua(yolk::EvalMode::Local, expr)?);
         }
         Command::Git { command } => {
             yolk.with_canonical_state(|| {
@@ -109,8 +109,7 @@ pub(crate) fn main() -> Result<()> {
                     buffer
                 }
             };
-            let engine = script::make_engine();
-            let mut eval_ctx = yolk.prepare_eval_ctx(EvalMode::Local, &engine)?;
+            let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(EvalMode::Local)?;
             let result = yolk.eval_template(&mut eval_ctx, &text)?;
             println!("{}", result);
         }

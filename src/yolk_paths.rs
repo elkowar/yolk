@@ -2,13 +2,13 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 
-const DEFAULT_RHAI: &str = indoc::indoc! {r#"
-    fn canonical_data() {
-        #{}
-    }
-    fn local_data(system) {
+const DEFAULT_LUA: &str = indoc::indoc! {r#"
+    function canonical_data()
+        return {}
+    end
+    function local_data(system)
         canonical_data()
-    }
+    end
 "#};
 
 pub struct YolkPaths {
@@ -55,10 +55,10 @@ impl YolkPaths {
                 self.root_path().display()
             );
         }
-        if !self.rhai_path().exists() {
+        if !self.script_path().exists() {
             anyhow::bail!(
-                "Yolk directory does not contain a .rhai file at {}",
-                self.rhai_path().display()
+                "Yolk directory does not contain a yolk.lua file at {}",
+                self.script_path().display()
             );
         }
         if !self.eggs_dir_path().exists() {
@@ -77,7 +77,7 @@ impl YolkPaths {
         }
         fs_err::create_dir_all(path)?;
         fs_err::create_dir_all(self.eggs_dir_path())?;
-        fs_err::write(self.rhai_path(), DEFAULT_RHAI)?;
+        fs_err::write(self.script_path(), DEFAULT_LUA)?;
 
         Ok(())
     }
@@ -88,8 +88,8 @@ impl YolkPaths {
     pub fn home_path(&self) -> &std::path::Path {
         &self.home
     }
-    pub fn rhai_path(&self) -> std::path::PathBuf {
-        self.root_path.join("yolk.rhai")
+    pub fn script_path(&self) -> std::path::PathBuf {
+        self.root_path.join("yolk.lua")
     }
     pub fn eggs_dir_path(&self) -> std::path::PathBuf {
         self.root_path.join("eggs")
@@ -119,6 +119,6 @@ mod test {
         yolk_paths.create().unwrap();
         assert!(yolk_paths.check().is_ok());
         root.child("yolk/eggs").assert(exists());
-        root.child("yolk/yolk.rhai").assert(exists());
+        root.child("yolk/yolk.lua").assert(exists());
     }
 }

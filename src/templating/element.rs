@@ -1,26 +1,13 @@
-use std::collections::VecDeque;
-
-use anyhow::{bail, Context as _, Result};
-use pest::{iterators::Pair, Parser};
-use regex::Regex;
-
 use crate::eval_ctx::EvalCtx;
+use anyhow::Result;
 
-use super::{
-    document::Context,
-    linewise::{self, MultiLineTagKind, ParsedLine, TagKind},
-    Rule, TaggedLine, YolkParser,
-};
-// TODO: Instead of parsing separate specific syntax per element, what if
-// we just parsed {% rhai %}, and made a set of rhai functions that return objects that tell us _what_ that tag does?
-// that might make a lot of things a lot easier...
-// However, how would that work with conditionals and their `else` blocks? are those just magic syntax again?
+use super::{document::Context, TaggedLine};
 
 #[derive(Debug)]
 pub struct ConditionalBlock<'a> {
-    line: TaggedLine<'a>,
-    expr: Option<&'a str>,
-    body: Vec<Element<'a>>,
+    pub line: TaggedLine<'a>,
+    pub expr: Option<&'a str>,
+    pub body: Vec<Element<'a>>,
 }
 
 #[derive(Debug)]
@@ -44,525 +31,186 @@ pub enum Element<'a> {
         end: TaggedLine<'a>,
     },
     Conditional {
-        if_block: ConditionalBlock<'a>,
-        elifs: Vec<ConditionalBlock<'a>>,
-        else_block: Option<ConditionalBlock<'a>>,
+        blocks: Vec<ConditionalBlock<'a>>,
         end: TaggedLine<'a>,
     },
     Eof,
 }
 
-pub struct ElementParser<'a> {
-    lines: VecDeque<ParsedLine<'a>>,
-    parsed: Vec<Element<'a>>,
-}
-
-impl<'a> ElementParser<'a> {
-    pub fn new(lines: Vec<ParsedLine<'a>>) -> Self {
-        Self {
-            lines: lines.into(),
-            parsed: Vec::new(),
-        }
-    }
-    pub fn parse(mut self) -> Result<Vec<Element<'a>>> {
-        loop {
-            let elem = self.parse_element()?;
-            if matches!(elem, Element::Eof) {
-                break;
-            } else {
-                self.parsed.push(elem);
-            }
-        }
-        Ok(self.parsed)
-    }
-    pub fn parse_raw_line(&mut self) -> Result<Option<&'a str>> {
-        let Some(line) = self.lines.pop_front() else {
-            return Ok(None);
-        };
-
-        match line {
-            ParsedLine::Raw(raw) => Ok(Some(raw)),
-            _ => Err(anyhow::anyhow!("Expected raw line, got {:?}", line)),
-        }
-    }
-
-    fn parse_conditional_body(&mut self) -> Result<Vec<Element<'a>>> {
-        let mut children = Vec::new();
-        loop {
-            let Some(next) = self.lines.front() else {
-                bail!("Expected another line in if body");
-            };
-            match next {
-                ParsedLine::MultiLineTag { line: _, kind }
-                    if !matches!(kind, MultiLineTagKind::If(_) | MultiLineTagKind::Regular(_)) =>
-                {
-                    return Ok(children);
-                }
-                _ => children.push(self.parse_element()?),
-            }
-        }
-    }
-
-    pub fn parse_end_line(&mut self) -> Result<TaggedLine<'a>> {
-        let Some(line) = self.lines.pop_front() else {
-            bail!("Expected end line, got EOF");
-        };
-        match line {
-            ParsedLine::MultiLineTag {
-                line,
-                kind: MultiLineTagKind::End,
-            } => Ok(line),
-            line => {
-                let s = format!("{:?}", &line);
-                self.lines.push_front(line);
-                bail!("Expected end line, got {:?}", s);
-            }
-        }
-    }
-
-    pub fn parse_else_line(&mut self) -> Result<TaggedLine<'a>> {
-        let Some(line) = self.lines.pop_front() else {
-            bail!("Expected else line, got EOF");
-        };
-        match line {
-            ParsedLine::MultiLineTag {
-                line,
-                kind: MultiLineTagKind::Else,
-            } => Ok(line),
-            line => {
-                let s = format!("{:?}", &line);
-                self.lines.push_front(line);
-                bail!("Expected else line, got {:?}", s);
-            }
-        }
-    }
-    pub fn parse_elif_line(&mut self) -> Result<(TaggedLine<'a>, &'a str)> {
-        let Some(line) = self.lines.pop_front() else {
-            bail!("Expected elif line, got EOF");
-        };
-        match line {
-            ParsedLine::MultiLineTag {
-                line,
-                kind: MultiLineTagKind::Elif(expr),
-            } => Ok((line, expr)),
-            line => {
-                let s = format!("{:?}", &line);
-                self.lines.push_front(line);
-                bail!("Expected elif line, got {:?}", s);
-            }
-        }
-    }
-
-    pub fn parse_element(&mut self) -> Result<Element<'a>> {
-        let Some(line) = self.lines.pop_front() else {
-            return Ok(Element::Eof);
-        };
-        match line {
-            ParsedLine::MultiLineTag {
-                line: if_line,
-                kind: MultiLineTagKind::If(if_expr),
-            } => {
-                let mut elifs = Vec::new();
-                let mut else_block = None;
-                let yes_body = self.parse_conditional_body()?;
-                let if_block = ConditionalBlock {
-                    line: if_line,
-                    expr: Some(if_expr),
-                    body: yes_body,
-                };
-                loop {
-                    if let Ok((line, expr)) = self.parse_elif_line() {
-                        let body = self.parse_conditional_body()?;
-                        elifs.push(ConditionalBlock {
-                            line,
-                            expr: Some(expr),
-                            body,
-                        });
-                    } else if let Ok(line) = self.parse_else_line() {
-                        let body = self.parse_conditional_body()?;
-                        else_block = Some(ConditionalBlock {
-                            line,
-                            expr: None,
-                            body,
-                        })
-                    } else if let Ok(end) = self.parse_end_line() {
-                        return Ok(Element::Conditional {
-                            if_block,
-                            elifs,
-                            else_block,
-                            end,
-                        });
-                    } else {
-                        unreachable!(
-                            "We know that parse_conditional_body always \
-                            ends right before some conditional line"
-                        );
-                    }
-                }
-            }
-            ParsedLine::MultiLineTag {
-                line,
-                kind: MultiLineTagKind::Regular(expr),
-            } => {
-                let body = self.parse_conditional_body()?;
-                if let Ok(end_line) = self.parse_end_line() {
-                    return Ok(Element::MultiLine {
-                        line,
-                        expr,
-                        body,
-                        end: end_line,
-                    });
-                } else {
-                    unreachable!(
-                        "We know that parse_conditional_body \
-                        always ends right before some conditional line"
-                    );
-                }
-            }
-            ParsedLine::MultiLineTag { line: _, kind } => {
-                // TODO: Ensure that kind has some sort of ".type()" function to use here, rather than printing all of this
-                anyhow::bail!("Unexpected {:?}", kind)
-            }
-            ParsedLine::NextLineTag { line, kind } => Ok(Element::NextLine {
-                line,
-                expr: kind.expr(),
-                is_if: matches!(kind, TagKind::If(_)),
-                next_line: match self.parse_raw_line()? {
-                    Some(line) => line,
-                    None => todo!(
-                        "Potentially keep incomplete stuff, in case \
-                        we want to support evaluating partially invalid files"
-                    ),
-                },
-            }),
-            ParsedLine::InlineTag { line, kind } => Ok(Element::Inline {
-                line,
-                expr: kind.expr(),
-                is_if: matches!(kind, TagKind::If(_)),
-            }),
-            ParsedLine::Raw(text) => Ok(Element::Raw(text)),
-        }
-    }
-}
-
 impl<'a> Element<'a> {
-    #[allow(unused)]
-    pub fn parse(s: &'a str) -> Result<Vec<Self>> {
-        let mut pairs = YolkParser::parse(Rule::Document, s)?;
-        let lines = pairs
-            .into_iter()
-            .map(|pair| linewise::ParsedLine::try_from_pair(pair))
-            .collect::<Result<_>>()?;
-        println!("{:#?}", &lines);
-        ElementParser::new(lines).parse()
-    }
-
-    pub fn render(&self, render_ctx: &Context, eval_ctx: &mut EvalCtx<'_>) -> Result<String> {
+    pub fn render(&self, render_ctx: &Context, eval_ctx: &mut EvalCtx) -> Result<String> {
         match self {
             Element::Raw(s) => Ok(s.to_string()),
-            Element::Inline {
-                line,
-                expr,
-                is_if: false,
-            } => {
-                let mut output = run_transformation_expr(render_ctx, eval_ctx, line.left, expr)?;
-                output.push_str(line.tag);
-                output.push_str(line.right);
-                Ok(output)
-            }
+            Element::Inline { line, expr, is_if } => match is_if {
+                true => Ok(render_ctx.string_toggled(line.full_line, eval_ctx.eval_expr(expr)?)),
+                false => Ok(format!(
+                    "{}{}{}",
+                    run_transformation_expr(eval_ctx, line.left, expr)?,
+                    line.tag,
+                    line.right
+                )),
+            },
             Element::NextLine {
                 line,
                 expr,
                 next_line,
-                is_if: false,
-            } => {
-                let mut output = line.full_line.to_string();
-                let new_affected = run_transformation_expr(render_ctx, eval_ctx, next_line, expr)?;
-                output.push_str(&new_affected);
-                Ok(output)
-            }
-            Element::Inline {
-                line,
-                expr,
-                is_if: true,
-            } => {
-                todo!()
-            }
-            Element::NextLine {
-                line,
-                expr,
-                next_line,
-                is_if: true,
-            } => {
-                todo!()
-            }
+                is_if,
+            } => match is_if {
+                true => Ok(format!(
+                    "{}{}",
+                    line.full_line,
+                    &render_ctx.string_toggled(next_line, eval_ctx.eval_expr(expr)?),
+                )),
+                false => Ok(format!(
+                    "{}{}",
+                    line.full_line,
+                    run_transformation_expr(eval_ctx, next_line, expr)?
+                )),
+            },
             Element::MultiLine {
                 line,
                 expr,
                 body,
                 end,
             } => {
-                let rendered_body = body
-                    .iter()
-                    .map(|x| x.render(render_ctx, eval_ctx))
-                    .collect::<Result<String>>()?;
-                let mut output = line.full_line.to_string();
-                let new_body = run_transformation_expr(eval_ctx, &rendered_body, expr)?;
-                output.push_str(&new_body);
+                let rendered_body = render_elements(render_ctx, eval_ctx, &body)?;
+                Ok(format!(
+                    "{}{}{}",
+                    line.full_line,
+                    &run_transformation_expr(eval_ctx, &rendered_body, expr)?,
+                    end.full_line
+                ))
+            }
+            Element::Conditional { blocks, end } => {
+                let mut output = String::new();
+                let mut had_true = false;
+                for block in blocks {
+                    // If we've already had a true block, we want to return false for every other one.
+                    // If we haven't, and there's an expression, evaluate it.
+                    // If there isn't, we're on the else block, which should be true iff we haven't had a true block yet.
+                    let expr_true = match block.expr {
+                        Some(expr) => !had_true && eval_ctx.eval_expr(expr)?,
+                        None => !had_true,
+                    };
+                    had_true = had_true || expr_true;
+
+                    let rendered_body = render_elements(render_ctx, eval_ctx, &block.body)?;
+                    output.push_str(block.line.full_line);
+                    output.push_str(&render_ctx.string_toggled(&rendered_body, expr_true));
+                }
                 output.push_str(end.full_line);
                 Ok(output)
             }
-            Element::Conditional {
-                if_block,
-                elifs,
-                else_block,
-                end,
-            } => todo!(),
             Element::Eof => todo!(),
         }
     }
 }
 
-fn run_transformation_expr(eval_ctx: &mut EvalCtx<'_>, text: &str, expr: &str) -> Result<String> {
-    eval_ctx.eval_tag_inner(text, expr)
+fn render_elements<'a>(
+    render_ctx: &Context,
+    eval_ctx: &mut EvalCtx,
+    elements: &[Element<'a>],
+) -> Result<String> {
+    elements
+        .iter()
+        .map(|x| x.render(render_ctx, eval_ctx))
+        .collect::<Result<String>>()
 }
 
-/*
-impl<'a> Element<'a> {
-    pub fn render(&self, render_ctx: &Context, eval_ctx: &mut EvalCtx<'_>) -> Result<String> {
-        match self {
-            Element::Raw(s) => Ok(s.to_string()),
-
-            Element::Conditional {
-                if_block,
-                elifs,
-                else_block,
-                end,
-            } => {
-                let pred_value: bool = eval_ctx.eval(if_block.expr.unwrap())?;
-                todo!()
-            } /*
-                  Element::IfBlock {
-                      pred,
-                      if_tag,
-                      body,
-                      else_tag_and_body,
-                      end_tag,
-                  } => {
-                      let pred_value: bool = eval_ctx.eval(pred.trim())?;
-
-                      let rendered_body = body.render(render_ctx, eval_ctx)?;
-                      let rendered_else_body = else_tag_and_body
-                          .as_ref()
-                          .map(|(else_tag, else_body)| {
-                              anyhow::Ok((else_tag, else_body.render(render_ctx, eval_ctx)?))
-                          })
-                          .transpose()?;
-                      let mut output = String::new();
-                      output.push_str(if_tag);
-                      if pred_value {
-                          output.push_str(&render_ctx.enabled_str(&rendered_body));
-                      } else {
-                          output.push_str(&render_ctx.disabled_str(&rendered_body));
-                      }
-                      if let Some((else_tag, rendered_else_body)) = rendered_else_body {
-                          output.push_str(else_tag);
-                          if pred_value {
-                              output.push_str(&render_ctx.disabled_str(&rendered_else_body));
-                          } else {
-                              output.push_str(&render_ctx.enabled_str(&rendered_else_body));
-                          }
-                      }
-                      output.push_str(end_tag);
-                      Ok(output)
-                  }
-                  Element::ReplaceBlock {
-                      tag,
-                      regex_pattern,
-                      expr,
-                      affected_line,
-                  } => {
-                      let replacement: rhai::Dynamic = eval_ctx.eval(expr.trim())?;
-                      let replacement = replacement.to_string();
-                      let mut output = tag.to_string();
-                      let regex = Regex::new(regex_pattern)?;
-
-                      let after_replacement = regex.replace(affected_line, &replacement);
-                      let original_value = regex.find(affected_line);
-                      if let Some(original_value) = original_value {
-                          let reverted_line = regex.replace(&after_replacement, original_value.as_str());
-                          if &reverted_line != affected_line {
-                              eprintln!(
-                                  "Warning: Refusing to apply non-reversible `replace` action: `{}` in `{}`",
-                                  regex_pattern, affected_line
-                              );
-                              output.push_str(affected_line);
-                              return Ok(output);
-                          }
-                      }
-
-                      output.push_str(&after_replacement);
-                      Ok(output)
-                  }
-                  Element::ReplaceInBlock {
-                      tag,
-                      left,
-                      right,
-                      expr,
-                      affected_line,
-                  } => {
-                      let replacement: rhai::Dynamic = eval_ctx.eval(expr.trim())?;
-                      let replacement = replacement.to_string();
-                      let mut output = tag.to_string();
-                      let regex = Regex::new(&format!("{}[^{}]*{}", left, right, right))?;
-
-                      let after_replacement = regex.replace(affected_line, &replacement);
-                      let original_value = regex.find(affected_line);
-                      if let Some(original_value) = original_value {
-                          let reverted_line = regex.replace(&after_replacement, original_value.as_str());
-                          if &reverted_line != affected_line {
-                              eprintln!(
-                                  "Warning: Refusing to apply non-reversible `replace_in` action in `{affected_line}`",
-                              );
-                              output.push_str(affected_line);
-                              return Ok(output);
-                          }
-                      }
-
-                      output.push_str(&after_replacement);
-                      Ok(output)
-                  }
-                  Element::ReplaceInline {
-                      before_tag,
-                      tag,
-                      regex_pattern,
-                      expr,
-                  } => {
-                      let replacement: rhai::Dynamic = eval_ctx.eval(expr.trim())?;
-                      let replacement = replacement.to_string();
-                      let mut output = String::new();
-                      let regex = Regex::new(regex_pattern)?;
-
-                      let after_replacement = regex.replace(before_tag, &replacement);
-                      let original_value = regex.find(before_tag);
-                      if let Some(original_value) = original_value {
-                          let reverted_line = regex.replace(&after_replacement, original_value.as_str());
-                          if &reverted_line != before_tag {
-                              eprintln!(
-                                  "Warning: Refusing to apply non-reversible `replace` action: `{}` in `{}`",
-                                  regex_pattern, before_tag
-                              );
-                              output.push_str(before_tag);
-                          } else {
-                              output.push_str(&after_replacement);
-                          }
-                      } else {
-                          output.push_str(&after_replacement);
-                      }
-                      output.push_str(tag);
-                      Ok(output)
-                  }
-                  Element::ReplaceInInline {
-                      before_tag,
-                      tag,
-                      left,
-                      right,
-                      expr,
-                  } => {
-                      let replacement: rhai::Dynamic = eval_ctx.eval(expr.trim())?;
-                      let replacement = replacement.to_string();
-                      let mut output = String::new();
-                      let regex = Regex::new(&format!("{}[^{}]*{}", left, right, right))?;
-
-                      let after_replacement = regex.replace(before_tag, &replacement);
-                      let original_value = regex.find(before_tag);
-                      if let Some(original_value) = original_value {
-                          let reverted_line = regex.replace(&after_replacement, original_value.as_str());
-                          if &reverted_line != before_tag {
-                              eprintln!(
-                                  "Warning: Refusing to apply non-reversible `replace_in` action in `{before_tag}`",
-                              );
-                              output.push_str(before_tag);
-                          } else {
-                              output.push_str(&after_replacement);
-                          }
-                      } else {
-                          output.push_str(&after_replacement);
-                      }
-
-                      output.push_str(tag);
-                      Ok(output)
-                  }
-                  Element::Directive { tag, .. } => Ok(tag.to_string()),
-              */
-        }
+fn run_transformation_expr(eval_ctx: &mut EvalCtx, text: &str, expr: &str) -> Result<String> {
+    let result = eval_ctx.eval_text_transformation(text, expr)?;
+    let second_pass = eval_ctx.eval_text_transformation(&result, expr)?;
+    if result != second_pass {
+        println!("Warning: Refusing to apply transformation that is not idempodent: `{expr}`",);
+        Ok(text.to_string())
+    } else {
+        Ok(result)
     }
-
 }
-*/
 
 #[cfg(test)]
 mod test {
     use testresult::TestResult;
 
     use crate::eval_ctx;
-    use crate::templating::document::Context;
-    use crate::templating::element::Element;
-    #[test]
-    pub fn test_parse_if() -> TestResult {
-        let element = Element::parse("{%if foo %}\nfoo: 'original'\n{% end %}\n")?;
-        println!("{:#?}", element);
-        panic!();
-        Ok(())
-    }
+    use crate::templating::document::Document;
 
     #[test]
     pub fn test_render_inline() -> TestResult {
-        let render_ctx = Context::default();
-        let mut eval_ctx = eval_ctx::EvalCtx::new();
-
-        let element = Element::parse("color=red /* {< id() >} */\n")?
-            .pop()
-            .unwrap();
+        let mut eval_ctx = eval_ctx::EvalCtx::new_for_tag()?;
+        let doc = Document::parse_string("color=red /* {< `_{YOLK_TEXT}_` >} */\n")?;
         assert_eq!(
-            "color=red /* {< id() >} */\n",
-            element.render(&render_ctx, &mut eval_ctx)?
+            "_color=red /* _{< `_{YOLK_TEXT}_` >} */\n",
+            doc.render(&mut eval_ctx)?
         );
         Ok(())
     }
-    // #[test]
-    // pub fn test_render_replace() -> TestResult {
-    //     let element = Element::parse("{% replace /'.*'/ `'new'` %}\nfoo: 'original'")?;
-    //     let render_ctx = Context::default();
-    //     let mut eval_ctx = eval_ctx::EvalCtx::new();
-    //     assert_eq!(
-    //         "{% replace /'.*'/ `'new'` %}\nfoo: 'new'",
-    //         element.render(&render_ctx, &mut eval_ctx)?
-    //     );
-    //     Ok(())
-    // }
 
-    // #[test]
-    // pub fn test_render_replace_inline() -> TestResult {
-    //     let element = Element::parse("foo: 'original' # {<< replace /'.*'/ `'new'` >>}")?;
-    //     let render_ctx = Context::default();
-    //     let mut eval_ctx = eval_ctx::EvalCtx::new();
-    //     assert_eq!(
-    //         "foo: 'new' # {<< replace /'.*'/ `'new'` >>}",
-    //         element.render(&render_ctx, &mut eval_ctx)?
-    //     );
-    //     Ok(())
-    // }
+    #[test]
+    pub fn test_render_next_line() -> TestResult {
+        let mut eval_ctx = eval_ctx::EvalCtx::new_for_tag()?;
+        let doc = Document::parse_string("/* {# `_{YOLK_TEXT}_` #} */\nfoo\n")?;
+        // TODO: Fix the fact that appending at the end here goes after the \n???
+        assert_eq!(
+            "/* {# `_{YOLK_TEXT}_` #} */\n_foo\n_",
+            doc.render(&mut eval_ctx)?
+        );
+        Ok(())
+    }
 
-    // #[test]
-    // pub fn test_render_replace_refuse_nonreversible() -> TestResult {
-    //     let element = Element::parse("{% replace /'.*'/ `no quotes` %}\nfoo: 'original'")?;
-    //     let render_ctx = Context::default();
-    //     let mut eval_ctx = eval_ctx::EvalCtx::new();
-    //     assert_eq!(
-    //         "{% replace /'.*'/ `no quotes` %}\nfoo: 'original'",
-    //         element.render(&render_ctx, &mut eval_ctx)?
-    //     );
-    //     Ok(())
-    // }
+    #[test]
+    pub fn test_multiline_conditional() -> TestResult {
+        let mut eval_ctx = eval_ctx::EvalCtx::new_for_tag()?;
+        let input_str = indoc::indoc! {r#"
+            /* {% if false %} */
+            foo
+            /* {% elif true %} */
+            bar
+            /* {% else %} */
+            bar
+            /* {% end %} */
+        "#};
+        let doc = Document::parse_string(input_str)?;
+        assert_eq!(
+            indoc::indoc! {r#"
+                /* {% if false %} */
+                #<yolk> foo
+                /* {% elif true %} */
+                bar
+                /* {% else %} */
+                #<yolk> bar
+                /* {% end %} */
+            "#},
+            doc.render(&mut eval_ctx)?
+        );
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_render_replace() -> TestResult {
+        let doc = Document::parse_string(indoc::indoc! {"
+            {# replace(`'.*'`, `'new'`) #}
+            foo: 'original'
+        "})?;
+        let mut eval_ctx = eval_ctx::EvalCtx::new_for_tag()?;
+        assert_eq!(
+            indoc::indoc! {"
+                {# replace(`'.*'`, `'new'`) #}
+                foo: 'new'
+            "},
+            doc.render(&mut eval_ctx)?
+        );
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_render_replace_refuse_non_idempodent() -> TestResult {
+        let element = Document::parse_string("{# replace(`'.*'`, `a'a'`) #}\nfoo: 'original'\n")?;
+        let mut eval_ctx = eval_ctx::EvalCtx::new_for_tag()?;
+        assert_eq!(
+            "{# replace(`'.*'`, `a'a'`) #}\nfoo: 'original'\n",
+            element.render(&mut eval_ctx)?
+        );
+        Ok(())
+    }
 }

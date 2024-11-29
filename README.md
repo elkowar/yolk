@@ -30,9 +30,9 @@ font="Fira Code"
 
 [colors]
 # Load your colors from your yolk configuration
-# {% replace /".*"/ `"${data.colors.background}"` %}
+# {% replace(`".*"`, `"${data.colors.background}"`) %}
 background="#282828"
-# {% replace /".*"/ `"${data.colors.foreground}"` %}
+# {% replace(`".*"`, `"${data.colors.foreground}"`) %}
 foreground="#ebdbb2"
 ```
 
@@ -40,8 +40,8 @@ Yolk will now be able to run the corresponding modifications on the file itself,
 templated values while keeping the template directly in the same file.
 
 ### User Configuration
-Yolk template expressions and configuration are written in the [Rhai](https://rhai.rs/) scripting language.
-You can provide custom data to use in your templates via the `yolk.rhai` file in your yolk directory,
+Yolk template expressions and configuration are written in the [Luau](https://luau.org/) scripting language.
+You can provide custom data to use in your templates via the `yolk.lua` file in your yolk directory,
 which allows you to fetch data dynamically from your system, or reference different static data depending on your system.
 
 ### Version Control

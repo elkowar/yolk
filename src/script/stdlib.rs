@@ -1,14 +1,29 @@
-use anyhow::Result;
-use rhai::{EvalAltResult, EvalContext, NativeCallContext};
-use std::path::PathBuf;
+use anyhow::Context as _;
+use mlua::Lua;
+use regex::Regex;
 
-pub fn register_tag_functions(engine: &mut rhai::Engine) {
-    engine
-        .register_fn("__transform_id", |input_str: &str| input_str.to_string())
-        .register_fn("__transform_reverse", |input_str: &str| {
-            input_str.chars().rev().collect::<String>()
-        });
+use super::eval_ctx::YOLK_TEXT_NAME;
+
+pub fn setup_tag_functions(lua: &Lua) -> anyhow::Result<()> {
+    let globals = lua.globals();
+    globals.set(
+        "reverse",
+        lua.create_function(|lua, ()| {
+            let text = lua.globals().get::<String>(YOLK_TEXT_NAME)?;
+            Ok(text.chars().rev().collect::<String>())
+        })?,
+    )?;
+    globals.set(
+        "replace",
+        lua.create_function(|lua, (regex, replacement): (String, String)| {
+            let text = lua.globals().get::<String>(YOLK_TEXT_NAME)?;
+            let pattern = Regex::new(&regex).with_context(|| format!("Invalid regex: {regex}"))?;
+            Ok(pattern.replace_all(&text, replacement).to_string())
+        })?,
+    )?;
+    Ok(())
 }
+/*
 
 // TODO: Potentially turn this into a rhai module instead
 pub fn register(engine: &mut rhai::Engine) {
@@ -57,3 +72,5 @@ pub fn command_available(command: &str) -> bool {
         }
     }
 }
+
+*/

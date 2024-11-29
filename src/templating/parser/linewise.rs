@@ -1,7 +1,7 @@
 use anyhow::Result;
 use pest::iterators::{Pair, Pairs};
 
-use super::{Rule, TaggedLine};
+use crate::templating::{Rule, TaggedLine};
 
 #[derive(Debug)]
 pub enum ParsedLine<'a> {
@@ -84,9 +84,7 @@ impl<'a> ParsedLine<'a> {
                 Ok(Self::MultiLineTag {
                     line: parse_tagged_line(inner),
                     kind: match kind.as_rule() {
-                        Rule::MultiLineTagRegularInner => {
-                            MultiLineTagKind::Regular(expr.unwrap().as_str())
-                        }
+                        Rule::MultiLineTagRegularInner => MultiLineTagKind::Regular(kind.as_str()),
                         Rule::MultiLineTagIfInner => MultiLineTagKind::If(expr.unwrap().as_str()),
                         Rule::MultiLineTagElseIfInner => {
                             MultiLineTagKind::Elif(expr.unwrap().as_str())

@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context as _, Result};
 use fs_err::PathExt;
-use rhai::Dynamic;
+use mlua::{Function, Lua, Value};
 
 use crate::{
     eval_ctx::EvalCtx,
@@ -108,9 +108,8 @@ impl Yolk {
 
     pub fn sync_to_mode(&self, mode: EvalMode) -> Result<()> {
         let egg_paths = self.list_egg_paths()?;
-        let engine = script::make_engine();
         let mut eval_ctx = self
-            .prepare_eval_ctx(mode, &engine)
+            .prepare_eval_ctx_for_templates(mode)
             .context("Failed to prepare eval_ctx")?;
 
         for egg_dir in egg_paths {
@@ -125,7 +124,7 @@ impl Yolk {
                             self.eval_template_file_in_place(&mut eval_ctx, &templated_file)
                         {
                             eprintln!(
-                                "Warning: Failed to sync templated file {}: {}",
+                                "Warning: Failed to sync templated file {}: {:?}",
                                 templated_file.display(),
                                 err
                             );
@@ -142,42 +141,43 @@ impl Yolk {
         Ok(())
     }
 
-    pub fn prepare_eval_ctx(&self, mode: EvalMode, engine: &rhai::Engine) -> Result<EvalCtx> {
+    pub fn prepare_eval_ctx_for_templates(&self, mode: EvalMode) -> Result<EvalCtx> {
         let sysinfo = match mode {
             EvalMode::Canonical => SystemInfo::canonical(),
             EvalMode::Local => SystemInfo::generate(),
         };
-        let mut eval_ctx = EvalCtx::new();
-        let ast = engine
-            .compile_file(self.yolk_paths.rhai_path())
-            .with_context(|| "Failed to compile rhai file".to_string())?;
-        let data: Result<Dynamic, _> = match mode {
-            EvalMode::Canonical => engine.call_fn(eval_ctx.scope_mut(), &ast, "canonical_data", ()),
-            EvalMode::Local => {
-                engine.call_fn(eval_ctx.scope_mut(), &ast, "local_data", (sysinfo.clone(),))
-            }
+        let eval_ctx = EvalCtx::new_for_tag()?;
+        let yolk_file = fs_err::read_to_string(self.yolk_paths.script_path())?;
+        eval_ctx.lua().load(yolk_file).set_name("yolk.lua").exec()?;
+        let globals = eval_ctx.lua().globals();
+        let data: Result<Value, _> = match mode {
+            EvalMode::Canonical => globals
+                .get::<Function>("canonical_data")
+                .with_context(|| "Failed to get canonical_data function")?
+                .call(()),
+            EvalMode::Local => globals
+                .get::<Function>("local_data")
+                .with_context(|| "Failed to get local_data function")?
+                .call(sysinfo.clone()),
         };
         let data = data.with_context(|| "Failed to call data function".to_string())?;
-        eval_ctx.scope_mut().push_constant("data", data);
-        eval_ctx.scope_mut().push_constant("system", sysinfo);
+        globals.set("data", data)?;
+        globals.set("system", sysinfo)?;
         Ok(eval_ctx)
     }
 
-    pub fn eval_rhai(&self, mode: EvalMode, expr: &str) -> Result<String> {
-        let engine = script::make_engine();
-        let mut eval_ctx = self
-            .prepare_eval_ctx(mode, &engine)
+    pub fn eval_lua(&self, mode: EvalMode, expr: &str) -> Result<String> {
+        let eval_ctx = self
+            .prepare_eval_ctx_for_templates(mode)
             .context("Failed to prepare eval_ctx")?;
-        let result = engine
-            .eval_expression_with_scope::<Dynamic>(eval_ctx.scope_mut(), expr)
-            .with_context(|| format!("Failed to evaluate: {}", expr))?;
-        Ok(result.to_string())
+        let result = eval_ctx.lua().load(expr).eval::<Value>()?;
+        Ok(result.to_string()?)
     }
 
     /// Evaluate a templated file
     pub fn eval_template(&self, eval_ctx: &mut EvalCtx, content: &str) -> Result<String> {
-        let doc = Document::parse_string(content)?;
-        doc.render(eval_ctx)
+        let doc = Document::parse_string(content).context("Failed to parse document")?;
+        doc.render(eval_ctx).context("Failed to render document")
     }
 
     pub fn eval_template_file_in_place(
@@ -274,7 +274,7 @@ mod test {
         let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
         yolk.init_yolk()?;
 
-        home.child("yolk/yolk.rhai").assert(is_file());
+        home.child("yolk/yolk.lua").assert(is_file());
         home.child("yolk/eggs").assert(is_dir());
 
         yolk.add_egg("foo", home.child("config/foo.toml"))?;
@@ -336,16 +336,16 @@ mod test {
         let home = assert_fs::TempDir::new()?;
         // deliberately non-sense state -- both parts need to change at one point, depending on canonical vs local
         let foo_toml_initial = indoc::indoc! {r#"
-            # {% replace /'.*'/ `'${data.value}'` %}
+            # {# replace(`'.*'`, `'${data.value}'`) #}
             value = 'local'
         "#};
         home.child("config/foo.toml").write_str(&foo_toml_initial)?;
         let yp = YolkPaths::new(home.join("yolk"), home.to_path_buf());
         let yolk = Yolk::new(yp);
         yolk.init_yolk()?;
-        home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
-                fn canonical_data() { #{value: "canonical"} }
-                fn local_data(system) { #{value: "local"} }
+        home.child("yolk/yolk.lua").write_str(indoc::indoc! {r#"
+                function canonical_data() return {value = "canonical"} end
+                function local_data(system) return {value = "local"} end
             "#})?;
         yolk.add_egg("foo", home.join("config").join("foo.toml"))?;
         home.child("yolk/eggs/foo/yolk_templates")
@@ -353,32 +353,32 @@ mod test {
         home.child("config/foo.toml").assert(foo_toml_initial);
         yolk.sync_to_mode(EvalMode::Local)?;
         home.child("config/foo.toml").assert(indoc::indoc! {r#"
-            # {% replace /'.*'/ `'${data.value}'` %}
+            # {# replace(`'.*'`, `'${data.value}'`) #}
             value = 'local'
         "#});
         yolk.with_canonical_state(|| {
             home.child("yolk/eggs/foo/config/foo.toml")
                 .assert(indoc::indoc! {r#"
-                # {% replace /'.*'/ `'${data.value}'` %}
-                value = 'canonical'
-            "#});
+                    # {# replace(`'.*'`, `'${data.value}'`) #}
+                    value = 'canonical'
+                "#});
             Ok(())
         })?;
 
         // Update the state, to see if applying again just works :tm:
-        home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
-                fn canonical_data() { #{value: "new canonical"} }
-                fn local_data(system) { #{value: "new local"} }
+        home.child("yolk/yolk.lua").write_str(indoc::indoc! {r#"
+                function canonical_data() return {value = "new canonical"} end
+                function local_data(system) return {value = "new local"} end
             "#})?;
         yolk.sync_to_mode(EvalMode::Local)?;
         home.child("config/foo.toml").assert(indoc::indoc! {r#"
-            # {% replace /'.*'/ `'${data.value}'` %}
+            # {# replace(`'.*'`, `'${data.value}'`) #}
             value = 'new local'
         "#});
         yolk.with_canonical_state(|| {
             home.child("yolk/eggs/foo/config/foo.toml")
                 .assert(indoc::indoc! {r#"
-                # {% replace /'.*'/ `'${data.value}'` %}
+                # {# replace(`'.*'`, `'${data.value}'`) #}
                 value = 'new canonical'
             "#});
             Ok(())
@@ -390,7 +390,7 @@ mod test {
     fn test_add_to_templated_files() -> TestResult {
         let home = assert_fs::TempDir::new()?;
         home.child("config/foo.toml")
-            .write_str("# {% replace /'.*'/ `bar` %}\nvalue = 'foo'")?;
+            .write_str("# {# replace(`'.*'`, `bar`) #}\nvalue = 'foo'")?;
         let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
         yolk.init_yolk()?;
         yolk.add_egg("foo", home.child("config/foo.toml"))?;

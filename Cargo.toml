@@ -12,11 +12,16 @@ clap = { version = "4.5.21", features = ["derive", "env"] }
 dirs = "5.0.1"
 fs-err = "3.0.0"
 indoc = "2.0.5"
+mlua = { version = "0.10.1", features = [
+    "luau",
+    "error-send",
+    "anyhow",
+    "send",
+] }
 pest = { version = "2.7.14" }
 pest_derive = { version = "2.7.14", features = ["grammar-extras"] }
 predicates = "3.1.2"
 regex = "1.11.1"
-rhai = { version = "1.20.0", features = ["sync"] }
 testresult = "0.4.1"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
