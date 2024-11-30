@@ -50,7 +50,7 @@ impl Yolk {
             if in_home.is_symlink() && in_home.fs_err_read_link()? == path {
                 return Ok(());
             } else if in_home.is_dir() && path.is_dir() {
-                for entry in fs_err::read_dir(path)? {
+                for entry in path.fs_err_read_dir()? {
                     let entry = entry?;
                     self.use_recursively(egg_name, &entry.path())?;
                 }
@@ -74,7 +74,7 @@ impl Yolk {
         tracing::info!("Using egg {}", egg_name);
         let egg_path = self.yolk_paths.egg_path(egg_name);
 
-        for entry in fs_err::read_dir(&egg_path)? {
+        for entry in egg_path.fs_err_read_dir()? {
             let entry = entry?;
             if entry.file_name() == "yolk_templates" {
                 continue;
@@ -226,7 +226,7 @@ impl Yolk {
     }
 
     pub fn list_egg_paths(&self) -> Result<Vec<PathBuf>> {
-        let entries = self.yolk_paths.eggs_dir_path().read_dir()?;
+        let entries = self.yolk_paths.eggs_dir_path().fs_err_read_dir()?;
         Ok(entries
             .filter_map(|entry| entry.ok().map(|x| x.path()))
             .collect())

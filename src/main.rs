@@ -23,7 +23,7 @@ struct Args {
     yolk_dir: Option<std::path::PathBuf>,
 
     /// Enable debug logging
-    #[arg(long)]
+    #[arg(long, short = 'v', global = true)]
     debug: bool,
 }
 

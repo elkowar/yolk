@@ -45,11 +45,11 @@ impl<'a> DocumentParser<'a> {
         }
     }
 
-    fn parse_conditional_body(&mut self) -> Result<Vec<Element<'a>>> {
+    fn parse_multiline_body(&mut self) -> Result<Vec<Element<'a>>> {
         let mut children = Vec::new();
         loop {
             let Some(next) = self.lines.front() else {
-                bail!("Expected another line in if body");
+                bail!("Expected another line in block body, but file ended");
             };
             match next {
                 ParsedLine::MultiLineTag { line: _, kind }
@@ -122,7 +122,7 @@ impl<'a> DocumentParser<'a> {
                 kind: MultiLineTagKind::If(if_expr),
             } => {
                 let mut blocks = Vec::new();
-                let yes_body = self.parse_conditional_body()?;
+                let yes_body = self.parse_multiline_body()?;
                 blocks.push(ConditionalBlock {
                     line: if_line,
                     expr: Some(if_expr),
@@ -130,14 +130,14 @@ impl<'a> DocumentParser<'a> {
                 });
                 loop {
                     if let Ok((line, expr)) = self.parse_elif_line() {
-                        let body = self.parse_conditional_body()?;
+                        let body = self.parse_multiline_body()?;
                         blocks.push(ConditionalBlock {
                             line,
                             expr: Some(expr),
                             body,
                         });
                     } else if let Ok(line) = self.parse_else_line() {
-                        let body = self.parse_conditional_body()?;
+                        let body = self.parse_multiline_body()?;
                         blocks.push(ConditionalBlock {
                             line,
                             expr: None,
@@ -157,20 +157,14 @@ impl<'a> DocumentParser<'a> {
                 line,
                 kind: MultiLineTagKind::Regular(expr),
             } => {
-                let body = self.parse_conditional_body()?;
-                if let Ok(end_line) = self.parse_end_line() {
-                    return Ok(Element::MultiLine {
-                        line,
-                        expr,
-                        body,
-                        end: end_line,
-                    });
-                } else {
-                    unreachable!(
-                        "We know that parse_conditional_body \
-                        always ends right before some conditional line"
-                    );
-                }
+                let body = self.parse_multiline_body()?;
+                let end = self.parse_end_line()?;
+                Ok(Element::MultiLine {
+                    line,
+                    expr,
+                    body,
+                    end,
+                })
             }
             ParsedLine::MultiLineTag { line: _, kind } => {
                 // TODO: Ensure that kind has some sort of ".type()" function to use here, rather than printing all of this
