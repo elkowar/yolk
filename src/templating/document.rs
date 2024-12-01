@@ -1,6 +1,5 @@
 use crate::eval_ctx::EvalCtx;
 use crate::templating::parser::linewise::ParsedLine;
-use crate::templating::COMMENT_START;
 
 use super::{
     element,
@@ -10,7 +9,6 @@ use super::{
 
 use anyhow::Result;
 use pest::Parser as _;
-use regex::Regex;
 
 #[derive(Debug)]
 pub struct Document<'a> {
@@ -89,27 +87,10 @@ impl RenderContext {
         lines.join("\n")
     }
     pub fn disabled_str(&self, s: &str) -> String {
-        let re = Regex::new(&format!("^\\s*{}{}", self.comment_style, COMMENT_START)).unwrap();
-        let lines: Vec<_> = s
+        let lines = s
             .split('\n')
-            .map(|line| {
-                if !re.is_match(line) && !line.is_empty() {
-                    let indent: String = line
-                        .chars()
-                        .take_while(|&c| c == ' ' || c == '\t')
-                        .collect();
-                    format!(
-                        "{}{}{}{}",
-                        indent,
-                        self.comment_style,
-                        COMMENT_START,
-                        line.trim_start_matches(|c| c == ' ' || c == '\t')
-                    )
-                } else {
-                    line.to_string()
-                }
-            })
-            .collect();
+            .map(|x| self.comment_style.disable_line(x))
+            .collect::<Vec<_>>();
         lines.join("\n")
     }
 }
