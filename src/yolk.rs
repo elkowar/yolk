@@ -336,7 +336,7 @@ mod test {
             # {# replace(`'.*'`, `'{data.value}'`) #}
             value = 'foo'
         "#};
-        home.child("config/foo.toml").write_str(&foo_toml_initial)?;
+        home.child("config/foo.toml").write_str(foo_toml_initial)?;
         let yp = YolkPaths::new(home.join("yolk"), home.to_path_buf());
         let yolk = Yolk::new(yp);
         yolk.init_yolk()?;

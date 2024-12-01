@@ -77,7 +77,7 @@ impl<'a> Element<'a> {
                 body,
                 end,
             } => {
-                let rendered_body = render_elements(render_ctx, eval_ctx, &body)?;
+                let rendered_body = render_elements(render_ctx, eval_ctx, body)?;
                 Ok(format!(
                     "{}{}{}",
                     line.full_line.as_str(),
@@ -110,10 +110,10 @@ impl<'a> Element<'a> {
     }
 }
 
-fn render_elements<'a>(
+fn render_elements(
     render_ctx: &RenderContext,
     eval_ctx: &mut EvalCtx,
-    elements: &[Element<'a>],
+    elements: &[Element<'_>],
 ) -> Result<String> {
     elements
         .iter()

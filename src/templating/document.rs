@@ -41,7 +41,7 @@ impl<'a> Document<'a> {
         let result_lines = YolkParser::parse(Rule::Document, s)?;
         let lines = result_lines
             .into_iter()
-            .map(|pair| ParsedLine::try_from_pair(pair))
+            .map(ParsedLine::try_from_pair)
             .collect::<Result<_>>()?;
         let parser = DocumentParser::new(lines);
         let elements = parser.parse()?;

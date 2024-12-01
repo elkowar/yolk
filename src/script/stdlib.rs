@@ -8,14 +8,14 @@ use regex::Regex;
 use super::eval_ctx::YOLK_TEXT_NAME;
 
 pub fn setup_tag_functions(lua: &Lua) -> anyhow::Result<()> {
-    setup_pure_functions(&lua)?;
+    setup_pure_functions(lua)?;
     let globals = lua.globals();
 
     /// Simple regex replacement that will refuse to run a non-reversible replacement.
     /// If the replacement value is non-reversible, will return the original text and log a warning.
     fn tag_text_replace(text: &str, pattern: &str, replacement: &str) -> Result<String> {
-        let pattern = Regex::new(&pattern).with_context(|| format!("Invalid regex: {pattern}"))?;
-        let after_replace = pattern.replace(&text, replacement);
+        let pattern = Regex::new(pattern).with_context(|| format!("Invalid regex: {pattern}"))?;
+        let after_replace = pattern.replace(text, replacement);
         if let Some(original_value) = pattern.find(text) {
             let original_value = original_value.as_str();
             let reversed = pattern.replace(&after_replace, original_value);
@@ -59,7 +59,7 @@ pub fn setup_tag_functions(lua: &Lua) -> anyhow::Result<()> {
         Ok(tag_text_replace(
             &text,
             r"#[\da-fA-F]{6}([\da-fA-F]{2})?",
-            &format!("{replacement}"),
+            &replacement.to_string(),
         )?)
     })?;
     globals.set("rc", globals.get::<mlua::Function>("replace_in")?)?;

@@ -68,7 +68,7 @@ impl CommentStyle {
             return line.into();
         }
         let left = self.left();
-        let re = Regex::new(&format!("^(\\s*)(.*)$")).unwrap();
+        let re = Regex::new("^(\\s*)(.*)$").unwrap();
         let (indent, remaining_line) = re
             .captures(line)
             .and_then(|x| (x.get(1).zip(x.get(2))))
@@ -76,7 +76,7 @@ impl CommentStyle {
             .unwrap_or_default();
         let right = match self {
             CommentStyle::Prefix(_) => "".to_string(),
-            CommentStyle::Circumfix(_, right) => format!("{right}"),
+            CommentStyle::Circumfix(_, right) => right.to_string(),
         };
         format!("{indent}{left}{COMMENT_START}{remaining_line}{right}",).into()
     }
@@ -143,7 +143,7 @@ mod test {
     #[test]
     pub fn test_enable_idempodent() {
         let assert_idempotent = |comment_style: CommentStyle, line: &str| {
-            let enabled = comment_style.enable_line(&line);
+            let enabled = comment_style.enable_line(line);
             let enabled_again = comment_style.enable_line(enabled.as_ref());
             assert_eq!(enabled, enabled_again);
         };

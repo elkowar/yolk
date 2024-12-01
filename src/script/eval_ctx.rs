@@ -14,6 +14,12 @@ pub struct EvalCtx {
     lua: Lua,
 }
 
+impl Default for EvalCtx {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EvalCtx {
     pub fn new() -> Self {
         let lua = Lua::new();
@@ -26,12 +32,11 @@ impl EvalCtx {
     }
 
     pub fn eval_expr<T: FromLuaMulti>(&mut self, expr: &str) -> Result<T> {
-        Ok(self
-            .lua
+        self.lua
             .load(expr)
             .set_name("Expression")
             .eval::<T>()
-            .with_context(|| format!("Failed to evaluate expression `{expr}`"))?)
+            .with_context(|| format!("Failed to evaluate expression `{expr}`"))
     }
 
     pub fn eval_text_transformation(&mut self, text: &str, expr: &str) -> Result<String> {
