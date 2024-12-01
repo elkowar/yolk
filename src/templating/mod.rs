@@ -1,3 +1,4 @@
+use pest::Span;
 use pest_derive::Parser;
 
 pub mod document;
@@ -11,7 +12,7 @@ pub struct TaggedLine<'a> {
     left: &'a str,
     tag: &'a str,
     right: &'a str,
-    full_line: &'a str,
+    full_line: Span<'a>,
 }
 
 #[derive(Parser)]

@@ -2,7 +2,11 @@ use crate::eval_ctx::EvalCtx;
 use crate::templating::parser::linewise::ParsedLine;
 use crate::templating::COMMENT_START;
 
-use super::{element, parser::document_parser::DocumentParser, Rule, YolkParser};
+use super::{
+    element,
+    parser::{comment_style::CommentStyle, document_parser::DocumentParser},
+    Rule, YolkParser,
+};
 
 use anyhow::Result;
 use pest::Parser as _;
@@ -10,14 +14,14 @@ use regex::Regex;
 
 #[derive(Debug)]
 pub struct Document<'a> {
-    pub(crate) comment_prefix: String,
+    pub(crate) comment_style: CommentStyle,
     pub(crate) elements: Vec<element::Element<'a>>,
 }
 
 impl<'a> Default for Document<'a> {
     fn default() -> Self {
         Self {
-            comment_prefix: "#".to_string(),
+            comment_style: CommentStyle::Prefix("#".to_string()),
             elements: Vec::new(),
         }
     }
@@ -26,8 +30,8 @@ impl<'a> Default for Document<'a> {
 impl<'a> Document<'a> {
     pub fn render(&self, eval_ctx: &mut EvalCtx) -> Result<String> {
         let mut output = String::new();
-        let ctx = Context {
-            comment_prefix: self.comment_prefix.clone(),
+        let ctx = RenderContext {
+            comment_style: self.comment_style.clone(),
         };
         for element in &self.elements {
             output.push_str(&element.render(&ctx, eval_ctx)?);
@@ -51,22 +55,22 @@ impl<'a> Document<'a> {
     }
 }
 
-pub struct Context {
-    pub(crate) comment_prefix: String,
+pub struct RenderContext {
+    pub(crate) comment_style: CommentStyle,
 }
 
-impl Default for Context {
+impl Default for RenderContext {
     fn default() -> Self {
         Self {
-            comment_prefix: "#".to_string(),
+            comment_style: CommentStyle::Prefix("#".to_string()),
         }
     }
 }
 
-impl Context {
+impl RenderContext {
     #[allow(unused)]
-    pub fn new(comment_prefix: String) -> Self {
-        Self { comment_prefix }
+    pub fn new(comment_style: CommentStyle) -> Self {
+        Self { comment_style }
     }
 
     pub fn string_toggled(&self, s: &str, enable: bool) -> String {
@@ -78,12 +82,14 @@ impl Context {
     }
 
     pub fn enabled_str(&self, s: &str) -> String {
-        let re = Regex::new(&format!("{}{}", self.comment_prefix, COMMENT_START)).unwrap();
-        let lines: Vec<_> = s.split('\n').map(|line| re.replace_all(line, "")).collect();
+        let lines = s
+            .split('\n')
+            .map(|x| self.comment_style.enable_line(x))
+            .collect::<Vec<_>>();
         lines.join("\n")
     }
     pub fn disabled_str(&self, s: &str) -> String {
-        let re = Regex::new(&format!("^\\s*{}{}", self.comment_prefix, COMMENT_START)).unwrap();
+        let re = Regex::new(&format!("^\\s*{}{}", self.comment_style, COMMENT_START)).unwrap();
         let lines: Vec<_> = s
             .split('\n')
             .map(|line| {
@@ -95,7 +101,7 @@ impl Context {
                     format!(
                         "{}{}{}{}",
                         indent,
-                        self.comment_prefix,
+                        self.comment_style,
                         COMMENT_START,
                         line.trim_start_matches(|c| c == ' ' || c == '\t')
                     )

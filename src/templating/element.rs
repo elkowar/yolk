@@ -1,7 +1,8 @@
 use crate::eval_ctx::EvalCtx;
 use anyhow::Result;
+use pest::Span;
 
-use super::{document::Context, TaggedLine};
+use super::{document::RenderContext, TaggedLine};
 
 #[derive(Debug)]
 pub struct ConditionalBlock<'a> {
@@ -12,7 +13,7 @@ pub struct ConditionalBlock<'a> {
 
 #[derive(Debug)]
 pub enum Element<'a> {
-    Raw(&'a str),
+    Raw(Span<'a>),
     Inline {
         line: TaggedLine<'a>,
         expr: &'a str,
@@ -38,18 +39,21 @@ pub enum Element<'a> {
 }
 
 impl<'a> Element<'a> {
-    pub fn render(&self, render_ctx: &Context, eval_ctx: &mut EvalCtx) -> Result<String> {
+    pub fn render(&self, render_ctx: &RenderContext, eval_ctx: &mut EvalCtx) -> Result<String> {
         match self {
-            Element::Raw(s) => Ok(s.to_string()),
-            Element::Inline { line, expr, is_if } => match is_if {
-                true => Ok(render_ctx.string_toggled(line.full_line, eval_ctx.eval_expr(expr)?)),
-                false => Ok(format!(
-                    "{}{}{}",
-                    run_transformation_expr(eval_ctx, line.left, expr)?,
-                    line.tag,
-                    line.right
-                )),
-            },
+            Element::Raw(s) => Ok(s.as_str().to_string()),
+            Element::Inline { line, expr, is_if } => {
+                match is_if {
+                    true => Ok(render_ctx
+                        .string_toggled(line.full_line.as_str(), eval_ctx.eval_expr(expr)?)),
+                    false => Ok(format!(
+                        "{}{}{}",
+                        run_transformation_expr(eval_ctx, line.left, expr)?,
+                        line.tag,
+                        line.right
+                    )),
+                }
+            }
             Element::NextLine {
                 line,
                 expr,
@@ -58,12 +62,12 @@ impl<'a> Element<'a> {
             } => match is_if {
                 true => Ok(format!(
                     "{}{}",
-                    line.full_line,
+                    line.full_line.as_str(),
                     &render_ctx.string_toggled(next_line, eval_ctx.eval_expr(expr)?),
                 )),
                 false => Ok(format!(
                     "{}{}",
-                    line.full_line,
+                    line.full_line.as_str(),
                     run_transformation_expr(eval_ctx, next_line, expr)?
                 )),
             },
@@ -76,9 +80,9 @@ impl<'a> Element<'a> {
                 let rendered_body = render_elements(render_ctx, eval_ctx, &body)?;
                 Ok(format!(
                     "{}{}{}",
-                    line.full_line,
+                    line.full_line.as_str(),
                     &run_transformation_expr(eval_ctx, &rendered_body, expr)?,
-                    end.full_line
+                    end.full_line.as_str(),
                 ))
             }
             Element::Conditional { blocks, end } => {
@@ -95,10 +99,10 @@ impl<'a> Element<'a> {
                     had_true = had_true || expr_true;
 
                     let rendered_body = render_elements(render_ctx, eval_ctx, &block.body)?;
-                    output.push_str(block.line.full_line);
+                    output.push_str(block.line.full_line.as_str());
                     output.push_str(&render_ctx.string_toggled(&rendered_body, expr_true));
                 }
-                output.push_str(end.full_line);
+                output.push_str(end.full_line.as_str());
                 Ok(output)
             }
             Element::Eof => todo!(),
@@ -107,7 +111,7 @@ impl<'a> Element<'a> {
 }
 
 fn render_elements<'a>(
-    render_ctx: &Context,
+    render_ctx: &RenderContext,
     eval_ctx: &mut EvalCtx,
     elements: &[Element<'a>],
 ) -> Result<String> {

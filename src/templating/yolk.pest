@@ -1,8 +1,6 @@
 WHITESPACE = _{ " " | "\t" }
 
 nl = { NEWLINE }
-// wsp = { WHITESPACE }
-// ws  = { wsp* }
 any = { ANY }
 
 InlineTag    = !{ "{<" ~ InlineTagInner ~ ">}" }

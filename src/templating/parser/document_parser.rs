@@ -2,46 +2,48 @@ use std::collections::VecDeque;
 
 use super::{
     super::element::Element,
+    comment_style::{infer_comment_syntax, CommentStyle},
     linewise::{MultiLineTagKind, ParsedLine, TagKind},
 };
 
 use anyhow::{bail, Result};
+use pest::Span;
 
 use crate::templating::{element::ConditionalBlock, TaggedLine};
 
+// TODO: Make this file not use anyhow::Error as the parser error type. Even as a temporary solution that's hideous.
+
 pub struct DocumentParser<'a> {
     lines: VecDeque<ParsedLine<'a>>,
-    parsed: Vec<Element<'a>>,
+    comment_style: Option<CommentStyle>,
 }
 
 impl<'a> DocumentParser<'a> {
     pub fn new(lines: Vec<ParsedLine<'a>>) -> Self {
         Self {
             lines: lines.into(),
-            parsed: Vec::new(),
+            comment_style: None,
         }
     }
 
     pub fn parse(mut self) -> Result<Vec<Element<'a>>> {
+        let mut parsed = Vec::new();
         loop {
             let elem = self.parse_element()?;
             if matches!(elem, Element::Eof) {
                 break;
             } else {
-                self.parsed.push(elem);
+                parsed.push(elem);
             }
         }
-        Ok(self.parsed)
+        Ok(parsed)
     }
 
-    fn parse_raw_line(&mut self) -> Result<Option<&'a str>> {
-        let Some(line) = self.lines.pop_front() else {
-            return Ok(None);
-        };
-
-        match line {
-            ParsedLine::Raw(raw) => Ok(Some(raw)),
-            _ => Err(anyhow::anyhow!("Expected raw line, got {:?}", line)),
+    fn parse_raw_line(&mut self) -> Result<Option<Span<'a>>> {
+        match self.lines.pop_front() {
+            Some(ParsedLine::Raw(raw)) => Ok(Some(raw)),
+            Some(line) => Err(anyhow::anyhow!("Expected raw line, got {:?}", line)),
+            None => Ok(None),
         }
     }
 
@@ -116,6 +118,9 @@ impl<'a> DocumentParser<'a> {
         let Some(line) = self.lines.pop_front() else {
             return Ok(Element::Eof);
         };
+        if self.comment_style.is_none() {
+            self.comment_style = infer_comment_syntax(&line);
+        }
         match line {
             ParsedLine::MultiLineTag {
                 line: if_line,
@@ -175,7 +180,7 @@ impl<'a> DocumentParser<'a> {
                 expr: kind.expr(),
                 is_if: matches!(kind, TagKind::If(_)),
                 next_line: match self.parse_raw_line()? {
-                    Some(line) => line,
+                    Some(line) => line.as_str(),
                     None => todo!(
                         "Potentially keep incomplete stuff, in case \
                         we want to support evaluating partially invalid files"

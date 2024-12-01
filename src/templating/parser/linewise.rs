@@ -1,5 +1,8 @@
 use anyhow::Result;
-use pest::iterators::{Pair, Pairs};
+use pest::{
+    iterators::{Pair, Pairs},
+    Span,
+};
 
 use crate::templating::{Rule, TaggedLine};
 
@@ -17,7 +20,7 @@ pub enum ParsedLine<'a> {
         line: TaggedLine<'a>,
         kind: TagKind<'a>,
     },
-    Raw(&'a str),
+    Raw(Span<'a>),
 }
 
 #[derive(Debug)]
@@ -46,9 +49,10 @@ impl<'a> TagKind<'a> {
 impl<'a> ParsedLine<'a> {
     pub fn try_from_pair(pair: Pair<'a, Rule>) -> Result<Self> {
         match pair.as_rule() {
-            Rule::Raw => Ok(Self::Raw(pair.as_str())),
-            Rule::nl => Ok(Self::Raw(pair.as_str())),
+            Rule::Raw => Ok(Self::Raw(pair.as_span())),
+            Rule::nl => Ok(Self::Raw(pair.as_span())),
             Rule::LineNextLineTag => {
+                let span = pair.as_span();
                 let inner = pair.into_inner();
                 let kind = inner.find_first_tagged("kind").unwrap();
                 Ok(Self::NextLineTag {
@@ -59,10 +63,11 @@ impl<'a> ParsedLine<'a> {
                         Rule::NextLineTagRegularInner => TagKind::Regular(kind.as_str()),
                         _ => unreachable!(),
                     },
-                    line: parse_tagged_line(inner),
+                    line: parse_tagged_line(span, inner),
                 })
             }
             Rule::LineInlineTag => {
+                let span = pair.as_span();
                 let inner = pair.into_inner();
                 let kind = inner.find_first_tagged("kind").unwrap();
                 Ok(Self::InlineTag {
@@ -73,16 +78,17 @@ impl<'a> ParsedLine<'a> {
                         Rule::InlineTagRegularInner => TagKind::Regular(kind.as_str()),
                         _ => unreachable!(),
                     },
-                    line: parse_tagged_line(inner),
+                    line: parse_tagged_line(span, inner),
                 })
             }
 
             Rule::LineMultiLineTag => {
+                let span = pair.as_span();
                 let inner = pair.into_inner();
                 let kind = inner.find_first_tagged("kind").unwrap();
                 let expr = inner.find_first_tagged("expr");
                 Ok(Self::MultiLineTag {
-                    line: parse_tagged_line(inner),
+                    line: parse_tagged_line(span, inner),
                     kind: match kind.as_rule() {
                         Rule::MultiLineTagRegularInner => MultiLineTagKind::Regular(kind.as_str()),
                         Rule::MultiLineTagIfInner => MultiLineTagKind::If(expr.unwrap().as_str()),
@@ -102,7 +108,7 @@ impl<'a> ParsedLine<'a> {
     }
 }
 
-fn parse_tagged_line<'a>(inner: Pairs<'a, Rule>) -> TaggedLine<'a> {
+fn parse_tagged_line<'a>(span: Span<'a>, inner: Pairs<'a, Rule>) -> TaggedLine<'a> {
     let left = inner.find_first_tagged("left").unwrap();
     let tag = inner.find_first_tagged("tag").unwrap();
     let right = inner.find_first_tagged("right").unwrap();
@@ -110,6 +116,6 @@ fn parse_tagged_line<'a>(inner: Pairs<'a, Rule>) -> TaggedLine<'a> {
         left: left.as_str(),
         tag: tag.as_str(),
         right: right.as_str(),
-        full_line: inner.as_str(),
+        full_line: span,
     }
 }
