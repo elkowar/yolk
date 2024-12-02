@@ -3,6 +3,7 @@ use std::{io::Read as _, str::FromStr};
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use script::eval_ctx;
+use templating::document::ParseError;
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 use yolk::{EvalMode, Yolk};
 
@@ -83,6 +84,16 @@ pub(crate) fn main() -> Result<()> {
         .with(env_filter)
         .init();
 
+    if let Err(err) = run_command(args) {
+        if let Some(parse_error) = err.downcast_ref::<ParseError>() {
+        } else {
+            eprintln!("{:?}", err);
+        }
+    }
+    Ok(())
+}
+
+fn run_command(args: Args) -> Result<()> {
     let yolk_paths = if let Some(yolk_dir) = args.yolk_dir {
         yolk_paths::YolkPaths::from_env_with_root(yolk_dir)
     } else {

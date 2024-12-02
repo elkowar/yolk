@@ -26,15 +26,15 @@ impl<'a> Default for Document<'a> {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum ParseError<'a> {
+pub enum ParseError {
     #[error(transparent)]
     Pest(pest::error::Error<Rule>),
     #[error(transparent)]
-    DocumentParser(document_parser::Error<'a>),
+    DocumentParser(document_parser::Error),
 }
 
-impl<'a> ParseError<'a> {
-    pub fn into_report(self) -> ariadne::Report<'a> {
+impl ParseError {
+    pub fn into_report(self) -> ariadne::Report<'static> {
         match self {
             ParseError::Pest(e) => {
                 let span = match e.location {
@@ -50,7 +50,9 @@ impl<'a> ParseError<'a> {
                 }
                 builder.finish()
             }
-            ParseError::DocumentParser(e) => e.into_report(),
+            ParseError::DocumentParser(e) => ariadne::Report::build(ReportKind::Error, e.span())
+                .with_message(&e)
+                .finish(),
         }
     }
 }
@@ -67,7 +69,7 @@ impl<'a> Document<'a> {
         Ok(output)
     }
 
-    pub fn parse_string(s: &'a str) -> Result<Self, ParseError<'a>> {
+    pub fn parse_string(s: &'a str) -> Result<Self, ParseError> {
         let result_lines = YolkParser::parse(Rule::Document, s).map_err(|e| ParseError::Pest(e))?;
         let lines = result_lines
             .into_iter()

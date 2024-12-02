@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, ops::Range};
 
 use super::{
     super::element::Element,
@@ -7,35 +7,30 @@ use super::{
     TaggedLine,
 };
 
-use ariadne::ReportKind;
 use pest::Span;
 
 use crate::templating::element::ConditionalBlock;
 
 #[derive(Debug, thiserror::Error)]
-pub enum Error<'a> {
-    #[error("Unexpected {}", .1)]
-    UnexpectedElement(Span<'a>, String),
+pub enum Error {
     #[error("Expected {} but got {}", .1, .2)]
-    UnexpectedElementWithExpected(Span<'a>, &'static str, &'static str),
-    #[error("Expected {} but got EOF", .1)]
-    UnexpectedEof(Span<'a>, &'static str),
+    UnexpectedElement(Range<usize>, &'static str, &'static str),
 }
 
-impl<'a> Error<'a> {
-    pub fn into_report(self) -> ariadne::Report<'a> {
-        let span = match self {
-            Error::UnexpectedElement(span, _) => span,
-            Error::UnexpectedElementWithExpected(span, _, _) => span,
-            Error::UnexpectedEof(span, _) => span,
-        };
-        ariadne::Report::build(ReportKind::Error, span.start()..span.end())
-            .with_message(self)
-            .finish()
+impl Error {
+    fn unexpected(span: Span<'_>, expected: &'static str, got: &'static str) -> Self {
+        let range = span.start()..span.end();
+        Self::UnexpectedElement(range, expected, got)
+    }
+
+    pub fn span(&self) -> Range<usize> {
+        match self {
+            Self::UnexpectedElement(range, ..) => range.clone(),
+        }
     }
 }
 
-type Result<'a, T> = std::result::Result<T, Error<'a>>;
+type Result<T> = std::result::Result<T, Error>;
 
 // TODO: Make this file not use anyhow::Error as the parser error type. Even as a temporary solution that's hideous.
 
@@ -54,7 +49,7 @@ impl<'a> DocumentParser<'a> {
         }
     }
 
-    pub fn parse(mut self) -> Result<'a, Vec<Element<'a>>> {
+    pub fn parse(mut self) -> Result<Vec<Element<'a>>> {
         let mut parsed = Vec::new();
         loop {
             match self.parse_element()? {
@@ -65,26 +60,19 @@ impl<'a> DocumentParser<'a> {
         Ok(parsed)
     }
 
-    fn mk_eof_error(&self, expected: &'static str) -> Error<'a> {
-        Error::UnexpectedEof(
-            Span::new(self.input, self.input.len(), self.input.len()).unwrap(),
-            expected,
-        )
+    fn mk_eof_error(&self, expected: &'static str) -> Error {
+        Error::UnexpectedElement(self.input.len()..self.input.len(), expected, "eof")
     }
 
-    fn parse_plain_line(&mut self) -> Result<'a, Option<Span<'a>>> {
+    fn parse_plain_line(&mut self) -> Result<Option<Span<'a>>> {
         match self.lines.pop_front() {
             Some(ParsedLine::Plain(raw)) => Ok(Some(raw)),
-            Some(line) => Err(Error::UnexpectedElementWithExpected(
-                line.span(),
-                "plain",
-                line.kind(),
-            )),
+            Some(line) => Err(Error::unexpected(line.span(), "plain", line.kind())),
             None => Ok(None),
         }
     }
 
-    fn parse_multiline_body(&mut self) -> Result<'a, Vec<Element<'a>>> {
+    fn parse_multiline_body(&mut self) -> Result<Vec<Element<'a>>> {
         let mut children = Vec::new();
         loop {
             let Some(next) = self.lines.front() else {
@@ -101,7 +89,7 @@ impl<'a> DocumentParser<'a> {
         }
     }
 
-    fn parse_end_line(&mut self) -> Result<'a, TaggedLine<'a>> {
+    fn parse_end_line(&mut self) -> Result<TaggedLine<'a>> {
         let Some(line) = self.lines.pop_front() else {
             Err(self.mk_eof_error("end"))?
         };
@@ -111,7 +99,7 @@ impl<'a> DocumentParser<'a> {
                 kind: MultiLineTagKind::End,
             } => Ok(line),
             line => {
-                let err = Error::UnexpectedElementWithExpected(line.span(), "end", line.kind());
+                let err = Error::unexpected(line.span(), "end", line.kind());
                 self.lines.push_front(line);
                 Err(err)?
             }
@@ -128,13 +116,13 @@ impl<'a> DocumentParser<'a> {
                 kind: MultiLineTagKind::Else,
             } => Ok(line),
             line => {
-                let err = Error::UnexpectedElementWithExpected(line.span(), "else", line.kind());
+                let err = Error::unexpected(line.span(), "else", line.kind());
                 self.lines.push_front(line);
                 Err(err)?
             }
         }
     }
-    fn parse_elif_line(&mut self) -> Result<'a, (TaggedLine<'a>, &'a str)> {
+    fn parse_elif_line(&mut self) -> Result<(TaggedLine<'a>, &'a str)> {
         let Some(line) = self.lines.pop_front() else {
             Err(self.mk_eof_error("elif"))?
         };
@@ -144,14 +132,14 @@ impl<'a> DocumentParser<'a> {
                 kind: MultiLineTagKind::Elif(expr),
             } => Ok((line, expr)),
             line => {
-                let err = Error::UnexpectedElementWithExpected(line.span(), "elif", line.kind());
+                let err = Error::unexpected(line.span(), "elif", line.kind());
                 self.lines.push_front(line);
                 Err(err)?
             }
         }
     }
 
-    fn parse_element(&mut self) -> Result<'a, Element<'a>> {
+    fn parse_element(&mut self) -> Result<Element<'a>> {
         let Some(line) = self.lines.pop_front() else {
             return Ok(Element::Eof);
         };
@@ -208,9 +196,10 @@ impl<'a> DocumentParser<'a> {
                     end,
                 })
             }
-            ParsedLine::MultiLineTag { line, kind } => Err(Error::UnexpectedElement(
+            ParsedLine::MultiLineTag { line, kind } => Err(Error::unexpected(
                 line.full_line,
-                kind.kind().to_string(),
+                "anything else",
+                kind.kind(),
             )),
             ParsedLine::NextLineTag { line, kind } => Ok(Element::NextLine {
                 line,
