@@ -41,6 +41,8 @@ lto = "thin"
 cargo-dist-version = "0.10.0"
 # CI backends to support
 ci = ["github"]
+# The installers to generate for each app
+installers = ["shell"]
 targets = [
     # "aarch64-apple-darwin",
     # "x86_64-apple-darwin",
