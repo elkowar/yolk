@@ -6,6 +6,11 @@ Those templates will be evaluated whenever you run `yolk sync`, use a new egg, o
 Expressions within these templates are written in the [Luau](https://luau.org) scripting language,
 and have access to a couple special variables that allow you to reference your configuration and system state.
 
+## Preparation
+To make yolk evaluate your file as a template, you need to explicitly tell yolk about it.
+To do this, run `yolk mktmpl <egg-name> <filepath>` on the file you want to turn into a template.
+Note that it needs to already be managed as part of an egg for this to work.
+
 ## Conditional
 Let's take a look at a simple example of conditional template syntax:
 ```toml
@@ -45,3 +50,23 @@ foreground_color = "#ebdbb2"
 ```
 Note that the expression here still needs to contain the quotes, to continue returning valid toml.
 Yolk will refuse to evaluate `replace` directives that are non-reversible (i.e. if you replaced `".*"` with `foo`, as `foo` will no longer match that regex pattern).
+
+## Different types of tags
+Yolk supports three different types of tags:
+- Next-line tags (`{# ... #}`): These tags operate on the line following the tag.
+- Inline tags (`{< ... >}`): These tags operate on everything before the tag within the same line.
+- Block tags (`{% ... %} ... {% end %}}`): These tags operate on everything between the tag and the corresponding `{% end %}` tag.
+
+You can use whichever of these you want, wherever you want. For example, all of these do the same:
+```toml
+background_color = "#000000" # {< replace(`".*"`, `"{colors.background}"`) >}
+```
+```toml
+# {# replace(`".*"`, `"{colors.background}"`) #}
+background_color = "#000000"
+```
+```toml
+# {% replace(`".*"`, `"{colors.background}"`) %}
+background_color = "#000000"
+# {% end %}
+```
