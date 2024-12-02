@@ -1,5 +1,6 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+use fs_err::PathExt as _;
 use miette::{IntoDiagnostic as _, Result};
 
 const DEFAULT_LUA: &str = indoc::indoc! {r#"
@@ -100,9 +101,99 @@ impl YolkPaths {
     pub fn egg_path(&self, egg_name: &str) -> std::path::PathBuf {
         self.eggs_dir_path().join(egg_name)
     }
-    pub fn yolk_templates_file_path_for(&self, egg_name: &str) -> std::path::PathBuf {
-        // TODO: Do we like this being next to regular directories, and just being treated magically based on the name?
-        self.egg_path(egg_name).join("yolk_templates")
+
+    pub fn get_egg(&self, name: &str) -> Result<Egg> {
+        Egg::open(self.egg_path(name))
+    }
+}
+
+pub struct Egg {
+    egg_dir: PathBuf,
+}
+
+impl Egg {
+    pub fn open(egg_path: PathBuf) -> Result<Self> {
+        if !egg_path.is_dir() {
+            miette::bail!(
+                "Egg {} does not exist",
+                egg_path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_str()
+                    .unwrap_or_default()
+            )
+        }
+        Ok(Egg { egg_dir: egg_path })
+    }
+
+    #[allow(unused)]
+    pub fn path(&self) -> &Path {
+        &self.egg_dir
+    }
+
+    pub fn templates_path(&self) -> PathBuf {
+        self.egg_dir.join("yolk_templates")
+    }
+
+    /// Returns a list of all entries in this egg,
+    /// meaning all files and directories in the egg dir except for the yolk_templates file.
+    pub fn entries(&self) -> Result<Vec<fs_err::DirEntry>> {
+        let mut entries = Vec::new();
+        for entry in self.egg_dir.fs_err_read_dir().into_diagnostic()? {
+            let entry = entry.into_diagnostic()?;
+            if entry.file_name() == "yolk_templates" {
+                continue;
+            }
+            entries.push(entry)
+        }
+        Ok(entries)
+    }
+
+    /// Returns a list of all the template paths in this egg in canonical form.
+    pub fn template_paths(&self) -> Result<Vec<PathBuf>> {
+        let tmpl_list_file = self.egg_dir.join("yolk_templates");
+        if !tmpl_list_file.is_file() {
+            return Ok(vec![]);
+        }
+        let tmpl_paths = fs_err::read_to_string(tmpl_list_file).into_diagnostic()?;
+        let tmpl_paths = tmpl_paths
+            .lines()
+            .map(|x| {
+                Ok(self
+                    .egg_dir
+                    .join(x)
+                    .fs_err_canonicalize()
+                    .into_diagnostic()?)
+            })
+            .collect::<Result<_>>()?;
+        Ok(tmpl_paths)
+    }
+
+    pub fn add_to_template_paths(&self, paths: &[PathBuf]) -> Result<()> {
+        let yolk_templates_path = self.templates_path();
+        if !yolk_templates_path.is_file() {
+            fs_err::File::create(&yolk_templates_path).into_diagnostic()?;
+        }
+        let yolk_templates = fs_err::read_to_string(&yolk_templates_path).into_diagnostic()?;
+        let mut yolk_templates: Vec<_> = yolk_templates.lines().map(|x| x.to_string()).collect();
+        for path in paths {
+            if !path.exists() {
+                eprintln!("Warning: {} does not exist, skipping.", path.display());
+                continue;
+            }
+            let path = path.fs_err_canonicalize().into_diagnostic()?;
+            if !path.starts_with(&self.egg_dir) {
+                return Err(miette::miette!(
+                    "The given file path is not within {}",
+                    self.egg_dir.display()
+                ));
+            }
+            let path_relative = path.strip_prefix(&self.egg_dir).into_diagnostic()?;
+            let path_str = path_relative.to_str().unwrap().to_string();
+            yolk_templates.push(path_str);
+        }
+        fs_err::write(&yolk_templates_path, yolk_templates.join("\n")).into_diagnostic()?;
+        Ok(())
     }
 }
 

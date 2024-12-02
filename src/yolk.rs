@@ -5,8 +5,11 @@ use miette::{Context, IntoDiagnostic, Result};
 use mlua::{Function, Value};
 
 use crate::{
-    eval_ctx::EvalCtx, script::sysinfo::SystemInfo, templating::document::Document, util,
-    yolk_paths::YolkPaths,
+    eval_ctx::EvalCtx,
+    script::sysinfo::SystemInfo,
+    templating::document::Document,
+    util,
+    yolk_paths::{Egg, YolkPaths},
 };
 
 pub struct Yolk {
@@ -74,13 +77,8 @@ impl Yolk {
 
     pub fn use_egg(&self, egg_name: &str) -> Result<()> {
         tracing::info!("Using egg {}", egg_name);
-        let egg_path = self.yolk_paths.egg_path(egg_name);
-
-        for entry in egg_path.fs_err_read_dir().into_diagnostic()? {
-            let entry = entry.into_diagnostic()?;
-            if entry.file_name() == "yolk_templates" {
-                continue;
-            }
+        let egg = self.yolk_paths.get_egg(egg_name)?;
+        for entry in egg.entries()? {
             self.use_recursively(egg_name, &entry.path())?;
         }
         self.sync_to_mode(EvalMode::Local)?;
@@ -112,27 +110,21 @@ impl Yolk {
             .context("Failed to prepare eval_ctx")?;
 
         for egg_dir in egg_paths {
-            let tmpl_list_file = egg_dir.join("yolk_templates");
-            if tmpl_list_file.is_file() {
-                let egg_canonical = egg_dir.canonicalize().into_diagnostic()?;
-                let tmpl_paths = fs_err::read_to_string(tmpl_list_file).into_diagnostic()?;
-                let tmpl_paths = tmpl_paths.lines().map(|x| egg_canonical.join(x));
-                for templated_file in tmpl_paths {
-                    if templated_file.is_file() {
-                        if let Err(err) =
-                            self.eval_template_file_in_place(&mut eval_ctx, &templated_file)
-                        {
-                            eprintln!(
-                                "Warning: Failed to sync templated file {}: {err:?}",
-                                templated_file.display(),
-                            );
-                        }
-                    } else {
-                        println!(
-                            "Warning: {} was specified as templated file, but doesn't exist",
-                            templated_file.display()
+            let egg = Egg::open(egg_dir)?;
+            let tmpl_paths = egg.template_paths()?;
+            for templated_file in tmpl_paths {
+                if templated_file.is_file() {
+                    if let Err(err) = self.sync_template_file(&mut eval_ctx, &templated_file) {
+                        eprintln!(
+                            "Warning: Failed to sync templated file {}: {err:?}",
+                            templated_file.display(),
                         );
                     }
+                } else {
+                    println!(
+                        "Warning: {} was specified as templated file, but doesn't exist",
+                        templated_file.display()
+                    );
                 }
             }
         }
@@ -198,11 +190,7 @@ impl Yolk {
             .context("Failed to render document")
     }
 
-    pub fn eval_template_file_in_place(
-        &self,
-        eval_ctx: &mut EvalCtx,
-        path: impl AsRef<Path>,
-    ) -> Result<()> {
+    pub fn sync_template_file(&self, eval_ctx: &mut EvalCtx, path: impl AsRef<Path>) -> Result<()> {
         tracing::info!("Syncing file {}", path.as_ref().display());
         let content = fs_err::read_to_string(&path).into_diagnostic()?;
         let rendered = self.eval_template(eval_ctx, &content).with_context(|| {
@@ -222,29 +210,8 @@ impl Yolk {
     }
 
     pub fn add_to_templated_files(&self, egg_name: &str, paths: &[PathBuf]) -> Result<()> {
-        let egg_dir = self.yolk_paths.egg_path(egg_name);
-        if !egg_dir.is_dir() {
-            miette::bail!("Egg {} does not exist", egg_name);
-        }
-        let yolk_templates_path = self.yolk_paths.yolk_templates_file_path_for(egg_name);
-        if !yolk_templates_path.is_file() {
-            fs_err::File::create(&yolk_templates_path).into_diagnostic()?;
-        }
-        let yolk_templates = fs_err::read_to_string(&yolk_templates_path).into_diagnostic()?;
-        let mut yolk_templates: Vec<_> = yolk_templates.lines().map(|x| x.to_string()).collect();
-        for path in paths {
-            let path = path.fs_err_canonicalize().into_diagnostic()?;
-            if !path.starts_with(&egg_dir) {
-                return Err(miette::miette!(
-                    "The given file path is not within {}",
-                    egg_dir.display()
-                ));
-            }
-            let path_relative = path.strip_prefix(&egg_dir).into_diagnostic()?;
-            let path_str = path_relative.to_str().unwrap().to_string();
-            yolk_templates.push(path_str);
-        }
-        fs_err::write(&yolk_templates_path, yolk_templates.join("\n")).into_diagnostic()?;
+        let egg = self.yolk_paths.get_egg(egg_name)?;
+        egg.add_to_template_paths(paths)?;
         self.sync_to_mode(EvalMode::Local)?;
         Ok(())
     }
