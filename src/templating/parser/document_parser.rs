@@ -7,10 +7,21 @@ use super::{
     TaggedLine,
 };
 
-use anyhow::{bail, Result};
 use pest::Span;
 
 use crate::templating::element::ConditionalBlock;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error<'a> {
+    #[error("Unexpected {}", .1)]
+    UnexpectedElement(Span<'a>, String),
+    #[error("Expected {} but got {}", .1, .2)]
+    UnexpectedElementWithExpected(Span<'a>, &'static str, &'static str),
+    #[error("Expected {} but got EOF", .0)]
+    UnexpectedEof(&'static str),
+}
+
+type Result<'a, T> = std::result::Result<T, Error<'a>>;
 
 // TODO: Make this file not use anyhow::Error as the parser error type. Even as a temporary solution that's hideous.
 
@@ -27,32 +38,34 @@ impl<'a> DocumentParser<'a> {
         }
     }
 
-    pub fn parse(mut self) -> Result<Vec<Element<'a>>> {
+    pub fn parse(mut self) -> Result<'a, Vec<Element<'a>>> {
         let mut parsed = Vec::new();
         loop {
-            let elem = self.parse_element()?;
-            if matches!(elem, Element::Eof) {
-                break;
-            } else {
-                parsed.push(elem);
+            match self.parse_element()? {
+                Element::Eof => break,
+                elem => parsed.push(elem),
             }
         }
         Ok(parsed)
     }
 
-    fn parse_raw_line(&mut self) -> Result<Option<Span<'a>>> {
+    fn parse_plain_line(&mut self) -> Result<'a, Option<Span<'a>>> {
         match self.lines.pop_front() {
-            Some(ParsedLine::Raw(raw)) => Ok(Some(raw)),
-            Some(line) => Err(anyhow::anyhow!("Expected raw line, got {:?}", line)),
+            Some(ParsedLine::Plain(raw)) => Ok(Some(raw)),
+            Some(line) => Err(Error::UnexpectedElementWithExpected(
+                line.span(),
+                "plain",
+                line.kind(),
+            )),
             None => Ok(None),
         }
     }
 
-    fn parse_multiline_body(&mut self) -> Result<Vec<Element<'a>>> {
+    fn parse_multiline_body(&mut self) -> Result<'a, Vec<Element<'a>>> {
         let mut children = Vec::new();
         loop {
             let Some(next) = self.lines.front() else {
-                bail!("Expected another line in block body, but file ended");
+                Err(Error::UnexpectedEof("another line"))?
             };
             match next {
                 ParsedLine::MultiLineTag { line: _, kind }
@@ -65,9 +78,9 @@ impl<'a> DocumentParser<'a> {
         }
     }
 
-    fn parse_end_line(&mut self) -> Result<TaggedLine<'a>> {
+    fn parse_end_line(&mut self) -> Result<'a, TaggedLine<'a>> {
         let Some(line) = self.lines.pop_front() else {
-            bail!("Expected end line, got EOF");
+            Err(Error::UnexpectedEof("end"))?
         };
         match line {
             ParsedLine::MultiLineTag {
@@ -75,16 +88,16 @@ impl<'a> DocumentParser<'a> {
                 kind: MultiLineTagKind::End,
             } => Ok(line),
             line => {
-                let s = format!("{:?}", &line);
+                let err = Error::UnexpectedElementWithExpected(line.span(), "end", line.kind());
                 self.lines.push_front(line);
-                bail!("Expected end line, got {:?}", s);
+                Err(err)?
             }
         }
     }
 
     fn parse_else_line(&mut self) -> Result<TaggedLine<'a>> {
         let Some(line) = self.lines.pop_front() else {
-            bail!("Expected else line, got EOF");
+            Err(Error::UnexpectedEof("end"))?
         };
         match line {
             ParsedLine::MultiLineTag {
@@ -92,15 +105,15 @@ impl<'a> DocumentParser<'a> {
                 kind: MultiLineTagKind::Else,
             } => Ok(line),
             line => {
-                let s = format!("{:?}", &line);
+                let err = Error::UnexpectedElementWithExpected(line.span(), "else", line.kind());
                 self.lines.push_front(line);
-                bail!("Expected else line, got {:?}", s);
+                Err(err)?
             }
         }
     }
-    fn parse_elif_line(&mut self) -> Result<(TaggedLine<'a>, &'a str)> {
+    fn parse_elif_line(&mut self) -> Result<'a, (TaggedLine<'a>, &'a str)> {
         let Some(line) = self.lines.pop_front() else {
-            bail!("Expected elif line, got EOF");
+            Err(Error::UnexpectedEof("elif"))?
         };
         match line {
             ParsedLine::MultiLineTag {
@@ -108,14 +121,14 @@ impl<'a> DocumentParser<'a> {
                 kind: MultiLineTagKind::Elif(expr),
             } => Ok((line, expr)),
             line => {
-                let s = format!("{:?}", &line);
+                let err = Error::UnexpectedElementWithExpected(line.span(), "elif", line.kind());
                 self.lines.push_front(line);
-                bail!("Expected elif line, got {:?}", s);
+                Err(err)?
             }
         }
     }
 
-    fn parse_element(&mut self) -> Result<Element<'a>> {
+    fn parse_element(&mut self) -> Result<'a, Element<'a>> {
         let Some(line) = self.lines.pop_front() else {
             return Ok(Element::Eof);
         };
@@ -172,15 +185,15 @@ impl<'a> DocumentParser<'a> {
                     end,
                 })
             }
-            ParsedLine::MultiLineTag { line: _, kind } => {
-                // TODO: Ensure that kind has some sort of ".type()" function to use here, rather than printing all of this
-                anyhow::bail!("Unexpected {:?}", kind)
-            }
+            ParsedLine::MultiLineTag { line, kind } => Err(Error::UnexpectedElement(
+                line.full_line,
+                kind.kind().to_string(),
+            )),
             ParsedLine::NextLineTag { line, kind } => Ok(Element::NextLine {
                 line,
                 expr: kind.expr(),
                 is_if: matches!(kind, TagKind::If(_)),
-                next_line: match self.parse_raw_line()? {
+                next_line: match self.parse_plain_line()? {
                     Some(line) => line.as_str(),
                     None => todo!(
                         "Potentially keep incomplete stuff, in case \
@@ -193,7 +206,7 @@ impl<'a> DocumentParser<'a> {
                 expr: kind.expr(),
                 is_if: matches!(kind, TagKind::If(_)),
             }),
-            ParsedLine::Raw(text) => Ok(Element::Raw(text)),
+            ParsedLine::Plain(text) => Ok(Element::Plain(text)),
         }
     }
 }

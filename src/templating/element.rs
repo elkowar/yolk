@@ -13,7 +13,7 @@ pub struct ConditionalBlock<'a> {
 
 #[derive(Debug)]
 pub enum Element<'a> {
-    Raw(Span<'a>),
+    Plain(Span<'a>),
     Inline {
         line: TaggedLine<'a>,
         expr: &'a str,
@@ -41,7 +41,7 @@ pub enum Element<'a> {
 impl<'a> Element<'a> {
     pub fn render(&self, render_ctx: &RenderContext, eval_ctx: &mut EvalCtx) -> Result<String> {
         match self {
-            Element::Raw(s) => Ok(s.as_str().to_string()),
+            Element::Plain(s) => Ok(s.as_str().to_string()),
             Element::Inline { line, expr, is_if } => {
                 match is_if {
                     true => Ok(render_ctx

@@ -20,7 +20,7 @@ pub enum ParsedLine<'a> {
         line: TaggedLine<'a>,
         kind: TagKind<'a>,
     },
-    Raw(Span<'a>),
+    Plain(Span<'a>),
 }
 
 #[derive(Debug)]
@@ -30,6 +30,17 @@ pub enum MultiLineTagKind<'a> {
     Elif(&'a str),
     Else,
     End,
+}
+impl<'a> MultiLineTagKind<'a> {
+    pub fn kind(&self) -> &'static str {
+        match self {
+            MultiLineTagKind::Regular(_) => "regular",
+            MultiLineTagKind::If(_) => "if",
+            MultiLineTagKind::Elif(_) => "elif",
+            MultiLineTagKind::Else => "else",
+            MultiLineTagKind::End => "end",
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -44,9 +55,31 @@ impl<'a> TagKind<'a> {
             TagKind::Regular(expr) | TagKind::If(expr) => expr,
         }
     }
+    pub fn kind(&self) -> &'static str {
+        match self {
+            TagKind::Regular(_) => "tag",
+            TagKind::If(_) => "conditional",
+        }
+    }
 }
 
 impl<'a> ParsedLine<'a> {
+    pub fn kind(&self) -> &'static str {
+        match self {
+            ParsedLine::MultiLineTag { kind, .. } => kind.kind(),
+            ParsedLine::NextLineTag { kind, .. } => kind.kind(),
+            ParsedLine::InlineTag { kind, .. } => kind.kind(),
+            ParsedLine::Plain(_) => "plain",
+        }
+    }
+    pub fn span(&self) -> Span<'a> {
+        match self {
+            ParsedLine::MultiLineTag { line, .. } => line.full_line,
+            ParsedLine::NextLineTag { line, .. } => line.full_line,
+            ParsedLine::InlineTag { line, .. } => line.full_line,
+            ParsedLine::Plain(span) => *span,
+        }
+    }
     #[allow(unused)]
     pub fn try_from_str(s: &'a str) -> Result<Self> {
         let mut result = YolkParser::parse(Rule::Line, s)?;
@@ -55,8 +88,8 @@ impl<'a> ParsedLine<'a> {
 
     pub fn from_pair(pair: Pair<'a, Rule>) -> Self {
         match pair.as_rule() {
-            Rule::Raw => Self::Raw(pair.as_span()),
-            Rule::nl => Self::Raw(pair.as_span()),
+            Rule::Plain => Self::Plain(pair.as_span()),
+            Rule::nl => Self::Plain(pair.as_span()),
             Rule::LineNextLineTag => {
                 let span = pair.as_span();
                 let inner = pair.into_inner();

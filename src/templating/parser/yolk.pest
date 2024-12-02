@@ -35,7 +35,7 @@ LineMultiLineTagStart = @{ (!(nl | "{#" | "{%" | "{<") ~ any)* }
 
 // We have the alternative here to ensure that when this is the last line, it at least contains SOMETHING.
 // Otherwise, this rule would accept the empty string
-Raw = @{ ((!nl ~ any)* ~ nl) | ((!nl ~ any)+ ~ EOI) }
+Plain = @{ ((!nl ~ any)* ~ nl) | ((!nl ~ any)+ ~ EOI) }
 
-Line     = _{ LineMultiLineTag | LineNextLineTag | LineInlineTag | Raw }
+Line     = _{ LineMultiLineTag | LineNextLineTag | LineInlineTag | Plain }
 Document = _{ Line* }

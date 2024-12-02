@@ -23,7 +23,7 @@ impl CommentStyle {
             ParsedLine::MultiLineTag { line, .. }
             | ParsedLine::NextLineTag { line, .. }
             | ParsedLine::InlineTag { line, .. } => (line.left, line.right),
-            ParsedLine::Raw(_) => return None,
+            ParsedLine::Plain(_) => return None,
         };
 
         for (prefix, postfix) in &CIRCUMFIX_COMMENT_SYMBOLS {
