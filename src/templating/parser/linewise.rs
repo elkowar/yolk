@@ -4,7 +4,7 @@ use pest::{
     Parser as _, Span,
 };
 
-use crate::templating::{Rule, TaggedLine, YolkParser};
+use super::{Rule, TaggedLine, YolkParser};
 
 #[derive(Debug)]
 pub enum ParsedLine<'a> {
@@ -50,18 +50,18 @@ impl<'a> ParsedLine<'a> {
     #[allow(unused)]
     pub fn try_from_str(s: &'a str) -> Result<Self> {
         let mut result = YolkParser::parse(Rule::Line, s)?;
-        Self::try_from_pair(result.next().unwrap())
+        Ok(Self::from_pair(result.next().unwrap()))
     }
 
-    pub fn try_from_pair(pair: Pair<'a, Rule>) -> Result<Self> {
+    pub fn from_pair(pair: Pair<'a, Rule>) -> Self {
         match pair.as_rule() {
-            Rule::Raw => Ok(Self::Raw(pair.as_span())),
-            Rule::nl => Ok(Self::Raw(pair.as_span())),
+            Rule::Raw => Self::Raw(pair.as_span()),
+            Rule::nl => Self::Raw(pair.as_span()),
             Rule::LineNextLineTag => {
                 let span = pair.as_span();
                 let inner = pair.into_inner();
                 let kind = inner.find_first_tagged("kind").unwrap();
-                Ok(Self::NextLineTag {
+                Self::NextLineTag {
                     kind: match kind.as_rule() {
                         Rule::NextLineTagIfInner => {
                             TagKind::If(inner.find_first_tagged("expr").unwrap().as_str())
@@ -70,13 +70,13 @@ impl<'a> ParsedLine<'a> {
                         _ => unreachable!(),
                     },
                     line: parse_tagged_line(span, inner),
-                })
+                }
             }
             Rule::LineInlineTag => {
                 let span = pair.as_span();
                 let inner = pair.into_inner();
                 let kind = inner.find_first_tagged("kind").unwrap();
-                Ok(Self::InlineTag {
+                Self::InlineTag {
                     kind: match kind.as_rule() {
                         Rule::InlineTagIfInner => {
                             TagKind::If(inner.find_first_tagged("expr").unwrap().as_str())
@@ -85,7 +85,7 @@ impl<'a> ParsedLine<'a> {
                         _ => unreachable!(),
                     },
                     line: parse_tagged_line(span, inner),
-                })
+                }
             }
 
             Rule::LineMultiLineTag => {
@@ -93,7 +93,7 @@ impl<'a> ParsedLine<'a> {
                 let inner = pair.into_inner();
                 let kind = inner.find_first_tagged("kind").unwrap();
                 let expr = inner.find_first_tagged("expr");
-                Ok(Self::MultiLineTag {
+                Self::MultiLineTag {
                     line: parse_tagged_line(span, inner),
                     kind: match kind.as_rule() {
                         Rule::MultiLineTagRegularInner => MultiLineTagKind::Regular(kind.as_str()),
@@ -105,10 +105,10 @@ impl<'a> ParsedLine<'a> {
                         Rule::MultiLineTagEndInner => MultiLineTagKind::End,
                         _ => unreachable!(),
                     },
-                })
+                }
             }
             _ => {
-                todo!()
+                unreachable!("No other rules should be possible here")
             }
         }
     }

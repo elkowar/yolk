@@ -2,7 +2,7 @@ use crate::eval_ctx::EvalCtx;
 use anyhow::Result;
 use pest::Span;
 
-use super::{document::RenderContext, TaggedLine};
+use super::{document::RenderContext, parser::TaggedLine};
 
 #[derive(Debug)]
 pub struct ConditionalBlock<'a> {

@@ -3,8 +3,7 @@ use crate::templating::parser::linewise::ParsedLine;
 
 use super::{
     element,
-    parser::{comment_style::CommentStyle, document_parser::DocumentParser},
-    Rule, YolkParser,
+    parser::{comment_style::CommentStyle, document_parser::DocumentParser, Rule, YolkParser},
 };
 
 use anyhow::Result;
@@ -41,13 +40,11 @@ impl<'a> Document<'a> {
         let result_lines = YolkParser::parse(Rule::Document, s)?;
         let lines = result_lines
             .into_iter()
-            .map(ParsedLine::try_from_pair)
-            .collect::<Result<_>>()?;
+            .map(ParsedLine::from_pair)
+            .collect();
         let parser = DocumentParser::new(lines);
-        let elements = parser.parse()?;
-        // TODO: properly detect comment prefix automatically,
         Ok(Self {
-            elements,
+            elements: parser.parse()?,
             ..Default::default()
         })
     }

@@ -4,12 +4,13 @@ use super::{
     super::element::Element,
     comment_style::CommentStyle,
     linewise::{MultiLineTagKind, ParsedLine, TagKind},
+    TaggedLine,
 };
 
 use anyhow::{bail, Result};
 use pest::Span;
 
-use crate::templating::{element::ConditionalBlock, TaggedLine};
+use crate::templating::element::ConditionalBlock;
 
 // TODO: Make this file not use anyhow::Error as the parser error type. Even as a temporary solution that's hideous.
 

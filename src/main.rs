@@ -19,7 +19,7 @@ struct Args {
     command: Command,
 
     /// Provide a custom yolk directory
-    #[arg(short = 'd', long, env = "YOLK_DIR")]
+    #[arg(short = 'd', long, env = "YOLK_DIR", global = true)]
     yolk_dir: Option<std::path::PathBuf>,
 
     /// Enable debug logging
@@ -33,17 +33,23 @@ enum Command {
     Init,
     /// Use an egg
     Use { name: String },
-    /// Evaluate an expression in the local context
-    Eval { expr: String },
+    /// Evaluate an expression like it would be done in a template
+    Eval {
+        #[arg(long)]
+        canonical: bool,
+        expr: String,
+    },
     /// Add a file or directory to an egg in yolk
     Add {
         name: String,
         path: std::path::PathBuf,
     },
     /// Re-evaluate all local templates to ensure that they are in a consistent state
-    Sync,
-    /// Run a git-command within the yolk directory,
-    /// while ensuring that the canonical directory is up-to-date
+    Sync {
+        #[arg(long)]
+        canonical: bool,
+    },
+    /// Run a git-command within the yolk directory while in canonical state.
     Git {
         #[clap(allow_hyphen_values = true)]
         command: Vec<String>,
@@ -57,7 +63,11 @@ enum Command {
     },
     /// Evaluate a given templated file, or read a templated string from stdin
     #[clap(name = "eval-template")]
-    EvalTemplate { path: Option<std::path::PathBuf> },
+    EvalTemplate {
+        #[arg(long)]
+        canonical: bool,
+        path: Option<std::path::PathBuf>,
+    },
 }
 
 pub(crate) fn main() -> Result<()> {
@@ -84,9 +94,22 @@ pub(crate) fn main() -> Result<()> {
         Command::Init => yolk.init_yolk()?,
         Command::Use { name } => yolk.use_egg(name)?,
         Command::Add { name, path } => yolk.add_egg(name, path)?,
-        Command::Sync => yolk.sync_to_mode(EvalMode::Local)?,
-        Command::Eval { expr } => {
-            println!("{}", yolk.eval_lua(yolk::EvalMode::Local, expr)?);
+        Command::Sync { canonical } => {
+            let mode = if *canonical {
+                EvalMode::Canonical
+            } else {
+                EvalMode::Local
+            };
+
+            yolk.sync_to_mode(mode)?
+        }
+        Command::Eval { expr, canonical } => {
+            let mode = if *canonical {
+                EvalMode::Canonical
+            } else {
+                EvalMode::Local
+            };
+            println!("{}", yolk.eval_lua(mode, expr)?);
         }
         Command::Git { command } => {
             yolk.with_canonical_state(|| {
@@ -100,7 +123,7 @@ pub(crate) fn main() -> Result<()> {
         Command::MakeTemplate { egg, paths } => {
             yolk.add_to_templated_files(egg, paths)?;
         }
-        Command::EvalTemplate { path } => {
+        Command::EvalTemplate { path, canonical } => {
             let text = match path {
                 Some(path) => std::fs::read_to_string(path)?,
                 None => {
@@ -109,7 +132,12 @@ pub(crate) fn main() -> Result<()> {
                     buffer
                 }
             };
-            let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(EvalMode::Local)?;
+            let mode = if *canonical {
+                EvalMode::Canonical
+            } else {
+                EvalMode::Local
+            };
+            let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(mode)?;
             let result = yolk.eval_template(&mut eval_ctx, &text)?;
             println!("{}", result);
         }
