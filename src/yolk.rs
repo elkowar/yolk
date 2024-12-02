@@ -173,7 +173,9 @@ impl Yolk {
 
     /// Evaluate a templated file
     pub fn eval_template(&self, eval_ctx: &mut EvalCtx, content: &str) -> Result<String> {
-        let doc = Document::parse_string(content).context("Failed to parse document")?;
+        let doc = Document::parse_string(content)
+            .map_err(|e| anyhow!(e.into_report()))
+            .context("Failed to parse document")?;
         doc.render(eval_ctx).context("Failed to render document")
     }
 

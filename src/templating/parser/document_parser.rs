@@ -7,6 +7,7 @@ use super::{
     TaggedLine,
 };
 
+use ariadne::ReportKind;
 use pest::Span;
 
 use crate::templating::element::ConditionalBlock;
@@ -17,8 +18,21 @@ pub enum Error<'a> {
     UnexpectedElement(Span<'a>, String),
     #[error("Expected {} but got {}", .1, .2)]
     UnexpectedElementWithExpected(Span<'a>, &'static str, &'static str),
-    #[error("Expected {} but got EOF", .0)]
-    UnexpectedEof(&'static str),
+    #[error("Expected {} but got EOF", .1)]
+    UnexpectedEof(Span<'a>, &'static str),
+}
+
+impl<'a> Error<'a> {
+    pub fn into_report(self) -> ariadne::Report<'a> {
+        let span = match self {
+            Error::UnexpectedElement(span, _) => span,
+            Error::UnexpectedElementWithExpected(span, _, _) => span,
+            Error::UnexpectedEof(span, _) => span,
+        };
+        ariadne::Report::build(ReportKind::Error, span.start()..span.end())
+            .with_message(self)
+            .finish()
+    }
 }
 
 type Result<'a, T> = std::result::Result<T, Error<'a>>;
@@ -26,13 +40,15 @@ type Result<'a, T> = std::result::Result<T, Error<'a>>;
 // TODO: Make this file not use anyhow::Error as the parser error type. Even as a temporary solution that's hideous.
 
 pub struct DocumentParser<'a> {
+    input: &'a str,
     lines: VecDeque<ParsedLine<'a>>,
     comment_style: Option<CommentStyle>,
 }
 
 impl<'a> DocumentParser<'a> {
-    pub fn new(lines: Vec<ParsedLine<'a>>) -> Self {
+    pub fn new(input: &'a str, lines: Vec<ParsedLine<'a>>) -> Self {
         Self {
+            input,
             lines: lines.into(),
             comment_style: None,
         }
@@ -47,6 +63,13 @@ impl<'a> DocumentParser<'a> {
             }
         }
         Ok(parsed)
+    }
+
+    fn mk_eof_error(&self, expected: &'static str) -> Error<'a> {
+        Error::UnexpectedEof(
+            Span::new(self.input, self.input.len(), self.input.len()).unwrap(),
+            expected,
+        )
     }
 
     fn parse_plain_line(&mut self) -> Result<'a, Option<Span<'a>>> {
@@ -65,7 +88,7 @@ impl<'a> DocumentParser<'a> {
         let mut children = Vec::new();
         loop {
             let Some(next) = self.lines.front() else {
-                Err(Error::UnexpectedEof("another line"))?
+                Err(self.mk_eof_error("another line"))?
             };
             match next {
                 ParsedLine::MultiLineTag { line: _, kind }
@@ -80,7 +103,7 @@ impl<'a> DocumentParser<'a> {
 
     fn parse_end_line(&mut self) -> Result<'a, TaggedLine<'a>> {
         let Some(line) = self.lines.pop_front() else {
-            Err(Error::UnexpectedEof("end"))?
+            Err(self.mk_eof_error("end"))?
         };
         match line {
             ParsedLine::MultiLineTag {
@@ -97,7 +120,7 @@ impl<'a> DocumentParser<'a> {
 
     fn parse_else_line(&mut self) -> Result<TaggedLine<'a>> {
         let Some(line) = self.lines.pop_front() else {
-            Err(Error::UnexpectedEof("end"))?
+            Err(self.mk_eof_error("else"))?
         };
         match line {
             ParsedLine::MultiLineTag {
@@ -113,7 +136,7 @@ impl<'a> DocumentParser<'a> {
     }
     fn parse_elif_line(&mut self) -> Result<'a, (TaggedLine<'a>, &'a str)> {
         let Some(line) = self.lines.pop_front() else {
-            Err(Error::UnexpectedEof("elif"))?
+            Err(self.mk_eof_error("elif"))?
         };
         match line {
             ParsedLine::MultiLineTag {

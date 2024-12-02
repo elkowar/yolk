@@ -1,5 +1,5 @@
-use crate::eval_ctx::EvalCtx;
 use crate::templating::parser::linewise::ParsedLine;
+use crate::{eval_ctx::EvalCtx, templating::parser::document_parser};
 
 use super::{
     element,
@@ -7,6 +7,7 @@ use super::{
 };
 
 use anyhow::Result;
+use ariadne::ReportKind;
 use pest::Parser as _;
 
 #[derive(Debug)]
@@ -24,6 +25,36 @@ impl<'a> Default for Document<'a> {
     }
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum ParseError<'a> {
+    #[error(transparent)]
+    Pest(pest::error::Error<Rule>),
+    #[error(transparent)]
+    DocumentParser(document_parser::Error<'a>),
+}
+
+impl<'a> ParseError<'a> {
+    pub fn into_report(self) -> ariadne::Report<'a> {
+        match self {
+            ParseError::Pest(e) => {
+                let span = match e.location {
+                    pest::error::InputLocation::Pos(x) => x..x,
+                    pest::error::InputLocation::Span((x, y)) => x..y,
+                };
+
+                let mut builder = ariadne::Report::build(ReportKind::Error, span).with_message(&e);
+                if let Some(attempts) = e.parse_attempts() {
+                    for attempt in attempts.expected_tokens() {
+                        builder.add_note(attempt);
+                    }
+                }
+                builder.finish()
+            }
+            ParseError::DocumentParser(e) => e.into_report(),
+        }
+    }
+}
+
 impl<'a> Document<'a> {
     pub fn render(&self, eval_ctx: &mut EvalCtx) -> Result<String> {
         let mut output = String::new();
@@ -36,15 +67,16 @@ impl<'a> Document<'a> {
         Ok(output)
     }
 
-    pub fn parse_string(s: &'a str) -> Result<Self> {
-        let result_lines = YolkParser::parse(Rule::Document, s)?;
+    pub fn parse_string(s: &'a str) -> Result<Self, ParseError<'a>> {
+        let result_lines = YolkParser::parse(Rule::Document, s).map_err(|e| ParseError::Pest(e))?;
         let lines = result_lines
             .into_iter()
             .map(ParsedLine::from_pair)
             .collect();
-        let parser = DocumentParser::new(lines);
+        let parser = DocumentParser::new(s, lines);
+        let elements = parser.parse().map_err(|e| ParseError::DocumentParser(e))?;
         Ok(Self {
-            elements: parser.parse()?,
+            elements,
             ..Default::default()
         })
     }
