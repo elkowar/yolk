@@ -1,4 +1,7 @@
 {
+  "styles": {
+    "theme": "axo_dark"
+  },
   "build": {
     "path_prefix": "yolk"
   }
