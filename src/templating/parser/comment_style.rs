@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use cached::proc_macro::cached;
 use regex::Regex;
 
 use crate::templating::COMMENT_START;
@@ -16,6 +17,31 @@ pub enum CommentStyle {
 }
 
 impl CommentStyle {
+    /// Try to infer the CommentStyle from a line
+    pub fn try_infer(line: &ParsedLine<'_>) -> Option<Self> {
+        let (left, right) = match line {
+            ParsedLine::MultiLineTag { line, .. }
+            | ParsedLine::NextLineTag { line, .. }
+            | ParsedLine::InlineTag { line, .. } => (line.left, line.right),
+            ParsedLine::Raw(_) => return None,
+        };
+
+        for (prefix, postfix) in &CIRCUMFIX_COMMENT_SYMBOLS {
+            if left.trim_end().ends_with(prefix) && right.trim_start().starts_with(postfix) {
+                return Some(CommentStyle::Circumfix(
+                    prefix.to_string(),
+                    postfix.to_string(),
+                ));
+            }
+        }
+        for prefix in &PREFIX_COMMENT_SYMBOLS {
+            if left.trim_end().ends_with(prefix) {
+                return Some(CommentStyle::Prefix(prefix.to_string()));
+            }
+        }
+        None
+    }
+
     #[allow(unused)]
     pub fn prefix(left: &str) -> Self {
         CommentStyle::Prefix(left.to_string())
@@ -33,7 +59,7 @@ impl CommentStyle {
     pub fn enable_line<'a>(&self, line: &'a str) -> Cow<'a, str> {
         // TODO: Creating a regex every time here is horrible
         let left = self.left();
-        let re = Regex::new(&format!(
+        let re = create_regex(format!(
             "{}{}",
             regex::escape(left),
             regex::escape(COMMENT_START)
@@ -41,7 +67,7 @@ impl CommentStyle {
         .unwrap();
         let left_done = re.replace_all(line, "");
         if let CommentStyle::Circumfix(_, right) = self {
-            let re_right = Regex::new(&regex::escape(right)).unwrap();
+            let re_right = create_regex(regex::escape(right)).unwrap();
             Cow::Owned(re_right.replace_all(&left_done, "").to_string())
         } else {
             left_done
@@ -60,7 +86,7 @@ impl CommentStyle {
                 regex::escape(right)
             ),
         };
-        Regex::new(&re).unwrap().is_match(line)
+        create_regex(re).unwrap().is_match(line)
     }
 
     pub fn disable_line<'a>(&self, line: &'a str) -> Cow<'a, str> {
@@ -68,7 +94,7 @@ impl CommentStyle {
             return line.into();
         }
         let left = self.left();
-        let re = Regex::new("^(\\s*)(.*)$").unwrap();
+        let re = create_regex("^(\\s*)(.*)$".to_string()).unwrap();
         let (indent, remaining_line) = re
             .captures(line)
             .and_then(|x| (x.get(1).zip(x.get(2))))
@@ -82,41 +108,18 @@ impl CommentStyle {
     }
 }
 
-pub fn infer_comment_syntax(line: &ParsedLine<'_>) -> Option<CommentStyle> {
-    let (left, right) = match line {
-        ParsedLine::MultiLineTag { line, .. }
-        | ParsedLine::NextLineTag { line, .. }
-        | ParsedLine::InlineTag { line, .. } => (line.left, line.right),
-        ParsedLine::Raw(_) => return None,
-    };
-
-    for (prefix, postfix) in &CIRCUMFIX_COMMENT_SYMBOLS {
-        if left.trim_end().ends_with(prefix) && right.trim_start().starts_with(postfix) {
-            return Some(CommentStyle::Circumfix(
-                prefix.to_string(),
-                postfix.to_string(),
-            ));
-        }
-    }
-    for prefix in &PREFIX_COMMENT_SYMBOLS {
-        if left.trim_end().ends_with(prefix) {
-            return Some(CommentStyle::Prefix(prefix.to_string()));
-        }
-    }
-    None
+/// Same as [`Regex::new`], but with caching.
+/// This is used so we don't have to re-create the same regex for each instance of `CommentStyle`
+#[cached]
+fn create_regex(s: String) -> Result<Regex, regex::Error> {
+    Regex::new(&s)
 }
 
 #[cfg(test)]
 mod test {
-    use pest::Span;
+    use testresult::TestResult;
 
-    use crate::templating::{
-        parser::{
-            comment_style::infer_comment_syntax,
-            linewise::{ParsedLine, TagKind},
-        },
-        TaggedLine,
-    };
+    use crate::templating::parser::linewise::ParsedLine;
 
     use super::CommentStyle;
 
@@ -165,33 +168,15 @@ mod test {
     }
 
     #[test]
-    pub fn test_infer_comment_syntax() {
-        let parsed_line = ParsedLine::InlineTag {
-            line: TaggedLine {
-                full_line: Span::new("# {# foo #}", 0, 10).unwrap(),
-                tag: "{# foo #}",
-                left: "# ",
-                right: "",
-            },
-            kind: TagKind::Regular("foo"),
-        };
+    pub fn test_infer_comment_syntax() -> TestResult {
         assert_eq!(
-            infer_comment_syntax(&parsed_line),
+            CommentStyle::try_infer(&ParsedLine::try_from_str("# {# foo #}")?),
             Some(CommentStyle::prefix("#"))
         );
-
-        let parsed_line = ParsedLine::InlineTag {
-            line: TaggedLine {
-                full_line: Span::new("/* {# foo #} */", 0, 14).unwrap(),
-                tag: "{# foo #}",
-                left: "/* ",
-                right: " */",
-            },
-            kind: TagKind::Regular("foo"),
-        };
         assert_eq!(
-            infer_comment_syntax(&parsed_line),
+            CommentStyle::try_infer(&ParsedLine::try_from_str("/* {# foo #} */")?),
             Some(CommentStyle::circumfix("/*", "*/"))
         );
+        Ok(())
     }
 }

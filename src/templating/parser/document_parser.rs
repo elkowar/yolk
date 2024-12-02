@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use super::{
     super::element::Element,
-    comment_style::{infer_comment_syntax, CommentStyle},
+    comment_style::CommentStyle,
     linewise::{MultiLineTagKind, ParsedLine, TagKind},
 };
 
@@ -119,7 +119,7 @@ impl<'a> DocumentParser<'a> {
             return Ok(Element::Eof);
         };
         if self.comment_style.is_none() {
-            self.comment_style = infer_comment_syntax(&line);
+            self.comment_style = CommentStyle::try_infer(&line);
         }
         match line {
             ParsedLine::MultiLineTag {

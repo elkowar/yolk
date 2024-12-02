@@ -1,10 +1,10 @@
 use anyhow::Result;
 use pest::{
     iterators::{Pair, Pairs},
-    Span,
+    Parser as _, Span,
 };
 
-use crate::templating::{Rule, TaggedLine};
+use crate::templating::{Rule, TaggedLine, YolkParser};
 
 #[derive(Debug)]
 pub enum ParsedLine<'a> {
@@ -47,6 +47,12 @@ impl<'a> TagKind<'a> {
 }
 
 impl<'a> ParsedLine<'a> {
+    #[allow(unused)]
+    pub fn try_from_str(s: &'a str) -> Result<Self> {
+        let mut result = YolkParser::parse(Rule::Line, s)?;
+        Self::try_from_pair(result.next().unwrap())
+    }
+
     pub fn try_from_pair(pair: Pair<'a, Rule>) -> Result<Self> {
         match pair.as_rule() {
             Rule::Raw => Ok(Self::Raw(pair.as_span())),
