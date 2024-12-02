@@ -6,8 +6,7 @@ use super::{
     parser::{comment_style::CommentStyle, document_parser::DocumentParser, Rule, YolkParser},
 };
 
-use anyhow::Result;
-use ariadne::ReportKind;
+use miette::{Diagnostic, LabeledSpan, Result, SourceCode};
 use pest::Parser as _;
 
 #[derive(Debug)]
@@ -27,35 +26,59 @@ impl<'a> Default for Document<'a> {
 
 #[derive(thiserror::Error, Debug)]
 pub enum ParseError {
-    #[error(transparent)]
-    Pest(pest::error::Error<Rule>),
-    #[error(transparent)]
-    DocumentParser(document_parser::Error),
+    #[error("{}", .1)]
+    Pest(String, pest::error::Error<Rule>),
+    #[error("{}", .1)]
+    DocumentParser(String, document_parser::Error),
 }
 
-impl ParseError {
-    pub fn into_report(self) -> ariadne::Report<'static> {
+impl Diagnostic for ParseError {
+    fn source_code(&self) -> Option<&dyn SourceCode> {
         match self {
-            ParseError::Pest(e) => {
-                let span = match e.location {
+            ParseError::Pest(text, _) => Some(text),
+            ParseError::DocumentParser(text, _) => Some(text),
+        }
+    }
+    fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
+        match self {
+            ParseError::Pest(_, e) => Some(Box::new(std::iter::once(LabeledSpan::at(
+                match e.location {
                     pest::error::InputLocation::Pos(x) => x..x,
                     pest::error::InputLocation::Span((x, y)) => x..y,
-                };
-
-                let mut builder = ariadne::Report::build(ReportKind::Error, span).with_message(&e);
-                if let Some(attempts) = e.parse_attempts() {
-                    for attempt in attempts.expected_tokens() {
-                        builder.add_note(attempt);
-                    }
-                }
-                builder.finish()
-            }
-            ParseError::DocumentParser(e) => ariadne::Report::build(ReportKind::Error, e.span())
-                .with_message(&e)
-                .finish(),
+                },
+                format!("{}", e),
+            )))),
+            ParseError::DocumentParser(_, e) => Some(Box::new(std::iter::once(LabeledSpan::at(
+                e.span(),
+                format!("{}", e),
+            )))),
         }
     }
 }
+
+// impl ParseError {
+//     pub fn into_report(self) -> ariadne::Report<'static> {
+//         match self {
+//             ParseError::Pest(e) => {
+//                 let span = match e.location {
+//                     pest::error::InputLocation::Pos(x) => x..x,
+//                     pest::error::InputLocation::Span((x, y)) => x..y,
+//                 };
+
+//                 let mut builder = ariadne::Report::build(ReportKind::Error, span).with_message(&e);
+//                 if let Some(attempts) = e.parse_attempts() {
+//                     for attempt in attempts.expected_tokens() {
+//                         builder.add_note(attempt);
+//                     }
+//                 }
+//                 builder.finish()
+//             }
+//             ParseError::DocumentParser(e) => ariadne::Report::build(ReportKind::Error, e.span())
+//                 .with_message(&e)
+//                 .finish(),
+//         }
+//     }
+// }
 
 impl<'a> Document<'a> {
     pub fn render(&self, eval_ctx: &mut EvalCtx) -> Result<String> {
@@ -70,13 +93,16 @@ impl<'a> Document<'a> {
     }
 
     pub fn parse_string(s: &'a str) -> Result<Self, ParseError> {
-        let result_lines = YolkParser::parse(Rule::Document, s).map_err(|e| ParseError::Pest(e))?;
+        let result_lines =
+            YolkParser::parse(Rule::Document, s).map_err(|e| ParseError::Pest(s.to_string(), e))?;
         let lines = result_lines
             .into_iter()
             .map(ParsedLine::from_pair)
             .collect();
         let parser = DocumentParser::new(s, lines);
-        let elements = parser.parse().map_err(|e| ParseError::DocumentParser(e))?;
+        let elements = parser
+            .parse()
+            .map_err(|e| ParseError::DocumentParser(s.to_string(), e))?;
         Ok(Self {
             elements,
             ..Default::default()

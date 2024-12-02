@@ -1,8 +1,9 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context as _, Result};
 use fs_err::PathExt;
+use miette::{Context, Diagnostic, IntoDiagnostic, Result};
 use mlua::{Function, Value};
+use regex::Regex;
 
 use crate::{
     eval_ctx::EvalCtx, script::sysinfo::SystemInfo, templating::document::Document, util,
@@ -34,9 +35,11 @@ impl Yolk {
     /// - If it is a directory that already exists in the target location, recurse into it.
     fn use_recursively(&self, egg_name: &str, path: &impl AsRef<Path>) -> Result<()> {
         let path = path.as_ref();
-        let path = path.fs_err_canonicalize()?;
+        let path = path.fs_err_canonicalize().into_diagnostic()?;
         tracing::debug!("use_recursively({}, {})", egg_name, path.display());
-        let path_relative = path.strip_prefix(self.yolk_paths.egg_path(egg_name))?;
+        let path_relative = path
+            .strip_prefix(self.yolk_paths.egg_path(egg_name))
+            .into_diagnostic()?;
 
         // Ensure that we skip the yolk_templates file, but only when it's a direct child of the egg dir.
         if path.file_name() == Some("yolk_templates".as_ref())
@@ -47,24 +50,24 @@ impl Yolk {
 
         let in_home = self.yolk_paths.home_path().join(path_relative);
         if in_home.exists() {
-            if in_home.is_symlink() && in_home.fs_err_read_link()? == path {
+            if in_home.is_symlink() && in_home.fs_err_read_link().into_diagnostic()? == path {
                 return Ok(());
             } else if in_home.is_dir() && path.is_dir() {
-                for entry in path.fs_err_read_dir()? {
-                    let entry = entry?;
+                for entry in path.fs_err_read_dir().into_diagnostic()? {
+                    let entry = entry.into_diagnostic()?;
                     self.use_recursively(egg_name, &entry.path())?;
                 }
             } else if !in_home.is_symlink() {
-                bail!("File {} already exists", in_home.display());
+                Err(miette::miette!("File {} already exists", in_home.display()))?;
             } else if in_home.is_dir() || path.is_dir() {
-                bail!(
+                return Err(miette::miette!(
                     "Conflicting file or directory {} with {}",
                     path.display(),
                     in_home.display()
-                );
+                ));
             }
         } else {
-            util::create_symlink(path, in_home)?;
+            util::create_symlink(path, in_home).into_diagnostic()?;
         }
 
         Ok(())
@@ -74,8 +77,8 @@ impl Yolk {
         tracing::info!("Using egg {}", egg_name);
         let egg_path = self.yolk_paths.egg_path(egg_name);
 
-        for entry in egg_path.fs_err_read_dir()? {
-            let entry = entry?;
+        for entry in egg_path.fs_err_read_dir().into_diagnostic()? {
+            let entry = entry.into_diagnostic()?;
             if entry.file_name() == "yolk_templates" {
                 continue;
             }
@@ -86,17 +89,17 @@ impl Yolk {
     }
 
     pub fn add_egg(&self, egg_name: &str, path: impl AsRef<Path>) -> Result<()> {
-        let original_path = fs_err::canonicalize(path.as_ref())?;
+        let original_path = fs_err::canonicalize(path.as_ref()).into_diagnostic()?;
         let Ok(relative_to_home) = original_path.strip_prefix(self.yolk_paths.home_path()) else {
-            anyhow::bail!(
+            return Err(miette::miette!(
                 "Path {} is not in the home directory {}",
                 original_path.display(),
                 self.yolk_paths.home_path().display()
-            );
+            ));
         };
         let new_local_path = self.yolk_paths.egg_path(egg_name).join(relative_to_home);
-        fs_err::create_dir_all(new_local_path.parent().unwrap())?;
-        fs_err::rename(&original_path, &new_local_path)?;
+        fs_err::create_dir_all(new_local_path.parent().unwrap()).into_diagnostic()?;
+        fs_err::rename(&original_path, &new_local_path).into_diagnostic()?;
         // TODO: This can be optimized a lot, as we assume we only need to re-use that one entry we just added.
         // However, we can't just naively create a symlink, as we don't know on that dir level to start symlinking.
         self.use_egg(egg_name)?;
@@ -112,8 +115,8 @@ impl Yolk {
         for egg_dir in egg_paths {
             let tmpl_list_file = egg_dir.join("yolk_templates");
             if tmpl_list_file.is_file() {
-                let egg_canonical = egg_dir.canonicalize()?;
-                let tmpl_paths = fs_err::read_to_string(tmpl_list_file)?;
+                let egg_canonical = egg_dir.canonicalize().into_diagnostic()?;
+                let tmpl_paths = fs_err::read_to_string(tmpl_list_file).into_diagnostic()?;
                 let tmpl_paths = tmpl_paths.lines().map(|x| egg_canonical.join(x));
                 for templated_file in tmpl_paths {
                     if templated_file.is_file() {
@@ -144,22 +147,34 @@ impl Yolk {
             EvalMode::Local => SystemInfo::generate(),
         };
         let eval_ctx = EvalCtx::new_for_tag()?;
-        let yolk_file = fs_err::read_to_string(self.yolk_paths.script_path())?;
-        eval_ctx.lua().load(yolk_file).set_name("yolk.lua").exec()?;
+        let yolk_file = fs_err::read_to_string(self.yolk_paths.script_path()).into_diagnostic()?;
+
+        // TODO: In the future, parse the lua error message for line number
+        // and show a proper error span
+        eval_ctx
+            .lua()
+            .load(&yolk_file)
+            .set_name("yolk.lua")
+            .exec()
+            .into_diagnostic()?;
         let globals = eval_ctx.lua().globals();
         let data: Result<Value, _> = match mode {
             EvalMode::Canonical => globals
                 .get::<Function>("canonical_data")
+                .into_diagnostic()
                 .with_context(|| "Failed to get canonical_data function")?
                 .call(()),
             EvalMode::Local => globals
                 .get::<Function>("local_data")
+                .into_diagnostic()
                 .with_context(|| "Failed to get local_data function")?
                 .call(sysinfo.clone()),
         };
-        let data = data.with_context(|| "Failed to call data function".to_string())?;
-        globals.set("data", data)?;
-        globals.set("system", sysinfo)?;
+        let data = data
+            .into_diagnostic()
+            .with_context(|| "Failed to call data function".to_string())?;
+        globals.set("data", data).into_diagnostic()?;
+        globals.set("system", sysinfo).into_diagnostic()?;
         Ok(eval_ctx)
     }
 
@@ -167,14 +182,21 @@ impl Yolk {
         let eval_ctx = self
             .prepare_eval_ctx_for_templates(mode)
             .context("Failed to prepare eval_ctx")?;
-        let result = eval_ctx.lua().load(expr).eval::<Value>()?;
-        Ok(result.to_string()?)
+        let result = eval_ctx
+            .lua()
+            .load(expr)
+            .eval::<Value>()
+            .into_diagnostic()
+            .map_err(|e| e.with_source_code(expr.to_string()))?;
+        Ok(result.to_string().into_diagnostic()?)
     }
 
     /// Evaluate a templated file
     pub fn eval_template(&self, eval_ctx: &mut EvalCtx, content: &str) -> Result<String> {
         let doc = Document::parse_string(content).context("Failed to parse document")?;
-        doc.render(eval_ctx).context("Failed to render document")
+        doc.render(eval_ctx)
+            .map_err(|e| e.with_source_code(content.to_string()))
+            .context("Failed to render document")
     }
 
     pub fn eval_template_file_in_place(
@@ -183,11 +205,11 @@ impl Yolk {
         path: impl AsRef<Path>,
     ) -> Result<()> {
         tracing::info!("Syncing file {}", path.as_ref().display());
-        let content = fs_err::read_to_string(&path)?;
+        let content = fs_err::read_to_string(&path).into_diagnostic()?;
         let rendered = self.eval_template(eval_ctx, &content).with_context(|| {
             format!("Failed to eval template file: {}", path.as_ref().display())
         })?;
-        fs_err::write(&path, rendered)?;
+        fs_err::write(&path, rendered).into_diagnostic()?;
         Ok(())
     }
 
@@ -207,26 +229,33 @@ impl Yolk {
         }
         let yolk_templates_path = self.yolk_paths.yolk_templates_file_path_for(egg_name);
         if !yolk_templates_path.is_file() {
-            fs_err::File::create(&yolk_templates_path)?;
+            fs_err::File::create(&yolk_templates_path).into_diagnostic()?;
         }
-        let yolk_templates = fs_err::read_to_string(&yolk_templates_path)?;
+        let yolk_templates = fs_err::read_to_string(&yolk_templates_path).into_diagnostic()?;
         let mut yolk_templates: Vec<_> = yolk_templates.lines().map(|x| x.to_string()).collect();
         for path in paths {
-            let path = path.fs_err_canonicalize()?;
+            let path = path.fs_err_canonicalize().into_diagnostic()?;
             if !path.starts_with(&egg_dir) {
-                bail!("The given file path is not within {}", egg_dir.display());
+                return Err(miette::miette!(
+                    "The given file path is not within {}",
+                    egg_dir.display()
+                ));
             }
-            let path_relative = path.strip_prefix(&egg_dir)?;
+            let path_relative = path.strip_prefix(&egg_dir).into_diagnostic()?;
             let path_str = path_relative.to_str().unwrap().to_string();
             yolk_templates.push(path_str);
         }
-        fs_err::write(&yolk_templates_path, yolk_templates.join("\n"))?;
+        fs_err::write(&yolk_templates_path, yolk_templates.join("\n")).into_diagnostic()?;
         self.sync_to_mode(EvalMode::Local)?;
         Ok(())
     }
 
     pub fn list_egg_paths(&self) -> Result<Vec<PathBuf>> {
-        let entries = self.yolk_paths.eggs_dir_path().fs_err_read_dir()?;
+        let entries = self
+            .yolk_paths
+            .eggs_dir_path()
+            .fs_err_read_dir()
+            .into_diagnostic()?;
         Ok(entries
             .filter_map(|entry| entry.ok().map(|x| x.path()))
             .collect())

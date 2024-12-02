@@ -1,7 +1,7 @@
 use std::{io::Read as _, str::FromStr};
 
-use anyhow::Result;
 use clap::{Parser, Subcommand};
+use miette::{IntoDiagnostic, Result};
 use script::eval_ctx;
 use templating::document::ParseError;
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
@@ -85,10 +85,7 @@ pub(crate) fn main() -> Result<()> {
         .init();
 
     if let Err(err) = run_command(args) {
-        if let Some(parse_error) = err.downcast_ref::<ParseError>() {
-        } else {
-            eprintln!("{:?}", err);
-        }
+        eprintln!("{:?}", err);
     }
     Ok(())
 }
@@ -127,7 +124,8 @@ fn run_command(args: Args) -> Result<()> {
                 std::process::Command::new("git")
                     .args(command)
                     .current_dir(yolk.paths().root_path())
-                    .status()?;
+                    .status()
+                    .into_diagnostic()?;
                 Ok(())
             })?;
         }
@@ -136,10 +134,12 @@ fn run_command(args: Args) -> Result<()> {
         }
         Command::EvalTemplate { path, canonical } => {
             let text = match path {
-                Some(path) => std::fs::read_to_string(path)?,
+                Some(path) => std::fs::read_to_string(path).into_diagnostic()?,
                 None => {
                     let mut buffer = String::new();
-                    std::io::stdin().read_to_string(&mut buffer)?;
+                    std::io::stdin()
+                        .read_to_string(&mut buffer)
+                        .into_diagnostic()?;
                     buffer
                 }
             };

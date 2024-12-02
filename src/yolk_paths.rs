@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::Result;
+use miette::{IntoDiagnostic as _, Result};
 
 const DEFAULT_LUA: &str = indoc::indoc! {r#"
     function canonical_data()
@@ -50,19 +50,19 @@ impl YolkPaths {
     #[allow(unused)]
     pub fn check(&self) -> Result<()> {
         if !self.root_path().exists() {
-            anyhow::bail!(
+            miette::bail!(
                 "Yolk directory does not exist at {}",
                 self.root_path().display()
             );
         }
         if !self.script_path().exists() {
-            anyhow::bail!(
+            miette::bail!(
                 "Yolk directory does not contain a yolk.lua file at {}",
                 self.script_path().display()
             );
         }
         if !self.eggs_dir_path().exists() {
-            anyhow::bail!(
+            miette::bail!(
                 "Yolk directory does not contain an eggs directory at {}",
                 self.eggs_dir_path().display()
             );
@@ -72,12 +72,15 @@ impl YolkPaths {
 
     pub fn create(&self) -> Result<()> {
         let path = self.root_path();
-        if path.exists() && path.is_dir() && fs_err::read_dir(path)?.next().is_some() {
-            anyhow::bail!("Yolk directory already exists at {}", path.display());
+        if path.exists()
+            && path.is_dir()
+            && fs_err::read_dir(path).into_diagnostic()?.next().is_some()
+        {
+            miette::bail!("Yolk directory already exists at {}", path.display());
         }
-        fs_err::create_dir_all(path)?;
-        fs_err::create_dir_all(self.eggs_dir_path())?;
-        fs_err::write(self.script_path(), DEFAULT_LUA)?;
+        fs_err::create_dir_all(path).into_diagnostic()?;
+        fs_err::create_dir_all(self.eggs_dir_path()).into_diagnostic()?;
+        fs_err::write(self.script_path(), DEFAULT_LUA).into_diagnostic()?;
 
         Ok(())
     }

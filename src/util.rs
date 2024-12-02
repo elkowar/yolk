@@ -1,4 +1,6 @@
-use std::path::Path;
+use std::{error::Error, path::Path};
+
+use miette::Diagnostic;
 
 /// Create a symlink at `link` pointing to `original`.
 pub fn create_symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> std::io::Result<()> {
@@ -13,4 +15,13 @@ pub fn create_symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> std
         }
     }
     Ok(())
+}
+
+#[derive(Debug, thiserror::Error, Diagnostic)]
+#[error("{}", source)]
+pub struct DiagnosticWithSpan<T: Error + 'static> {
+    #[source]
+    pub source: T,
+    #[label()]
+    pub span: std::ops::Range<usize>,
 }

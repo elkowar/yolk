@@ -1,20 +1,22 @@
-use anyhow::Result;
+use miette::{IntoDiagnostic, Result};
 use std::path::PathBuf;
 
-use anyhow::Context as _;
-use mlua::{Lua, Value};
+use miette::Context as _;
+use mlua::{ExternalResult, Lua, Value};
 use regex::Regex;
 
 use super::eval_ctx::YOLK_TEXT_NAME;
 
-pub fn setup_tag_functions(lua: &Lua) -> anyhow::Result<()> {
+pub fn setup_tag_functions(lua: &Lua) -> miette::Result<()> {
     setup_pure_functions(lua)?;
     let globals = lua.globals();
 
     /// Simple regex replacement that will refuse to run a non-reversible replacement.
     /// If the replacement value is non-reversible, will return the original text and log a warning.
     fn tag_text_replace(text: &str, pattern: &str, replacement: &str) -> Result<String> {
-        let pattern = Regex::new(pattern).with_context(|| format!("Invalid regex: {pattern}"))?;
+        let pattern = Regex::new(pattern)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Invalid regex: {pattern}"))?;
         let after_replace = pattern.replace(text, replacement);
         if let Some(original_value) = pattern.find(text) {
             let original_value = original_value.as_str();
@@ -34,17 +36,28 @@ pub fn setup_tag_functions(lua: &Lua) -> anyhow::Result<()> {
         lua,
         "replace",
         |lua, (regex, replacement): (String, String)| {
-            let text = lua.globals().get::<String>(YOLK_TEXT_NAME)?;
+            let text = lua
+                .globals()
+                .get::<String>(YOLK_TEXT_NAME)
+                .into_diagnostic()?;
             Ok(tag_text_replace(&text, &regex, &replacement)?)
         },
     )?;
-    globals.set("r", globals.get::<mlua::Function>("replace")?)?;
+    globals
+        .set(
+            "r",
+            globals.get::<mlua::Function>("replace").into_diagnostic()?,
+        )
+        .into_diagnostic()?;
 
     register_fn(
         lua,
         "replace_in",
         |lua, (between, replacement): (String, String)| {
-            let text = lua.globals().get::<String>(YOLK_TEXT_NAME)?;
+            let text = lua
+                .globals()
+                .get::<String>(YOLK_TEXT_NAME)
+                .into_diagnostic()?;
             let regex = format!("{between}[^{between}]*{between}");
             Ok(tag_text_replace(
                 &text,
@@ -53,33 +66,57 @@ pub fn setup_tag_functions(lua: &Lua) -> anyhow::Result<()> {
             )?)
         },
     )?;
-    globals.set("ri", globals.get::<mlua::Function>("replace_in")?)?;
+    globals
+        .set(
+            "ri",
+            globals
+                .get::<mlua::Function>("replace_in")
+                .into_diagnostic()?,
+        )
+        .into_diagnostic()?;
     register_fn(lua, "replace_color", |lua, replacement: String| {
-        let text = lua.globals().get::<String>(YOLK_TEXT_NAME)?;
+        let text = lua
+            .globals()
+            .get::<String>(YOLK_TEXT_NAME)
+            .into_diagnostic()?;
         Ok(tag_text_replace(
             &text,
             r"#[\da-fA-F]{6}([\da-fA-F]{2})?",
             &replacement.to_string(),
         )?)
     })?;
-    globals.set("rc", globals.get::<mlua::Function>("replace_in")?)?;
+    globals
+        .set(
+            "rc",
+            globals
+                .get::<mlua::Function>("replace_in")
+                .into_diagnostic()?,
+        )
+        .into_diagnostic()?;
 
     Ok(())
 }
 
-pub fn setup_pure_functions(lua: &Lua) -> anyhow::Result<()> {
+pub fn setup_pure_functions(lua: &Lua) -> Result<()> {
     let globals = lua.globals();
 
     let inspect = include_str!("lua_lib/inspect.lua");
-    let inspect = lua.load(inspect).set_name("inspect.lua").into_function()?;
-    let inspect = lua.load_from_function::<Value>("inspect", inspect)?;
-    globals.set("inspect", inspect)?;
+    let inspect = lua
+        .load(inspect)
+        .set_name("inspect.lua")
+        .into_function()
+        .into_diagnostic()?;
+    let inspect = lua
+        .load_from_function::<Value>("inspect", inspect)
+        .into_diagnostic()?;
+    globals.set("inspect", inspect).into_diagnostic()?;
 
     register_fn(
         lua,
         "regex_match",
         |_lua, (pattern, haystack): (String, String)| {
             Ok(regex::Regex::new(&pattern)
+                .into_diagnostic()
                 .with_context(|| format!("Invalid regex: {pattern}"))?
                 .is_match(&haystack))
         },
@@ -90,6 +127,7 @@ pub fn setup_pure_functions(lua: &Lua) -> anyhow::Result<()> {
         "regex_replace",
         |_lua, (pattern, haystack, replacement): (String, String, String)| {
             Ok(regex::Regex::new(&pattern)
+                .into_diagnostic()
                 .with_context(|| format!("Invalid regex: {pattern}"))?
                 .replace_all(&haystack, &replacement)
                 .to_string())
@@ -98,16 +136,22 @@ pub fn setup_pure_functions(lua: &Lua) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn register_fn<F, A, R>(lua: &Lua, name: &str, func: F) -> mlua::Result<()>
+fn register_fn<F, A, R>(lua: &Lua, name: &str, func: F) -> Result<()>
 where
-    F: Fn(&Lua, A) -> mlua::Result<R> + mlua::MaybeSend + 'static,
+    F: Fn(&Lua, A) -> miette::Result<R> + mlua::MaybeSend + 'static + Send + Sync,
     A: mlua::FromLuaMulti,
     R: mlua::IntoLuaMulti,
 {
-    lua.globals().set(name, lua.create_function(func)?)
+    lua.globals()
+        .set(
+            name,
+            lua.create_function(move |lua, x| func(&lua, x).into_lua_err())
+                .into_diagnostic()?,
+        )
+        .into_diagnostic()
 }
 
-pub fn setup_impure_functions(lua: &Lua) -> anyhow::Result<()> {
+pub fn setup_impure_functions(lua: &Lua) -> Result<()> {
     register_fn(lua, "command_available", |_, name: String| {
         Ok(match which::which_all_global(name) {
             Ok(mut iter) => iter.next().is_some(),

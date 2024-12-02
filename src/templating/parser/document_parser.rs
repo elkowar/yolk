@@ -7,14 +7,16 @@ use super::{
     TaggedLine,
 };
 
+use miette::Diagnostic;
 use pest::Span;
 
 use crate::templating::element::ConditionalBlock;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Diagnostic)]
+#[diagnostic()]
 pub enum Error {
     #[error("Expected {} but got {}", .1, .2)]
-    UnexpectedElement(Range<usize>, &'static str, &'static str),
+    UnexpectedElement(#[label("Here")] Range<usize>, &'static str, &'static str),
 }
 
 impl Error {

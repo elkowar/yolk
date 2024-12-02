@@ -1,5 +1,8 @@
-use anyhow::Context;
-use anyhow::Result;
+use miette::Context as _;
+use miette::Error;
+use miette::IntoDiagnostic;
+use miette::LabeledSpan;
+use miette::Result;
 use mlua::FromLuaMulti;
 use mlua::Lua;
 use mlua::Value;
@@ -36,19 +39,26 @@ impl EvalCtx {
             .load(expr)
             .set_name("Expression")
             .eval::<T>()
-            .with_context(|| format!("Failed to evaluate expression `{expr}`"))
+            .into_diagnostic()
     }
 
     pub fn eval_text_transformation(&mut self, text: &str, expr: &str) -> Result<String> {
         let globals = self.lua.globals();
-        let old_text = globals.get::<Value>(YOLK_TEXT_NAME)?;
-        self.lua.globals().set(YOLK_TEXT_NAME, text)?;
+        let old_text = globals.get::<Value>(YOLK_TEXT_NAME).into_diagnostic()?;
+        self.lua
+            .globals()
+            .set(YOLK_TEXT_NAME, text)
+            .into_diagnostic()?;
         let result = self
             .lua
             .load(expr)
             .set_name("text transformation expr")
-            .eval::<String>()?;
-        self.lua.globals().set(YOLK_TEXT_NAME, old_text)?;
+            .eval::<String>()
+            .into_diagnostic()?;
+        self.lua
+            .globals()
+            .set(YOLK_TEXT_NAME, old_text)
+            .into_diagnostic()?;
         Ok(result)
     }
 

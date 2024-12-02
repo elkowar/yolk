@@ -1,5 +1,5 @@
 use crate::eval_ctx::EvalCtx;
-use anyhow::Result;
+use miette::{Diagnostic, Error, LabeledSpan, Result};
 use pest::Span;
 
 use super::{document::RenderContext, parser::TaggedLine};
@@ -38,22 +38,32 @@ pub enum Element<'a> {
     Eof,
 }
 
+fn create_diagnostic(span: Span<'_>, e: miette::Report) -> miette::Report {
+    miette::miette!(
+        labels = vec![LabeledSpan::at(span.start()..span.end(), "here")],
+        "{}",
+        e
+    )
+}
+
 impl<'a> Element<'a> {
     pub fn render(&self, render_ctx: &RenderContext, eval_ctx: &mut EvalCtx) -> Result<String> {
         match self {
             Element::Plain(s) => Ok(s.as_str().to_string()),
-            Element::Inline { line, expr, is_if } => {
-                match is_if {
-                    true => Ok(render_ctx
-                        .string_toggled(line.full_line.as_str(), eval_ctx.eval_expr(expr)?)),
-                    false => Ok(format!(
-                        "{}{}{}",
-                        run_transformation_expr(eval_ctx, line.left, expr)?,
-                        line.tag,
-                        line.right
-                    )),
+            Element::Inline { line, expr, is_if } => match is_if {
+                true => {
+                    let eval_result = eval_ctx
+                        .eval_expr(expr)
+                        .map_err(|e| create_diagnostic(line.full_line, e))?;
+                    Ok(render_ctx.string_toggled(line.full_line.as_str(), eval_result))
                 }
-            }
+                false => Ok(format!(
+                    "{}{}{}",
+                    run_transformation_expr(eval_ctx, line.left, expr)?,
+                    line.tag,
+                    line.right
+                )),
+            },
             Element::NextLine {
                 line,
                 expr,
