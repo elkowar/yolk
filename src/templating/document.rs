@@ -27,7 +27,7 @@ impl<'a> Default for Document<'a> {
 #[derive(thiserror::Error, Debug)]
 pub enum ParseError {
     #[error("{}", .1)]
-    Pest(String, pest::error::Error<Rule>),
+    Pest(String, Box<pest::error::Error<Rule>>),
     #[error("{}", .1)]
     DocumentParser(String, document_parser::Error),
 }
@@ -93,8 +93,8 @@ impl<'a> Document<'a> {
     }
 
     pub fn parse_string(s: &'a str) -> Result<Self, ParseError> {
-        let result_lines =
-            YolkParser::parse(Rule::Document, s).map_err(|e| ParseError::Pest(s.to_string(), e))?;
+        let result_lines = YolkParser::parse(Rule::Document, s)
+            .map_err(|e| ParseError::Pest(s.to_string(), Box::new(e)))?;
         let lines = result_lines
             .into_iter()
             .map(ParsedLine::from_pair)

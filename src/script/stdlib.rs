@@ -40,7 +40,7 @@ pub fn setup_tag_functions(lua: &Lua) -> miette::Result<()> {
                 .globals()
                 .get::<String>(YOLK_TEXT_NAME)
                 .into_diagnostic()?;
-            Ok(tag_text_replace(&text, &regex, &replacement)?)
+            tag_text_replace(&text, &regex, &replacement)
         },
     )?;
     globals
@@ -59,11 +59,7 @@ pub fn setup_tag_functions(lua: &Lua) -> miette::Result<()> {
                 .get::<String>(YOLK_TEXT_NAME)
                 .into_diagnostic()?;
             let regex = format!("{between}[^{between}]*{between}");
-            Ok(tag_text_replace(
-                &text,
-                &regex,
-                &format!("{between}{replacement}{between}"),
-            )?)
+            tag_text_replace(&text, &regex, &format!("{between}{replacement}{between}"))
         },
     )?;
     globals
@@ -79,11 +75,11 @@ pub fn setup_tag_functions(lua: &Lua) -> miette::Result<()> {
             .globals()
             .get::<String>(YOLK_TEXT_NAME)
             .into_diagnostic()?;
-        Ok(tag_text_replace(
+        tag_text_replace(
             &text,
             r"#[\da-fA-F]{6}([\da-fA-F]{2})?",
             &replacement.to_string(),
-        )?)
+        )
     })?;
     globals
         .set(
@@ -145,7 +141,7 @@ where
     lua.globals()
         .set(
             name,
-            lua.create_function(move |lua, x| func(&lua, x).into_lua_err())
+            lua.create_function(move |lua, x| func(lua, x).into_lua_err())
                 .into_diagnostic()?,
         )
         .into_diagnostic()

@@ -116,7 +116,7 @@ fn run_command(args: Args) -> Result<()> {
             } else {
                 EvalMode::Local
             };
-            println!("{}", yolk.eval_lua(mode, expr)?);
+            println!("{}", yolk.eval_template_lua(mode, expr)?);
         }
         Command::Git { command } => {
             yolk.with_canonical_state(|| {

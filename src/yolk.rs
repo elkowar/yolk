@@ -1,9 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use fs_err::PathExt;
-use miette::{Context, Diagnostic, IntoDiagnostic, Result};
+use miette::{Context, IntoDiagnostic, Result};
 use mlua::{Function, Value};
-use regex::Regex;
 
 use crate::{
     eval_ctx::EvalCtx, script::sysinfo::SystemInfo, templating::document::Document, util,
@@ -58,13 +57,13 @@ impl Yolk {
                     self.use_recursively(egg_name, &entry.path())?;
                 }
             } else if !in_home.is_symlink() {
-                Err(miette::miette!("File {} already exists", in_home.display()))?;
+                miette::bail!("File {} already exists", in_home.display());
             } else if in_home.is_dir() || path.is_dir() {
-                return Err(miette::miette!(
+                miette::bail!(
                     "Conflicting file or directory {} with {}",
                     path.display(),
                     in_home.display()
-                ));
+                );
             }
         } else {
             util::create_symlink(path, in_home).into_diagnostic()?;
@@ -124,9 +123,8 @@ impl Yolk {
                             self.eval_template_file_in_place(&mut eval_ctx, &templated_file)
                         {
                             eprintln!(
-                                "Warning: Failed to sync templated file {}: {:?}",
+                                "Warning: Failed to sync templated file {}: {err:?}",
                                 templated_file.display(),
-                                err
                             );
                         }
                     } else {
@@ -178,17 +176,18 @@ impl Yolk {
         Ok(eval_ctx)
     }
 
-    pub fn eval_lua(&self, mode: EvalMode, expr: &str) -> Result<String> {
+    /// Evaluate a lua expression as though it was included in a template tag.
+    pub fn eval_template_lua(&self, mode: EvalMode, expr: &str) -> Result<String> {
         let eval_ctx = self
             .prepare_eval_ctx_for_templates(mode)
             .context("Failed to prepare eval_ctx")?;
         let result = eval_ctx
             .lua()
             .load(expr)
+            .set_name("expr")
             .eval::<Value>()
-            .into_diagnostic()
-            .map_err(|e| e.with_source_code(expr.to_string()))?;
-        Ok(result.to_string().into_diagnostic()?)
+            .into_diagnostic()?;
+        result.to_string().into_diagnostic()
     }
 
     /// Evaluate a templated file
@@ -225,7 +224,7 @@ impl Yolk {
     pub fn add_to_templated_files(&self, egg_name: &str, paths: &[PathBuf]) -> Result<()> {
         let egg_dir = self.yolk_paths.egg_path(egg_name);
         if !egg_dir.is_dir() {
-            bail!("Egg {} does not exist", egg_name);
+            miette::bail!("Egg {} does not exist", egg_name);
         }
         let yolk_templates_path = self.yolk_paths.yolk_templates_file_path_for(egg_name);
         if !yolk_templates_path.is_file() {
