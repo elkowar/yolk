@@ -1,6 +1,7 @@
 use std::{error::Error, path::Path};
 
-use miette::Diagnostic;
+use miette::{Diagnostic, LabeledSpan};
+use pest::Span;
 
 /// Create a symlink at `link` pointing to `original`.
 pub fn create_symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> std::io::Result<()> {
@@ -17,11 +18,17 @@ pub fn create_symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> std
     Ok(())
 }
 
-#[derive(Debug, thiserror::Error, Diagnostic)]
-#[error("{}", source)]
-pub struct DiagnosticWithSpan<T: Error + 'static> {
-    #[source]
-    pub source: T,
-    #[label()]
-    pub span: std::ops::Range<usize>,
+#[extend::ext(pub)]
+impl<T> Result<T, miette::Report> {
+    fn as_span_diagnostic(self, span: Span<'_>) -> Result<T, miette::Report> {
+        self.map_err(|e| create_diagnostic(span, e))
+    }
+}
+
+pub fn create_diagnostic(span: Span<'_>, e: miette::Report) -> miette::Report {
+    miette::miette!(
+        labels = vec![LabeledSpan::at(span.start()..span.end(), "here")],
+        "{}",
+        e
+    )
 }

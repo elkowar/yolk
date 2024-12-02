@@ -25,9 +25,9 @@ pub enum ParsedLine<'a> {
 
 #[derive(Debug)]
 pub enum MultiLineTagKind<'a> {
-    Regular(&'a str),
-    If(&'a str),
-    Elif(&'a str),
+    Regular(Span<'a>),
+    If(Span<'a>),
+    Elif(Span<'a>),
     Else,
     End,
 }
@@ -45,14 +45,14 @@ impl<'a> MultiLineTagKind<'a> {
 
 #[derive(Debug)]
 pub enum TagKind<'a> {
-    Regular(&'a str),
-    If(&'a str),
+    Regular(Span<'a>),
+    If(Span<'a>),
 }
 
 impl<'a> TagKind<'a> {
-    pub fn expr(&self) -> &'a str {
+    pub fn expr(&self) -> Span<'a> {
         match self {
-            TagKind::Regular(expr) | TagKind::If(expr) => expr,
+            TagKind::Regular(expr) | TagKind::If(expr) => *expr,
         }
     }
     pub fn kind(&self) -> &'static str {
@@ -99,9 +99,9 @@ impl<'a> ParsedLine<'a> {
                 Self::NextLineTag {
                     kind: match kind.as_rule() {
                         Rule::NextLineTagIfInner => {
-                            TagKind::If(inner.find_first_tagged("expr").unwrap().as_str())
+                            TagKind::If(inner.find_first_tagged("expr").unwrap().as_span())
                         }
-                        Rule::NextLineTagRegularInner => TagKind::Regular(kind.as_str()),
+                        Rule::NextLineTagRegularInner => TagKind::Regular(kind.as_span()),
                         _ => unreachable!(),
                     },
                     line: parse_tagged_line(span, inner),
@@ -114,9 +114,9 @@ impl<'a> ParsedLine<'a> {
                 Self::InlineTag {
                     kind: match kind.as_rule() {
                         Rule::InlineTagIfInner => {
-                            TagKind::If(inner.find_first_tagged("expr").unwrap().as_str())
+                            TagKind::If(inner.find_first_tagged("expr").unwrap().as_span())
                         }
-                        Rule::InlineTagRegularInner => TagKind::Regular(kind.as_str()),
+                        Rule::InlineTagRegularInner => TagKind::Regular(kind.as_span()),
                         _ => unreachable!(),
                     },
                     line: parse_tagged_line(span, inner),
@@ -131,10 +131,10 @@ impl<'a> ParsedLine<'a> {
                 Self::MultiLineTag {
                     line: parse_tagged_line(span, inner),
                     kind: match kind.as_rule() {
-                        Rule::MultiLineTagRegularInner => MultiLineTagKind::Regular(kind.as_str()),
-                        Rule::MultiLineTagIfInner => MultiLineTagKind::If(expr.unwrap().as_str()),
+                        Rule::MultiLineTagRegularInner => MultiLineTagKind::Regular(kind.as_span()),
+                        Rule::MultiLineTagIfInner => MultiLineTagKind::If(expr.unwrap().as_span()),
                         Rule::MultiLineTagElseIfInner => {
-                            MultiLineTagKind::Elif(expr.unwrap().as_str())
+                            MultiLineTagKind::Elif(expr.unwrap().as_span())
                         }
                         Rule::MultiLineTagElseInner => MultiLineTagKind::Else,
                         Rule::MultiLineTagEndInner => MultiLineTagKind::End,

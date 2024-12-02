@@ -1,5 +1,5 @@
-use crate::eval_ctx::EvalCtx;
-use miette::{Diagnostic, Error, LabeledSpan, Result};
+use crate::{eval_ctx::EvalCtx, util::ResultTmietteReportExt as _};
+use miette::Result;
 use pest::Span;
 
 use super::{document::RenderContext, parser::TaggedLine};
@@ -7,7 +7,7 @@ use super::{document::RenderContext, parser::TaggedLine};
 #[derive(Debug)]
 pub struct ConditionalBlock<'a> {
     pub line: TaggedLine<'a>,
-    pub expr: Option<&'a str>,
+    pub expr: Option<Span<'a>>,
     pub body: Vec<Element<'a>>,
 }
 
@@ -16,18 +16,18 @@ pub enum Element<'a> {
     Plain(Span<'a>),
     Inline {
         line: TaggedLine<'a>,
-        expr: &'a str,
+        expr: Span<'a>,
         is_if: bool,
     },
     NextLine {
         line: TaggedLine<'a>,
-        expr: &'a str,
+        expr: Span<'a>,
         next_line: &'a str,
         is_if: bool,
     },
     MultiLine {
         line: TaggedLine<'a>,
-        expr: &'a str,
+        expr: Span<'a>,
         body: Vec<Element<'a>>,
         end: TaggedLine<'a>,
     },
@@ -38,14 +38,6 @@ pub enum Element<'a> {
     Eof,
 }
 
-fn create_diagnostic(span: Span<'_>, e: miette::Report) -> miette::Report {
-    miette::miette!(
-        labels = vec![LabeledSpan::at(span.start()..span.end(), "here")],
-        "{}",
-        e
-    )
-}
-
 impl<'a> Element<'a> {
     pub fn render(&self, render_ctx: &RenderContext, eval_ctx: &mut EvalCtx) -> Result<String> {
         match self {
@@ -53,13 +45,14 @@ impl<'a> Element<'a> {
             Element::Inline { line, expr, is_if } => match is_if {
                 true => {
                     let eval_result = eval_ctx
-                        .eval_expr(expr)
-                        .map_err(|e| create_diagnostic(line.full_line, e))?;
+                        .eval_expr(expr.as_str())
+                        .as_span_diagnostic(*expr)?;
                     Ok(render_ctx.string_toggled(line.full_line.as_str(), eval_result))
                 }
                 false => Ok(format!(
                     "{}{}{}",
-                    run_transformation_expr(eval_ctx, line.left, expr)?,
+                    run_transformation_expr(eval_ctx, line.left, expr.as_str())
+                        .as_span_diagnostic(*expr)?,
                     line.tag,
                     line.right
                 )),
@@ -73,12 +66,18 @@ impl<'a> Element<'a> {
                 true => Ok(format!(
                     "{}{}",
                     line.full_line.as_str(),
-                    &render_ctx.string_toggled(next_line, eval_ctx.eval_expr(expr)?),
+                    &render_ctx.string_toggled(
+                        next_line,
+                        eval_ctx
+                            .eval_expr(expr.as_str())
+                            .as_span_diagnostic(*expr)?
+                    )
                 )),
                 false => Ok(format!(
                     "{}{}",
                     line.full_line.as_str(),
-                    run_transformation_expr(eval_ctx, next_line, expr)?
+                    run_transformation_expr(eval_ctx, next_line, expr.as_str())
+                        .as_span_diagnostic(*expr)?
                 )),
             },
             Element::MultiLine {
@@ -91,7 +90,8 @@ impl<'a> Element<'a> {
                 Ok(format!(
                     "{}{}{}",
                     line.full_line.as_str(),
-                    &run_transformation_expr(eval_ctx, &rendered_body, expr)?,
+                    &run_transformation_expr(eval_ctx, &rendered_body, expr.as_str())
+                        .as_span_diagnostic(*expr)?,
                     end.full_line.as_str(),
                 ))
             }
@@ -103,7 +103,10 @@ impl<'a> Element<'a> {
                     // If we haven't, and there's an expression, evaluate it.
                     // If there isn't, we're on the else block, which should be true iff we haven't had a true block yet.
                     let expr_true = match block.expr {
-                        Some(expr) => !had_true && eval_ctx.eval_expr(expr)?,
+                        Some(expr) => {
+                            !had_true
+                                && eval_ctx.eval_expr(expr.as_str()).as_span_diagnostic(expr)?
+                        }
                         None => !had_true,
                     };
                     had_true = had_true || expr_true;

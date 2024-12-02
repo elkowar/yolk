@@ -3,7 +3,6 @@ use std::{io::Read as _, str::FromStr};
 use clap::{Parser, Subcommand};
 use miette::{IntoDiagnostic, Result};
 use script::eval_ctx;
-use templating::document::ParseError;
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 use yolk::{EvalMode, Yolk};
 

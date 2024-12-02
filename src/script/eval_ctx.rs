@@ -1,7 +1,5 @@
-use miette::Context as _;
-use miette::Error;
 use miette::IntoDiagnostic;
-use miette::LabeledSpan;
+
 use miette::Result;
 use mlua::FromLuaMulti;
 use mlua::Lua;
@@ -37,7 +35,7 @@ impl EvalCtx {
     pub fn eval_expr<T: FromLuaMulti>(&mut self, expr: &str) -> Result<T> {
         self.lua
             .load(expr)
-            .set_name("Expression")
+            .set_name("expression")
             .eval::<T>()
             .into_diagnostic()
     }

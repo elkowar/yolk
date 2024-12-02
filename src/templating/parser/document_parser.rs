@@ -34,8 +34,6 @@ impl Error {
 
 type Result<T> = std::result::Result<T, Error>;
 
-// TODO: Make this file not use anyhow::Error as the parser error type. Even as a temporary solution that's hideous.
-
 pub struct DocumentParser<'a> {
     input: &'a str,
     lines: VecDeque<ParsedLine<'a>>,
@@ -78,7 +76,7 @@ impl<'a> DocumentParser<'a> {
         let mut children = Vec::new();
         loop {
             let Some(next) = self.lines.front() else {
-                Err(self.mk_eof_error("another line"))?
+                Err(self.mk_eof_error("end of block"))?
             };
             match next {
                 ParsedLine::MultiLineTag { line: _, kind }
@@ -124,7 +122,7 @@ impl<'a> DocumentParser<'a> {
             }
         }
     }
-    fn parse_elif_line(&mut self) -> Result<(TaggedLine<'a>, &'a str)> {
+    fn parse_elif_line(&mut self) -> Result<(TaggedLine<'a>, Span<'a>)> {
         let Some(line) = self.lines.pop_front() else {
             Err(self.mk_eof_error("elif"))?
         };
