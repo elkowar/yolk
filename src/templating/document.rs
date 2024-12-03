@@ -48,37 +48,10 @@ impl Diagnostic for ParseError {
                 },
                 format!("{}", e),
             )))),
-            ParseError::DocumentParser(_, e) => Some(Box::new(std::iter::once(LabeledSpan::at(
-                e.span(),
-                format!("{}", e),
-            )))),
+            ParseError::DocumentParser(_, e) => e.labels(),
         }
     }
 }
-
-// impl ParseError {
-//     pub fn into_report(self) -> ariadne::Report<'static> {
-//         match self {
-//             ParseError::Pest(e) => {
-//                 let span = match e.location {
-//                     pest::error::InputLocation::Pos(x) => x..x,
-//                     pest::error::InputLocation::Span((x, y)) => x..y,
-//                 };
-
-//                 let mut builder = ariadne::Report::build(ReportKind::Error, span).with_message(&e);
-//                 if let Some(attempts) = e.parse_attempts() {
-//                     for attempt in attempts.expected_tokens() {
-//                         builder.add_note(attempt);
-//                     }
-//                 }
-//                 builder.finish()
-//             }
-//             ParseError::DocumentParser(e) => ariadne::Report::build(ReportKind::Error, e.span())
-//                 .with_message(&e)
-//                 .finish(),
-//         }
-//     }
-// }
 
 impl<'a> Document<'a> {
     pub fn render(&self, eval_ctx: &mut EvalCtx) -> Result<String> {
