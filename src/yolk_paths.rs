@@ -5,12 +5,11 @@ use miette::{IntoDiagnostic as _, Result};
 
 const DEFAULT_LUA: &str = indoc::indoc! {r#"
     data = {
-        generating_for_vcs = !LOCAL,
+        generating_for_vcs = not LOCAL,
         cool_setting = if SYSTEM.hostname == "foo" then
             10
         else
             25
-        end,
     }
 "#};
 
