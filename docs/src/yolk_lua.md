@@ -6,11 +6,17 @@ It's where you define all of the variables and functionality you will then refer
 ## Basic structure
 
 The `yolk.lua` file is a Lua script that is run by Yolk to generate your configuration.
-It needs to contain at least two functions: `canonical_data()` and `local_data(system)`.
+Everything you declare in `yolk.lua` will be available to use in your templates.
 
-Both of these return a table, which is then used by Yolk to generate your configuration.
-Inside your templates, yolk will make the table available under the global variable `data`.
-If yolk is currently generating the config for your local system, the `local_data` will be used.
+To generate your configuration depending on your system, there are a couple global variables that you can reference inside the `yolk.lua` file.
+The `SYSTEM` variable is a table containing data about your local system.
+If the config is being executed in canonical mode, the `SYSTEM` table will instead contain a fixed set of values that will be the same across all systems.
 
-If yolk is evaluating the templates for use in version control, it will instead use the `canonical_data` function, which should return data that is fully stable across all systems.
-This allows yolk to keep a stable, consistent state in version control, while having a dynamic, system-specific state on your local machine.
+To know if you're currently in local or canonical mode, you can check the `LOCAL` variable.
+
+**Tip:**
+To look at the contents of those variables or try out your logic, you can always use the `yolk eval` command.
+
+```bash
+$ yolk eval 'inspect.inspect(SYSTEM)'
+```
