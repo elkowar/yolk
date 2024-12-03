@@ -1,4 +1,4 @@
-use std::{io::Read as _, str::FromStr};
+use std::{io::Read as _, path::PathBuf, str::FromStr};
 
 use clap::{Parser, Subcommand};
 use miette::{IntoDiagnostic, Result};
@@ -20,7 +20,7 @@ struct Args {
 
     /// Provide a custom yolk directory
     #[arg(short = 'd', long, env = "YOLK_DIR", global = true)]
-    yolk_dir: Option<std::path::PathBuf>,
+    yolk_dir: Option<PathBuf>,
 
     /// Enable debug logging
     #[arg(long, short = 'v', global = true)]
@@ -35,17 +35,22 @@ enum Command {
     Use { name: String },
     /// Evaluate an expression like it would be done in a template
     Eval {
+        /// Evaluate in canonical context instead.
         #[arg(long)]
         canonical: bool,
+        /// The expression to evaluate
         expr: String,
     },
     /// Add a file or directory to an egg in yolk
     Add {
+        /// The name of the egg
         name: String,
-        path: std::path::PathBuf,
+        /// The file to add into your egg
+        path: PathBuf,
     },
     /// Re-evaluate all local templates to ensure that they are in a consistent state
     Sync {
+        /// Sync to canonical state. This should only be necessary for debugging purposes.
         #[arg(long)]
         canonical: bool,
     },
@@ -57,16 +62,18 @@ enum Command {
     /// Make the given file template capable, by adding it to the yolk_templates file
     #[clap(name = "mktmpl")]
     MakeTemplate {
-        egg: String,
+        /// The files you want to turn into templates
         #[arg(required = true)]
-        paths: Vec<std::path::PathBuf>,
+        paths: Vec<PathBuf>,
     },
     /// Evaluate a given templated file, or read a templated string from stdin
     #[clap(name = "eval-template")]
     EvalTemplate {
         #[arg(long)]
         canonical: bool,
-        path: Option<std::path::PathBuf>,
+        /// The path to the file you want to evaluate
+        /// If not provided, the program will read from stdin
+        path: Option<PathBuf>,
     },
 }
 
@@ -99,8 +106,8 @@ fn run_command(args: Args) -> Result<()> {
     let yolk = Yolk::new(yolk_paths);
     match &args.command {
         Command::Init => yolk.init_yolk()?,
-        Command::Use { name } => yolk.use_egg(name)?,
-        Command::Add { name, path } => yolk.add_egg(name, path)?,
+        Command::Use { name: egg } => yolk.use_egg(egg)?,
+        Command::Add { name: egg, path } => yolk.add_to_egg(egg, path)?,
         Command::Sync { canonical } => {
             let mode = if *canonical {
                 EvalMode::Canonical
@@ -128,8 +135,8 @@ fn run_command(args: Args) -> Result<()> {
                 Ok(())
             })?;
         }
-        Command::MakeTemplate { egg, paths } => {
-            yolk.add_to_templated_files(egg, paths)?;
+        Command::MakeTemplate { paths } => {
+            yolk.add_to_templated_files(paths)?;
         }
         Command::EvalTemplate { path, canonical } => {
             let text = match path {

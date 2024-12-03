@@ -105,6 +105,13 @@ impl YolkPaths {
     pub fn get_egg(&self, name: &str) -> Result<Egg> {
         Egg::open(self.egg_path(name))
     }
+    pub fn get_or_create_egg(&self, name: &str) -> Result<Egg> {
+        let egg_path = self.egg_path(name);
+        if !egg_path.exists() {
+            fs_err::create_dir_all(&egg_path).into_diagnostic()?;
+        }
+        Egg::open(egg_path)
+    }
 }
 
 pub struct Egg {

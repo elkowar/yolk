@@ -85,17 +85,21 @@ impl Yolk {
         Ok(())
     }
 
-    pub fn add_egg(&self, egg_name: &str, path: impl AsRef<Path>) -> Result<()> {
-        let original_path = fs_err::canonicalize(path.as_ref()).into_diagnostic()?;
-        let Ok(relative_to_home) = original_path.strip_prefix(self.yolk_paths.home_path()) else {
-            return Err(miette::miette!(
-                "Path {} is not in the home directory {}",
-                original_path.display(),
-                self.yolk_paths.home_path().display()
-            ));
-        };
-        let new_local_path = self.yolk_paths.egg_path(egg_name).join(relative_to_home);
-        fs_err::create_dir_all(new_local_path.parent().unwrap()).into_diagnostic()?;
+    /// Add a file or directory to an egg, creating the egg if it does not exist.
+    pub fn add_to_egg(&self, egg_name: &str, path: impl AsRef<Path>) -> Result<()> {
+        let path = path.as_ref();
+        if !path.exists() {
+            miette::bail!(
+                "Failed to add {} into {egg_name}, as the file does not exist",
+                path.display()
+            )
+        }
+        let original_path = fs_err::canonicalize(path).into_diagnostic()?;
+        let relative_to_home = self.make_path_relative_to_home(&original_path)?;
+
+        let egg = self.yolk_paths.get_or_create_egg(egg_name)?;
+        let new_local_path = egg.path().join(relative_to_home);
+        fs_err::create_dir_all(&new_local_path.parent().unwrap()).into_diagnostic()?;
         fs_err::rename(&original_path, &new_local_path).into_diagnostic()?;
         // TODO: This can be optimized a lot, as we assume we only need to re-use that one entry we just added.
         // However, we can't just naively create a symlink, as we don't know on that dir level to start symlinking.
@@ -209,9 +213,23 @@ impl Yolk {
         result
     }
 
-    pub fn add_to_templated_files(&self, egg_name: &str, paths: &[PathBuf]) -> Result<()> {
-        let egg = self.yolk_paths.get_egg(egg_name)?;
-        egg.add_to_template_paths(paths)?;
+    /// Add a set of paths into the yolk_templates file of their corresponding eggs
+    pub fn add_to_templated_files(&self, paths: &[PathBuf]) -> Result<()> {
+        let eggs_dir = self.yolk_paths.eggs_dir_path();
+        for path in paths {
+            let path = path.fs_err_canonicalize().into_diagnostic()?;
+            let in_eggs = path
+                .strip_prefix(&eggs_dir)
+                .map_err(|_| miette::miette!("File '{}' is not inside an egg", path.display()))?;
+            let egg_name = in_eggs
+                .components()
+                .next()
+                .ok_or(miette::miette!("Empty path"))?
+                .as_os_str()
+                .to_string_lossy();
+            let egg = self.yolk_paths.get_egg(egg_name.as_ref())?;
+            egg.add_to_template_paths(paths)?;
+        }
         self.sync_to_mode(EvalMode::Local)?;
         Ok(())
     }
@@ -225,6 +243,17 @@ impl Yolk {
         Ok(entries
             .filter_map(|entry| entry.ok().map(|x| x.path()))
             .collect())
+    }
+
+    /// Convert a path into a path relative to the home directory
+    fn make_path_relative_to_home<'a>(&self, path: &'a Path) -> Result<&'a Path> {
+        path.strip_prefix(self.yolk_paths.home_path()).map_err(|_| {
+            miette::miette!(
+                "Path {} is not in the home directory {}",
+                path.display(),
+                self.yolk_paths.home_path().display()
+            )
+        })
     }
 }
 
@@ -269,7 +298,7 @@ mod test {
         home.child("yolk/yolk.lua").assert(is_file());
         home.child("yolk/eggs").assert(is_dir());
 
-        yolk.add_egg("foo", home.child("config/foo.toml"))?;
+        yolk.add_to_egg("foo", home.child("config/foo.toml"))?;
 
         home.child("yolk/eggs/foo/config/foo.toml")
             .assert(is_file());
@@ -291,8 +320,8 @@ mod test {
         let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
         yolk.init_yolk()?;
 
-        yolk.add_egg("foo", home.child("config/foo.toml"))?;
-        yolk.add_egg("bar", home.child("config/bar.toml"))?;
+        yolk.add_to_egg("foo", home.child("config/foo.toml"))?;
+        yolk.add_to_egg("bar", home.child("config/bar.toml"))?;
 
         home.child("yolk/eggs/foo/config/foo.toml")
             .assert(is_file());
@@ -311,8 +340,8 @@ mod test {
         let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
         yolk.init_yolk()?;
 
-        yolk.add_egg("foo", home.child("config/foo.toml"))?;
-        yolk.add_egg("foo", home.child("config/foo2.toml"))?;
+        yolk.add_to_egg("foo", home.child("config/foo.toml"))?;
+        yolk.add_to_egg("foo", home.child("config/foo2.toml"))?;
 
         home.child("yolk/eggs/foo/config/foo.toml")
             .assert(is_direct_file());
@@ -339,7 +368,7 @@ mod test {
                 function canonical_data() return {value = "canonical"} end
                 function local_data(system) return {value = "local"} end
             "#})?;
-        yolk.add_egg("foo", home.join("config").join("foo.toml"))?;
+        yolk.add_to_egg("foo", home.join("config").join("foo.toml"))?;
         home.child("yolk/eggs/foo/yolk_templates")
             .write_str("config/foo.toml")?;
         home.child("config/foo.toml").assert(foo_toml_initial);
@@ -385,8 +414,8 @@ mod test {
             .write_str("# {# replace(`'.*'`, `bar`) #}\nvalue = 'foo'")?;
         let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
         yolk.init_yolk()?;
-        yolk.add_egg("foo", home.child("config/foo.toml"))?;
-        yolk.add_to_templated_files("foo", &[home.child("config/foo.toml").to_path_buf()])?;
+        yolk.add_to_egg("foo", home.child("config/foo.toml"))?;
+        yolk.add_to_templated_files(&[home.child("config/foo.toml").to_path_buf()])?;
         home.child("yolk/eggs/foo/yolk_templates")
             .assert("config/foo.toml");
         home.child("yolk_templates").assert(exists().not());
@@ -403,7 +432,7 @@ mod test {
         let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
         yolk.init_yolk()?;
         assert!(yolk
-            .add_to_templated_files("foo", &[home.child("config/foo.toml").to_path_buf()])
+            .add_to_templated_files(&[home.child("config/foo.toml").to_path_buf()])
             .is_err());
         home.child("config/foo.toml").assert(is_direct_file());
         Ok(())
@@ -416,8 +445,8 @@ mod test {
         yolk.init_yolk()?;
         home.child("foo.toml").write_str("")?;
         home.child("test/foo.toml").write_str("")?;
-        yolk.add_egg("foo", home.child("foo.toml"))?;
-        yolk.add_egg("foo", home.child("test"))?;
+        yolk.add_to_egg("foo", home.child("foo.toml"))?;
+        yolk.add_to_egg("foo", home.child("test"))?;
         home.child("yolk/eggs/foo/bar.toml").write_str("")?;
         home.child("yolk/eggs/foo/test/bar.toml").write_str("")?;
         yolk.use_egg("foo")?;
@@ -435,12 +464,12 @@ mod test {
         yolk.init_yolk()?;
         home.child("foo_dir").create_dir_all()?;
         home.child("foo_dir/foo").write_str("")?;
-        yolk.add_egg("foo", home.child("foo_dir"))?;
+        yolk.add_to_egg("foo", home.child("foo_dir"))?;
         home.child("foo_dir").assert(is_symlink());
         home.child("foo_dir/foo").assert(is_direct_file());
 
         home.child("foo.toml").write_str("")?;
-        yolk.add_egg("foo", home.child("foo.toml"))?;
+        yolk.add_to_egg("foo", home.child("foo.toml"))?;
         home.child("foo.toml").assert(is_symlink());
 
         Ok(())
