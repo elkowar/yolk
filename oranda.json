@@ -1,8 +1,20 @@
 {
   "styles": {
-    "theme": "axo_dark"
+    "theme": "dark",
+    "logo": ".github/images/yolk_banner.svg",
+    "favicon": ".github/images/favicon.ico",
+    "additional_css": [
+      ".github/oranda_theme.css"
+    ]
   },
   "build": {
     "path_prefix": "yolk"
+  },
+  "marketing": {
+    "social": {
+      "image": ".github/images/yolk_banner.svg",
+      "image_alt": "yolk"
+    }
   }
+
 }

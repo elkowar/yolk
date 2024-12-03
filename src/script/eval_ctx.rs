@@ -28,13 +28,11 @@ impl Default for EvalCtx {
 
 impl EvalCtx {
     pub fn new_empty() -> Self {
-        let lua = Lua::new();
-        Self { lua }
+        Self { lua: Lua::new() }
     }
 
     pub fn new_in_mode(mode: EvalMode) -> Result<Self> {
-        let lua = Lua::new();
-        let ctx = Self { lua };
+        let ctx = Self::new_empty();
         stdlib::setup_tag_functions(&ctx)?;
         if mode == EvalMode::Local {
             stdlib::setup_impure_functions(&ctx)?;

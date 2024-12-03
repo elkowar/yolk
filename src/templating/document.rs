@@ -110,17 +110,15 @@ impl RenderContext {
     }
 
     pub fn enabled_str(&self, s: &str) -> String {
-        let lines = s
-            .split('\n')
+        s.split('\n')
             .map(|x| self.comment_style.enable_line(x))
-            .collect::<Vec<_>>();
-        lines.join("\n")
+            .collect::<Vec<_>>()
+            .join("\n")
     }
     pub fn disabled_str(&self, s: &str) -> String {
-        let lines = s
-            .split('\n')
+        s.split('\n')
             .map(|x| self.comment_style.disable_line(x))
-            .collect::<Vec<_>>();
-        lines.join("\n")
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }

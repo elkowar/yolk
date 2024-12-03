@@ -1,0 +1,19 @@
+@layer overrides {
+    .repo_banner,
+    footer {
+        background: var(--highlight-color) !important;
+    }
+}
+:root,
+* {
+    --highlight-color: #f7d654 !important;
+    --link-color: #fd8041 !important;
+    --title-fg: #faaa4a !important;
+}
+h1.title {
+    display: none;
+}
+
+#menu-bar {
+    background-color: red !important;
+}

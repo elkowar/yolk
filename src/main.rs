@@ -116,7 +116,6 @@ fn run_command(args: Args) -> Result<()> {
             } else {
                 EvalMode::Local
             };
-
             yolk.sync_to_mode(mode)?
         }
         Command::Eval { expr, canonical } => {
