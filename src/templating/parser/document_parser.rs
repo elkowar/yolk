@@ -98,7 +98,7 @@ impl<'a> DocumentParser<'a> {
     }
 
     fn mk_eof_error(&self, expected: &'static str) -> Error {
-        let span_start = if self.input.len() > 0 {
+        let span_start = if !self.input.is_empty() {
             self.input.len() - 1
         } else {
             self.input.len()

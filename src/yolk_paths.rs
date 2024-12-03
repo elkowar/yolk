@@ -168,11 +168,11 @@ impl Egg {
         let tmpl_paths = tmpl_paths
             .lines()
             .map(|x| {
-                Ok(self
+                self
                     .egg_dir
                     .join(x)
                     .fs_err_canonicalize()
-                    .into_diagnostic()?)
+                    .into_diagnostic()
             })
             .collect::<Result<_>>()?;
         Ok(tmpl_paths)

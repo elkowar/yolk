@@ -99,7 +99,7 @@ impl Yolk {
 
         let egg = self.yolk_paths.get_or_create_egg(egg_name)?;
         let new_local_path = egg.path().join(relative_to_home);
-        fs_err::create_dir_all(&new_local_path.parent().unwrap()).into_diagnostic()?;
+        fs_err::create_dir_all(new_local_path.parent().unwrap()).into_diagnostic()?;
         fs_err::rename(&original_path, &new_local_path).into_diagnostic()?;
         // TODO: This can be optimized a lot, as we assume we only need to re-use that one entry we just added.
         // However, we can't just naively create a symlink, as we don't know on that dir level to start symlinking.
