@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use fs_err::PathExt;
 use miette::{Context, IntoDiagnostic, Result};
-use mlua::{Function, Value};
+use mlua::Value;
 
 use crate::{
     eval_ctx::EvalCtx,
@@ -145,30 +145,17 @@ impl Yolk {
 
         // TODO: In the future, parse the lua error message for line number
         // and show a proper error span
+        let globals = eval_ctx.lua().globals();
+        globals.set("SYSTEM", sysinfo).into_diagnostic()?;
+        globals
+            .set("LOCAL", mode == EvalMode::Local)
+            .into_diagnostic()?;
         eval_ctx
             .lua()
             .load(&yolk_file)
             .set_name("yolk.lua")
             .exec()
             .into_diagnostic()?;
-        let globals = eval_ctx.lua().globals();
-        let data: Result<Value, _> = match mode {
-            EvalMode::Canonical => globals
-                .get::<Function>("canonical_data")
-                .into_diagnostic()
-                .with_context(|| "Failed to get canonical_data function")?
-                .call(()),
-            EvalMode::Local => globals
-                .get::<Function>("local_data")
-                .into_diagnostic()
-                .with_context(|| "Failed to get local_data function")?
-                .call(sysinfo.clone()),
-        };
-        let data = data
-            .into_diagnostic()
-            .with_context(|| "Failed to call data function".to_string())?;
-        globals.set("data", data).into_diagnostic()?;
-        globals.set("system", sysinfo).into_diagnostic()?;
         Ok(eval_ctx)
     }
 
@@ -365,9 +352,8 @@ mod test {
         let yolk = Yolk::new(yp);
         yolk.init_yolk()?;
         home.child("yolk/yolk.lua").write_str(indoc::indoc! {r#"
-                function canonical_data() return {value = "canonical"} end
-                function local_data(system) return {value = "local"} end
-            "#})?;
+            data = if LOCAL then {value = "local"} else {value = "canonical"}
+        "#})?;
         yolk.add_to_egg("foo", home.join("config").join("foo.toml"))?;
         home.child("yolk/eggs/foo/yolk_templates")
             .write_str("config/foo.toml")?;
@@ -388,9 +374,8 @@ mod test {
 
         // Update the state, to see if applying again just works :tm:
         home.child("yolk/yolk.lua").write_str(indoc::indoc! {r#"
-                function canonical_data() return {value = "new canonical"} end
-                function local_data(system) return {value = "new local"} end
-            "#})?;
+            data = if LOCAL then {value = "new local"} else {value = "new canonical"}
+        "#})?;
         yolk.sync_to_mode(EvalMode::Local)?;
         home.child("config/foo.toml").assert(indoc::indoc! {r#"
             # {# replace(`'.*'`, `'{data.value}'`) #}

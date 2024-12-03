@@ -4,12 +4,14 @@ use fs_err::PathExt as _;
 use miette::{IntoDiagnostic as _, Result};
 
 const DEFAULT_LUA: &str = indoc::indoc! {r#"
-    function canonical_data()
-        return {}
-    end
-    function local_data(system)
-        canonical_data()
-    end
+    data = {
+        generating_for_vcs = !LOCAL,
+        cool_setting = if SYSTEM.hostname == "foo" then
+            10
+        else
+            25
+        end,
+    }
 "#};
 
 pub struct YolkPaths {
