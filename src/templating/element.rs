@@ -150,11 +150,13 @@ mod test {
     use testresult::TestResult;
 
     use crate::eval_ctx;
+    use crate::script::eval_ctx::EvalCtx;
     use crate::templating::document::Document;
+    use crate::yolk::EvalMode;
 
     #[test]
     pub fn test_render_inline() -> TestResult {
-        let mut eval_ctx = eval_ctx::EvalCtx::new_for_tag()?;
+        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
         let doc = Document::parse_string("foo /* {< string.upper(YOLK_TEXT) >} */\n")?;
         assert_eq!(
             "FOO /* {< string.upper(YOLK_TEXT) >} */\n",
@@ -165,7 +167,7 @@ mod test {
 
     #[test]
     pub fn test_render_next_line() -> TestResult {
-        let mut eval_ctx = eval_ctx::EvalCtx::new_for_tag()?;
+        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
         let doc = Document::parse_string("/* {# string.upper(YOLK_TEXT) #} */\nfoo\n")?;
         assert_eq!(
             "/* {# string.upper(YOLK_TEXT) #} */\nFOO\n",
@@ -176,7 +178,7 @@ mod test {
 
     #[test]
     pub fn test_multiline_conditional() -> TestResult {
-        let mut eval_ctx = eval_ctx::EvalCtx::new_for_tag()?;
+        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
         let input_str = indoc::indoc! {r#"
             /* {% if false %} */
             foo
@@ -208,7 +210,7 @@ mod test {
             {# replace(`'.*'`, `'new'`) #}
             foo: 'original'
         "})?;
-        let mut eval_ctx = eval_ctx::EvalCtx::new_for_tag()?;
+        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
         assert_eq!(
             indoc::indoc! {"
                 {# replace(`'.*'`, `'new'`) #}
@@ -222,7 +224,7 @@ mod test {
     #[test]
     pub fn test_render_replace_refuse_non_idempodent() -> TestResult {
         let element = Document::parse_string("{# replace(`'.*'`, `a'a'`) #}\nfoo: 'original'\n")?;
-        let mut eval_ctx = eval_ctx::EvalCtx::new_for_tag()?;
+        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
         assert_eq!(
             "{# replace(`'.*'`, `a'a'`) #}\nfoo: 'original'\n",
             element.render(&mut eval_ctx)?

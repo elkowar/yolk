@@ -5,6 +5,8 @@ use mlua::FromLuaMulti;
 use mlua::Lua;
 use mlua::Value;
 
+use crate::yolk::EvalMode;
+
 use super::stdlib;
 
 pub const YOLK_TEXT_NAME: &str = "YOLK_TEXT";
@@ -17,18 +19,22 @@ pub struct EvalCtx {
 
 impl Default for EvalCtx {
     fn default() -> Self {
-        Self::new()
+        Self::new_empty()
     }
 }
 
 impl EvalCtx {
-    pub fn new() -> Self {
+    pub fn new_empty() -> Self {
         let lua = Lua::new();
         Self { lua }
     }
-    pub fn new_for_tag() -> Result<Self> {
+
+    pub fn new_in_mode(mode: EvalMode) -> Result<Self> {
         let lua = Lua::new();
         stdlib::setup_tag_functions(&lua)?;
+        if mode == EvalMode::Local {
+            stdlib::setup_impure_functions(&lua)?;
+        }
         Ok(Self { lua })
     }
 

@@ -140,7 +140,7 @@ impl Yolk {
             EvalMode::Canonical => SystemInfo::canonical(),
             EvalMode::Local => SystemInfo::generate(),
         };
-        let eval_ctx = EvalCtx::new_for_tag()?;
+        let eval_ctx = EvalCtx::new_in_mode(mode)?;
         let yolk_file = fs_err::read_to_string(self.yolk_paths.script_path()).into_diagnostic()?;
 
         // TODO: In the future, parse the lua error message for line number
