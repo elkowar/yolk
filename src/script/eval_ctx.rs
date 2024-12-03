@@ -1,8 +1,13 @@
 use miette::IntoDiagnostic;
 
 use miette::Result;
+use mlua::ExternalResult as _;
+use mlua::FromLua;
 use mlua::FromLuaMulti;
+use mlua::IntoLua;
+use mlua::IntoLuaMulti;
 use mlua::Lua;
+use mlua::MaybeSend;
 use mlua::Value;
 
 use crate::yolk::EvalMode;
@@ -29,11 +34,12 @@ impl EvalCtx {
 
     pub fn new_in_mode(mode: EvalMode) -> Result<Self> {
         let lua = Lua::new();
-        stdlib::setup_tag_functions(&lua)?;
+        let ctx = Self { lua };
+        stdlib::setup_tag_functions(&ctx)?;
         if mode == EvalMode::Local {
-            stdlib::setup_impure_functions(&lua)?;
+            stdlib::setup_impure_functions(&ctx)?;
         }
-        Ok(Self { lua })
+        Ok(ctx)
     }
 
     pub fn eval_lua<T: FromLuaMulti>(&self, name: &str, content: &str) -> Result<T> {
@@ -52,23 +58,32 @@ impl EvalCtx {
     }
 
     pub fn eval_text_transformation(&self, text: &str, expr: &str) -> Result<String> {
-        let globals = self.lua.globals();
-        let old_text = globals.get::<Value>(YOLK_TEXT_NAME).into_diagnostic()?;
-        self.lua
-            .globals()
-            .set(YOLK_TEXT_NAME, text)
-            .into_diagnostic()?;
-        let result = self
-            .lua
-            .load(expr)
-            .set_name("text transformation expr")
-            .eval::<String>()
-            .into_diagnostic()?;
-        self.lua
-            .globals()
-            .set(YOLK_TEXT_NAME, old_text)
-            .into_diagnostic()?;
+        let old_text = self.get_global::<Value>(YOLK_TEXT_NAME)?;
+        self.set_global(YOLK_TEXT_NAME, text)?;
+        let result = self.eval_lua("template tag", expr)?;
+        self.set_global(YOLK_TEXT_NAME, old_text)?;
         Ok(result)
+    }
+
+    pub fn set_global<T: IntoLua>(&self, name: impl IntoLua, value: T) -> Result<()> {
+        self.lua.globals().set(name, value).into_diagnostic()
+    }
+    pub fn get_global<T: FromLua>(&self, name: impl IntoLua) -> Result<T> {
+        self.lua.globals().get::<T>(name).into_diagnostic()
+    }
+
+    pub fn register_fn<F, A, R>(&self, name: &str, func: F) -> Result<()>
+    where
+        F: Fn(&Lua, A) -> Result<R> + MaybeSend + 'static + Send + Sync,
+        A: FromLuaMulti,
+        R: IntoLuaMulti,
+    {
+        self.set_global(
+            name,
+            self.lua
+                .create_function(move |lua, x| func(lua, x).into_lua_err())
+                .into_diagnostic()?,
+        )
     }
 
     pub fn lua(&self) -> &Lua {
