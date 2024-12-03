@@ -45,7 +45,7 @@ impl<'a> Element<'a> {
             Element::Inline { line, expr, is_if } => match is_if {
                 true => {
                     let eval_result = eval_ctx
-                        .eval_expr(expr.as_str())
+                        .eval_lua("template", expr.as_str())
                         .as_span_diagnostic(*expr)?;
                     Ok(render_ctx.string_toggled(line.full_line.as_str(), eval_result))
                 }
@@ -69,7 +69,7 @@ impl<'a> Element<'a> {
                     &render_ctx.string_toggled(
                         next_line,
                         eval_ctx
-                            .eval_expr(expr.as_str())
+                            .eval_lua("template", expr.as_str())
                             .as_span_diagnostic(*expr)?
                     )
                 )),
@@ -105,7 +105,9 @@ impl<'a> Element<'a> {
                     let expr_true = match block.expr {
                         Some(expr) => {
                             !had_true
-                                && eval_ctx.eval_expr(expr.as_str()).as_span_diagnostic(expr)?
+                                && eval_ctx
+                                    .eval_lua("template", expr.as_str())
+                                    .as_span_diagnostic(expr)?
                         }
                         None => !had_true,
                     };
@@ -118,7 +120,7 @@ impl<'a> Element<'a> {
                 output.push_str(end.full_line.as_str());
                 Ok(output)
             }
-            Element::Eof => todo!(),
+            Element::Eof => Ok("".to_string()),
         }
     }
 }
@@ -149,7 +151,6 @@ fn run_transformation_expr(eval_ctx: &mut EvalCtx, text: &str, expr: &str) -> Re
 mod test {
     use testresult::TestResult;
 
-    use crate::eval_ctx;
     use crate::script::eval_ctx::EvalCtx;
     use crate::templating::document::Document;
     use crate::yolk::EvalMode;

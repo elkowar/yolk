@@ -11,8 +11,6 @@ use super::stdlib;
 
 pub const YOLK_TEXT_NAME: &str = "YOLK_TEXT";
 
-// TODO: Ensure an EvalCtx contains info about what file is being parsed,
-// the egg name, etc etc
 pub struct EvalCtx {
     lua: Lua,
 }
@@ -38,15 +36,22 @@ impl EvalCtx {
         Ok(Self { lua })
     }
 
-    pub fn eval_expr<T: FromLuaMulti>(&mut self, expr: &str) -> Result<T> {
-        self.lua
-            .load(expr)
-            .set_name("expression")
-            .eval::<T>()
+    pub fn eval_lua<T: FromLuaMulti>(&self, name: &str, content: &str) -> Result<T> {
+        self.lua()
+            .load(content)
+            .set_name(name)
+            .eval()
+            .into_diagnostic()
+    }
+    pub fn exec_lua(&self, name: &str, content: &str) -> Result<()> {
+        self.lua()
+            .load(content)
+            .set_name(name)
+            .exec()
             .into_diagnostic()
     }
 
-    pub fn eval_text_transformation(&mut self, text: &str, expr: &str) -> Result<String> {
+    pub fn eval_text_transformation(&self, text: &str, expr: &str) -> Result<String> {
         let globals = self.lua.globals();
         let old_text = globals.get::<Value>(YOLK_TEXT_NAME).into_diagnostic()?;
         self.lua

@@ -150,12 +150,7 @@ impl Yolk {
         globals
             .set("LOCAL", mode == EvalMode::Local)
             .into_diagnostic()?;
-        eval_ctx
-            .lua()
-            .load(&yolk_file)
-            .set_name("yolk.lua")
-            .exec()
-            .into_diagnostic()?;
+        eval_ctx.exec_lua("yolk.lua", &yolk_file)?;
         Ok(eval_ctx)
     }
 
@@ -164,13 +159,10 @@ impl Yolk {
         let eval_ctx = self
             .prepare_eval_ctx_for_templates(mode)
             .context("Failed to prepare eval_ctx")?;
-        let result = eval_ctx
-            .lua()
-            .load(expr)
-            .set_name("expr")
-            .eval::<Value>()
-            .into_diagnostic()?;
-        result.to_string().into_diagnostic()
+        eval_ctx
+            .eval_lua::<Value>("expr", &expr)?
+            .to_string()
+            .into_diagnostic()
     }
 
     /// Evaluate a templated file
