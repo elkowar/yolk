@@ -1,6 +1,6 @@
 # Getting started
 
-**Remember: Yolk is currently in very early development. Except breakages, lost files, and other issues.
+**Remember: Yolk is currently in very early development. Expect breakages, lost files, and other issues.
 Always have a good backup of your files before using Yolk in this stage. You have been warned.**
 
 Yolk uses an approach to dotfile management very similar to [GNU Stow](https://www.gnu.org/software/stow/):
@@ -100,10 +100,10 @@ $ yolk make-template ~/.config/alacritty/alacritty.yml
 ```
 
 This will now add the `alacritty.toml` file into a special `yolk_templates` file inside the alacritty egg.
-Now, run
+Now, run:
 
 ```bash
 $ yolk sync
 ```
 
-You will see that, your `alacritty.toml` hsa changed, and the colors from your `yolk.lua` file have been applied, depending on your hostname.
+You will see that, your `alacritty.toml` has changed, and the colors from your `yolk.lua` file have been applied, depending on your hostname.

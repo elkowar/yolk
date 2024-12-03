@@ -31,7 +31,7 @@ displays = ["eDP-1"]
 ```
 
 ## Value replacement
-In many cases, you'll want to make specific values, like colors or paths, be set through one central source, rather than specifying them in every config file.
+In many cases, you'll want to make specific values, such as colors or paths, be set through one central source, rather than specifying them in every config file.
 Yolk allows you to do this (and more) by using the `replace` directive.
 This directive takes a regex pattern and a Lua expression, and replaces the matched pattern with the result of the expression.
 ```toml
@@ -55,7 +55,7 @@ Yolk will refuse to evaluate `replace` directives that are non-reversible (i.e. 
 Yolk supports three different types of tags:
 - Next-line tags (`{# ... #}`): These tags operate on the line following the tag.
 - Inline tags (`{< ... >}`): These tags operate on everything before the tag within the same line.
-- Block tags (`{% ... %} ... {% end %}}`): These tags operate on everything between the tag and the corresponding `{% end %}` tag.
+- Block tags (`{% ... %} ... {% end %}`): These tags operate on everything between the tag and the corresponding `{% end %}` tag.
 
 You can use whichever of these you want, wherever you want. For example, all of these do the same:
 ```toml
