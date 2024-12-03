@@ -8,6 +8,8 @@ use yolk::{EvalMode, Yolk};
 
 pub mod script;
 mod templating;
+#[cfg(test)]
+pub mod test;
 mod util;
 mod yolk;
 mod yolk_paths;
