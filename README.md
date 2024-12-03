@@ -24,7 +24,7 @@ This is achieved through a design that allows all templates to be included insid
 Let's demonstrate:
 ```toml
 # Use a different font on one host
-# {% if system.hostname == "epic-desktop" %}
+# {% if SYSTEM.hostname == "epic-desktop" %}
 font="Fira Code"
 # {% else %}
 #<yolk> font="Iosevka"
@@ -32,10 +32,8 @@ font="Fira Code"
 
 [colors]
 # Load your colors from your yolk configuration
-# {% replace(`".*"`, `"${data.colors.background}"`) %}
-background="#282828"
-# {% replace(`".*"`, `"${data.colors.foreground}"`) %}
-foreground="#ebdbb2"
+background="#282828" # {< replace(`".*"`, `"${data.colors.background}"`) >}
+foreground="#ebdbb2" # {< replace(`".*"`, `"${data.colors.foreground}"`) >}
 ```
 
 Yolk will now be able to run the corresponding modifications on the file itself, allowing you to set
