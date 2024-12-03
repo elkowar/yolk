@@ -167,13 +167,7 @@ impl Egg {
         let tmpl_paths = fs_err::read_to_string(tmpl_list_file).into_diagnostic()?;
         let tmpl_paths = tmpl_paths
             .lines()
-            .map(|x| {
-                self
-                    .egg_dir
-                    .join(x)
-                    .fs_err_canonicalize()
-                    .into_diagnostic()
-            })
+            .map(|x| self.egg_dir.join(x).fs_err_canonicalize().into_diagnostic())
             .collect::<Result<_>>()?;
         Ok(tmpl_paths)
     }

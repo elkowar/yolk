@@ -61,6 +61,7 @@ impl Error {
         }
     }
 
+    #[allow(dead_code)]
     pub fn span(&self) -> Range<usize> {
         match self {
             Self::UnexpectedElement(range, ..) => range.clone(),

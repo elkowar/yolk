@@ -167,7 +167,6 @@ mod test {
     pub fn test_render_next_line() -> TestResult {
         let mut eval_ctx = eval_ctx::EvalCtx::new_for_tag()?;
         let doc = Document::parse_string("/* {# string.upper(YOLK_TEXT) #} */\nfoo\n")?;
-        // TODO: Fix the fact that appending at the end here goes after the \n???
         assert_eq!(
             "/* {# string.upper(YOLK_TEXT) #} */\nFOO\n",
             doc.render(&mut eval_ctx)?
