@@ -108,13 +108,11 @@ impl Yolk {
     }
 
     pub fn sync_to_mode(&self, mode: EvalMode) -> Result<()> {
-        let egg_paths = self.list_egg_paths()?;
         let mut eval_ctx = self
             .prepare_eval_ctx_for_templates(mode)
             .context("Failed to prepare eval_ctx")?;
-
-        for egg_dir in egg_paths {
-            let egg = Egg::open(egg_dir)?;
+        for egg in self.list_eggs()? {
+            let egg = egg?;
             let tmpl_paths = egg.template_paths()?;
             for templated_file in tmpl_paths {
                 if templated_file.is_file() {
@@ -213,15 +211,8 @@ impl Yolk {
         Ok(())
     }
 
-    pub fn list_egg_paths(&self) -> Result<Vec<PathBuf>> {
-        let entries = self
-            .yolk_paths
-            .eggs_dir_path()
-            .fs_err_read_dir()
-            .into_diagnostic()?;
-        Ok(entries
-            .filter_map(|entry| entry.ok().map(|x| x.path()))
-            .collect())
+    pub fn list_eggs(&self) -> Result<impl Iterator<Item = Result<Egg>> + '_> {
+        self.yolk_paths.list_eggs()
     }
 
     /// Convert a path into a path relative to the home directory

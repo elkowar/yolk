@@ -77,6 +77,9 @@ enum Command {
         /// If not provided, the program will read from stdin
         path: Option<PathBuf>,
     },
+
+    /// List all the eggs in your yolk directory
+    List,
 }
 
 pub(crate) fn main() -> Result<()> {
@@ -108,8 +111,22 @@ fn run_command(args: Args) -> Result<()> {
     let yolk = Yolk::new(yolk_paths);
     match &args.command {
         Command::Init => yolk.init_yolk()?,
-        Command::Deploy { name: egg } => yolk.use_egg(egg)?,
+        Command::Deploy { name: egg } => yolk.deploy_egg(egg)?,
         Command::Add { name: egg, path } => yolk.add_to_egg(egg, path)?,
+        Command::List => {
+            for egg in yolk.list_eggs()? {
+                let egg = egg?;
+                println!(
+                    "{} [{}]",
+                    egg.name(),
+                    if egg.is_deployed()? {
+                        "active"
+                    } else {
+                        "inactive"
+                    }
+                );
+            }
+        }
         Command::Sync { canonical } => {
             let mode = if *canonical {
                 EvalMode::Canonical

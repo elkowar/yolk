@@ -104,23 +104,33 @@ impl YolkPaths {
     }
 
     pub fn get_egg(&self, name: &str) -> Result<Egg> {
-        Egg::open(self.egg_path(name))
+        Egg::open(self.home.clone(), self.egg_path(name))
     }
     pub fn get_or_create_egg(&self, name: &str) -> Result<Egg> {
         let egg_path = self.egg_path(name);
         if !egg_path.exists() {
             fs_err::create_dir_all(&egg_path).into_diagnostic()?;
         }
-        Egg::open(egg_path)
+        Egg::open(self.home.clone(), egg_path)
+    }
+
+    pub fn list_eggs(&self) -> Result<impl Iterator<Item = Result<Egg>> + '_> {
+        let entries = self.eggs_dir_path().fs_err_read_dir().into_diagnostic()?;
+        Ok(entries.filter_map(|entry| {
+            entry
+                .ok()
+                .map(|x| Egg::open(self.home_path().to_path_buf(), x.path()))
+        }))
     }
 }
 
 pub struct Egg {
     egg_dir: PathBuf,
+    home_path: PathBuf,
 }
 
 impl Egg {
-    pub fn open(egg_path: PathBuf) -> Result<Self> {
+    pub fn open(home: PathBuf, egg_path: PathBuf) -> Result<Self> {
         if !egg_path.is_dir() {
             miette::bail!(
                 "Egg {} does not exist",
@@ -131,7 +141,10 @@ impl Egg {
                     .unwrap_or_default()
             )
         }
-        Ok(Egg { egg_dir: egg_path })
+        Ok(Self {
+            home_path: home,
+            egg_dir: egg_path,
+        })
     }
 
     #[allow(unused)]
@@ -139,8 +152,26 @@ impl Egg {
         &self.egg_dir
     }
 
+    /// Check if the egg is _fully_ deployed (-> All contained entries have corresponding symlinks)
+    pub fn is_deployed(&self) -> Result<bool> {
+        for entry in self.entries()? {
+            if !check_is_deployed_recursive(&self.home_path, &self.egg_dir, entry.path())? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
     pub fn templates_path(&self) -> PathBuf {
         self.egg_dir.join("yolk_templates")
+    }
+
+    pub fn name(&self) -> &str {
+        self.egg_dir
+            .file_name()
+            .unwrap_or_default()
+            .to_str()
+            .unwrap_or_default()
     }
 
     /// Returns a list of all entries in this egg,
@@ -199,11 +230,43 @@ impl Egg {
     }
 }
 
+fn check_is_deployed_recursive(
+    target_root: impl AsRef<Path>,
+    egg_root: impl AsRef<Path>,
+    current: impl AsRef<Path>,
+) -> Result<bool> {
+    let target_root = target_root.as_ref();
+    let egg_root = egg_root.as_ref();
+    let current = current.as_ref();
+    let target_file = target_root.join(current.strip_prefix(&egg_root).into_diagnostic()?);
+    if target_file.is_symlink() && target_file.fs_err_canonicalize().into_diagnostic()? == current {
+        return Ok(true);
+    } else if target_file.is_file() {
+        return Ok(false);
+    } else if target_file.is_dir() {
+        for entry in fs_err::read_dir(current).into_diagnostic()? {
+            let entry = entry.into_diagnostic()?;
+            if !check_is_deployed_recursive(target_root, egg_root, entry.path())? {
+                return Ok(false);
+            }
+        }
+        return Ok(true);
+    } else {
+        return Ok(false);
+    }
+}
+
 #[cfg(test)]
 mod test {
 
-    use assert_fs::{assert::PathAssert, prelude::PathChild};
+    use assert_fs::{
+        assert::PathAssert,
+        prelude::{FileWriteStr, PathChild, PathCreateDir},
+    };
     use predicates::path::exists;
+    use testresult::TestResult;
+
+    use crate::yolk::Yolk;
 
     use super::YolkPaths;
 
@@ -216,5 +279,35 @@ mod test {
         assert!(yolk_paths.check().is_ok());
         root.child("yolk/eggs").assert(exists());
         root.child("yolk/yolk.lua").assert(exists());
+    }
+
+    #[test]
+    pub fn test_is_deployed() -> TestResult {
+        let root = assert_fs::TempDir::new().unwrap();
+        let yolk_paths = YolkPaths::new(root.child("yolk").to_path_buf(), root.to_path_buf());
+        yolk_paths.create()?;
+        let yolk = Yolk::new(yolk_paths);
+
+        root.child("content/dir_old").create_dir_all()?;
+        root.child("content/dir_old/file_old").write_str("")?;
+        let egg = yolk.paths().get_or_create_egg("test_egg")?;
+        let test_egg_dir = root.child("yolk/eggs/test_egg");
+        test_egg_dir.child("content/file").write_str("")?;
+        test_egg_dir.child("content/dir1").create_dir_all()?;
+        test_egg_dir.child("content/dir2/dir1").create_dir_all()?;
+        test_egg_dir.child("content/dir2/file1").write_str("")?;
+        test_egg_dir.child("content/dir_old/file1").write_str("")?;
+        test_egg_dir.child("content/dir_old/dir1").write_str("")?;
+        test_egg_dir.child("content/dir3").create_dir_all()?;
+        test_egg_dir.child("content/dir3/file1").write_str("")?;
+        test_egg_dir.child("content/dir4/dir1").create_dir_all()?;
+
+        assert_eq!(false, egg.is_deployed()?);
+        yolk.deploy_egg("test_egg")?;
+        assert_eq!(true, egg.is_deployed()?);
+        fs_err::remove_file(root.child("content/dir_old/file1"))?;
+        assert_eq!(false, egg.is_deployed()?);
+
+        Ok(())
     }
 }
