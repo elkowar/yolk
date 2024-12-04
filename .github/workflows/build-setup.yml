@@ -1,0 +1,3 @@
+- name: symlink musl-g++
+  run: |
+    ln -s "/usr/bin/g++" "/usr/bin/musl-g++"
