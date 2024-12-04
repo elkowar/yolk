@@ -3,9 +3,16 @@
     "theme": "dark",
     "logo": ".github/images/yolk_banner.svg",
     "favicon": ".github/images/favicon.ico",
-    "additional_css": [
-      ".github/oranda_theme.css"
-    ]
+    "additional_css": [".github/oranda_theme.css"]
+  },
+  "components": {
+    "artifacts": {
+      "cargo_dist": true,
+      "auto": true
+    },
+    "mdbook": {
+      "theme": true
+    }
   },
   "build": {
     "path_prefix": "yolk"
