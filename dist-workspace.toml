@@ -3,9 +3,9 @@ members = ["cargo:."]
 
 # Config for 'dist'
 [dist]
-github-build-setup = "../dist-build-setup.yml"
+# github-build-setup = "../dist-build-setup.yml"
 # The preferred dist version to use in CI (Cargo.toml SemVer syntax)
-cargo-dist-version = "0.25.1"
+cargo-dist-version = "0.26.0-prerelease.3"
 # CI backends to support
 ci = "github"
 # The installers to generate for each app
@@ -19,10 +19,10 @@ install-path = "CARGO_HOME"
 # Whether to install an updater program
 install-updater = false
 
-[dist.github-custom-runners.x86_64-unknown-linux-gnu]
-container = { image = "ekidd/rust-musl-builder", host = "x86_64-unknown-linux-musl" }
-dist.github-custom-runners.x86_64-pc-windows-msvc.container = "messense/cargo-xwin"
-dist.github-custom-runners.aarch64-pc-windows-msvc.container = "messense/cargo-xwin"
+github-custom-runners.x86_64-unknown-linux-gnu.container = "ekidd/rust-musl-builder"
+github-custom-runners.x86_64-unknown-linux-musl.container = "ekidd/rust-musl-builder"
+github-custom-runners.x86_64-pc-windows-msvc.container = "messense/cargo-xwin"
+github-custom-runners.aarch64-pc-windows-msvc.container = "messense/cargo-xwin"
 # [dist.github-custom-runners.x86_64-unknown-linux-musl]
 # container = "ekidd/rust-musl-builder"
 
