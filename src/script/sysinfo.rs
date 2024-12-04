@@ -2,8 +2,6 @@ use std::path::PathBuf;
 
 use mlua::IntoLua;
 
-use crate::yolk_paths::default_yolk_dir;
-
 #[derive(Debug, Clone)]
 pub struct SystemInfo {
     hostname: Option<String>,
@@ -90,4 +88,11 @@ impl SystemInfo {
             platform: "linux".to_string(),
         }
     }
+}
+
+#[allow(unused)]
+fn default_yolk_dir() -> PathBuf {
+    dirs::config_dir()
+        .expect("No config dir found")
+        .join("yolk")
 }

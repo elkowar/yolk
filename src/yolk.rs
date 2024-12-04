@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use fs_err::PathExt;
+use fs_err::PathExt as _;
 use miette::{Context, IntoDiagnostic, Result};
 use mlua::Value;
 
@@ -8,7 +8,7 @@ use crate::{
     eval_ctx::EvalCtx,
     script::sysinfo::SystemInfo,
     templating::document::Document,
-    util,
+    util::{self, PathExt as _},
     yolk_paths::{Egg, YolkPaths},
 };
 
@@ -37,7 +37,7 @@ impl Yolk {
     /// - If it is a directory that already exists in the target location, recurse into it.
     fn deploy_recursively(&self, egg_name: &str, path: &impl AsRef<Path>) -> Result<()> {
         let path = path.as_ref();
-        let path = path.fs_err_canonicalize().into_diagnostic()?;
+        let path = path.canonical()?;
         tracing::debug!("use_recursively({}, {})", egg_name, path.display());
         let path_relative = path
             .strip_prefix(self.yolk_paths.egg_path(egg_name))
@@ -69,7 +69,7 @@ impl Yolk {
                 );
             }
         } else {
-            util::create_symlink(path, in_home).into_diagnostic()?;
+            util::create_symlink(path, in_home)?;
         }
 
         Ok(())
@@ -94,7 +94,7 @@ impl Yolk {
                 path.display()
             )
         }
-        let original_path = fs_err::canonicalize(path).into_diagnostic()?;
+        let original_path = path.canonical()?;
         let relative_to_home = self.make_path_relative_to_home(&original_path)?;
 
         let egg = self.yolk_paths.get_or_create_egg(egg_name)?;
@@ -192,9 +192,9 @@ impl Yolk {
 
     /// Add a set of paths into the yolk_templates file of their corresponding eggs
     pub fn add_to_templated_files(&self, paths: &[PathBuf]) -> Result<()> {
-        let eggs_dir = self.yolk_paths.eggs_dir_path();
+        let eggs_dir = self.yolk_paths.eggs_dir_path().canonical()?;
         for path in paths {
-            let path = path.fs_err_canonicalize().into_diagnostic()?;
+            let path = path.canonical()?;
             let in_eggs = path
                 .strip_prefix(&eggs_dir)
                 .map_err(|_| miette::miette!("File '{}' is not inside an egg", path.display()))?;
@@ -217,13 +217,14 @@ impl Yolk {
 
     /// Convert a path into a path relative to the home directory
     fn make_path_relative_to_home<'a>(&self, path: &'a Path) -> Result<&'a Path> {
-        path.strip_prefix(self.yolk_paths.home_path()).map_err(|_| {
-            miette::miette!(
-                "Path {} is not in the home directory {}",
-                path.display(),
-                self.yolk_paths.home_path().display()
-            )
-        })
+        path.strip_prefix(self.yolk_paths.home_path().canonical()?)
+            .map_err(|_| {
+                miette::miette!(
+                    "Path {} is not in the home directory {}",
+                    path.display(),
+                    self.yolk_paths.home_path().display()
+                )
+            })
     }
 }
 

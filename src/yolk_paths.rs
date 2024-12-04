@@ -1,7 +1,9 @@
 use std::path::{Path, PathBuf};
 
-use fs_err::PathExt as _;
-use miette::{IntoDiagnostic as _, Result};
+use fs_err::PathExt;
+use miette::{IntoDiagnostic, Result};
+
+use crate::util::PathExt as _;
 
 const DEFAULT_LUA: &str = indoc::indoc! {r#"
     data = {
@@ -29,28 +31,26 @@ impl YolkPaths {
     pub fn new(path: PathBuf, home: PathBuf) -> Self {
         YolkPaths {
             root_path: path,
-            home,
+            home: home
+                .canonical()
+                .expect("Failed to canonicalize home directory"),
         }
-    }
-
-    #[allow(unused)]
-    pub fn testing() -> Self {
-        let base_dir = PathBuf::from(std::env!("CARGO_MANIFEST_DIR")).join("test_home");
-        Self::new(base_dir.join("yolk"), base_dir)
     }
 
     pub fn from_env() -> Self {
-        Self {
-            root_path: default_yolk_dir(),
-            home: dirs::home_dir().expect("No config dir available"),
-        }
+        Self::new(
+            default_yolk_dir(),
+            dirs::home_dir().expect("No home dir available"),
+        )
     }
 
     pub fn set_yolk_dir(&mut self, path: PathBuf) {
         self.root_path = path;
     }
     pub fn set_home_dir(&mut self, path: PathBuf) {
-        self.home = path;
+        self.home = path
+            .canonical()
+            .expect("Failed to canonicalize home directory");
     }
 
     #[allow(unused)]
@@ -146,8 +146,8 @@ impl Egg {
             )
         }
         Ok(Self {
-            home_path: home,
-            egg_dir: egg_path,
+            home_path: home.canonical()?,
+            egg_dir: egg_path.canonical()?,
         })
     }
 
@@ -201,7 +201,7 @@ impl Egg {
         let tmpl_paths = fs_err::read_to_string(tmpl_list_file).into_diagnostic()?;
         let tmpl_paths = tmpl_paths
             .lines()
-            .map(|x| self.egg_dir.join(x).fs_err_canonicalize().into_diagnostic())
+            .map(|x| self.egg_dir.join(x).canonical())
             .collect::<Result<_>>()?;
         Ok(tmpl_paths)
     }
@@ -218,7 +218,7 @@ impl Egg {
                 eprintln!("Warning: {} does not exist, skipping.", path.display());
                 continue;
             }
-            let path = path.fs_err_canonicalize().into_diagnostic()?;
+            let path = path.canonical()?;
             if !path.starts_with(&self.egg_dir) {
                 return Err(miette::miette!(
                     "The given file path is not within {}",
@@ -243,7 +243,7 @@ fn check_is_deployed_recursive(
     let egg_root = egg_root.as_ref();
     let current = current.as_ref();
     let target_file = target_root.join(current.strip_prefix(&egg_root).into_diagnostic()?);
-    if target_file.is_symlink() && target_file.fs_err_canonicalize().into_diagnostic()? == current {
+    if target_file.is_symlink() && target_file.canonical()? == current {
         return Ok(true);
     } else if target_file.is_file() {
         return Ok(false);

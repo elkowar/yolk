@@ -18,12 +18,15 @@ assert_fs = "1.1.2"
 cached = "0.54.0"
 clap = { version = "4.5.21", features = ["derive", "env"] }
 dirs = "5.0.1"
+dunce = "1.0.5"
 extend = "1.2.0"
 fs-err = "3.0.0"
 indoc = "2.0.5"
 miette = { version = "7.4.0", features = ["fancy"] }
 mlua = { version = "0.10.1", features = [
     "luau",
+    # "lua52",
+    # "vendored",
     "error-send",
     "anyhow",
     "send",
