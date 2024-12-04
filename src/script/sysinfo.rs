@@ -2,10 +2,17 @@ use std::path::PathBuf;
 
 use mlua::IntoLua;
 
+use crate::yolk_paths::default_yolk_dir;
+
 #[derive(Debug, Clone)]
 pub struct SystemInfo {
-    hostname: String,
+    hostname: Option<String>,
     username: String,
+    distro: String,
+    device_name: Option<String>,
+    arch: String,
+    desktop_env: String,
+    platform: String,
     paths: SystemInfoPaths,
 }
 
@@ -15,15 +22,20 @@ impl IntoLua for SystemInfo {
         table.set("hostname", self.hostname)?;
         table.set("username", self.username)?;
         table.set("paths", self.paths)?;
+        table.set("distro", self.distro)?;
+        table.set("device_name", self.device_name)?;
+        table.set("arch", self.arch)?;
+        table.set("desktop_env", self.desktop_env)?;
+        table.set("platform", self.platform)?;
         Ok(mlua::Value::Table(table))
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct SystemInfoPaths {
-    cache_dir: PathBuf,
-    config_dir: PathBuf,
-    home_dir: PathBuf,
+    cache_dir: Option<PathBuf>,
+    config_dir: Option<PathBuf>,
+    home_dir: Option<PathBuf>,
     yolk_dir: PathBuf,
 }
 
@@ -45,27 +57,37 @@ impl SystemInfo {
         // lmao make this not garbage
         #[cfg(not(test))]
         Self {
-            hostname: std::env::var("HOSTNAME").unwrap_or("no-hostname".to_string()),
-            username: std::env::var("USER").unwrap_or("no-username".to_string()),
+            hostname: whoami::fallible::hostname().ok(),
+            username: whoami::username(),
+            distro: whoami::distro().to_string(),
+            device_name: whoami::fallible::devicename().ok(),
+            arch: whoami::arch().to_string(),
+            desktop_env: whoami::desktop_env().to_string(),
+            platform: whoami::platform().to_string(),
             paths: SystemInfoPaths {
-                cache_dir: PathBuf::from("/test/cache"),
-                config_dir: PathBuf::from("/test/config"),
-                home_dir: PathBuf::from("/test/home"),
-                yolk_dir: PathBuf::from("/test/yolk"),
+                cache_dir: dirs::cache_dir(),
+                config_dir: dirs::config_dir(),
+                home_dir: dirs::home_dir(),
+                yolk_dir: default_yolk_dir(),
             },
         }
     }
 
     pub fn canonical() -> Self {
         Self {
-            hostname: "canonical-hostname".to_string(),
+            hostname: Some("canonical-hostname".to_string()),
             username: "canonical-username".to_string(),
             paths: SystemInfoPaths {
-                cache_dir: PathBuf::from("/canonical/cache"),
-                config_dir: PathBuf::from("/canonical/config"),
-                home_dir: PathBuf::from("/canonical/home"),
+                cache_dir: Some(PathBuf::from("/canonical/cache")),
+                config_dir: Some(PathBuf::from("/canonical/config")),
+                home_dir: Some(PathBuf::from("/canonical/home")),
                 yolk_dir: PathBuf::from("/canonical/yolk"),
             },
+            distro: "distro".to_string(),
+            device_name: None,
+            arch: "x86_64".to_string(),
+            desktop_env: "gnome".to_string(),
+            platform: "linux".to_string(),
         }
     }
 }

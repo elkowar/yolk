@@ -19,6 +19,12 @@ pub struct YolkPaths {
     home: PathBuf,
 }
 
+pub fn default_yolk_dir() -> PathBuf {
+    dirs::config_dir()
+        .expect("No config dir available")
+        .join("yolk")
+}
+
 impl YolkPaths {
     pub fn new(path: PathBuf, home: PathBuf) -> Self {
         YolkPaths {
@@ -35,9 +41,7 @@ impl YolkPaths {
 
     pub fn from_env() -> Self {
         Self {
-            root_path: dirs::config_dir()
-                .expect("No config dir available")
-                .join("yolk"),
+            root_path: default_yolk_dir(),
             home: dirs::home_dir().expect("No config dir available"),
         }
     }
