@@ -118,7 +118,7 @@ jobs:
         with:
           submodules: recursive
       - name: "Symlink musl-g++"
-        run: "ln -s \"/usr/bin/g++\" \"/usr/bin/musl-g++\""
+        run: "sudo ln -s \"/usr/bin/g++\" \"/usr/bin/musl-g++\""
       - uses: swatinem/rust-cache@v2
         with:
           key: ${{ join(matrix.targets, '-') }}
