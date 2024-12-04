@@ -37,6 +37,8 @@ lto = "thin"
 
 # Config for 'cargo dist'
 [workspace.metadata.dist]
+github-build-setup = "../dist-build-setup.yml"
+
 # The preferred cargo-dist version to use in CI (Cargo.toml SemVer syntax)
 cargo-dist-version = "0.10.0"
 # CI backends to support
@@ -47,11 +49,12 @@ targets = [
     # "aarch64-apple-darwin",
     # "x86_64-apple-darwin",
     # "x86_64-unknown-linux-gnu",
-    "x86_64-pc-windows-msvc",
+    # "x86_64-pc-windows-msvc",
     "x86_64-unknown-linux-musl", # TODO: Get musl working with lua
-] # Target platforms to build apps for (Rust target-triple syntax)installers = ["shell"]# The installers to generate for each app
+]
 # Publish jobs to run in CI
-pr-run-mode = "plan"
+# pr-run-mode = "plan"
+pr-run-mode = "upload"
 
-# [workspace.metadata.dist.dependencies.apt]
-# "musl-tools" = "*"
+[workspace.metadata.dist.dependencies.apt]
+"musl-tools" = "*"
