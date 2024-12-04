@@ -1,10 +1,9 @@
 <div class="oranda-hide">
+<img src="./.github/images/yolk_banner.svg" height="200" align="right"/>
 
 # Yolk – Painfree Templated Dotfile Management
 
 </div>
-
-![yolk logo](./.github/images/yolk_banner.svg)
 
 Yolk is a dotfile management tool with a unique spin on templating,
 sitting somewhere in between [GNU Stow](https://www.gnu.org/software/stow/) and [chezmoi](https://www.chezmoi.io/).
@@ -22,6 +21,7 @@ Yolk allows you to use simple templates in your configuration files without havi
 This is achieved through a design that allows all templates to be included inside comments in your actual configuration file.
 
 Let's demonstrate:
+
 ```toml
 # Use a different font on one host
 # {% if SYSTEM.hostname == "epic-desktop" %}
@@ -40,11 +40,13 @@ Yolk will now be able to run the corresponding modifications on the file itself,
 templated values while keeping the template directly in the same file.
 
 ### User Configuration
+
 Yolk template expressions and configuration are written in the [Luau](https://luau.org/) scripting language.
 You can provide custom data to use in your templates via the `yolk.lua` file in your yolk directory,
 which allows you to fetch data dynamically from your system, or reference different static data depending on your system.
 
 ### Version Control
+
 How does this work with version control?
 Given that the concrete files in use on your system may be different across machines,
 adding those to version control directly would result in a lot of merge conflicts frequently.
