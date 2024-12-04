@@ -76,7 +76,7 @@ impl Yolk {
     }
 
     pub fn deploy_egg(&self, egg_name: &str) -> Result<()> {
-        tracing::info!("Deploying egg {}", egg_name);
+        tracing::info!("Deploying egg {egg_name}");
         let egg = self.yolk_paths.get_egg(egg_name)?;
         for entry in egg.entries()? {
             self.deploy_recursively(egg_name, &entry.path())?;
@@ -181,7 +181,11 @@ impl Yolk {
         Ok(())
     }
 
+    /// Run a given closure with all templates in their canonical state.
+    ///
+    /// First syncs them to canonical then runs the closure, then syncs them back to local.
     pub fn with_canonical_state<T>(&self, f: impl FnOnce() -> Result<T>) -> Result<T> {
+        // TODO: Consider using a pre_commit and post_commit hook instead of doing all this stuff.
         println!("Converting all templates into their canonical state");
         self.sync_to_mode(EvalMode::Canonical)?;
         let result = f();

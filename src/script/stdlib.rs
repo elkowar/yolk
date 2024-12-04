@@ -13,9 +13,7 @@ pub fn setup_tag_functions(eval_ctx: &EvalCtx) -> miette::Result<()> {
     /// Simple regex replacement that will refuse to run a non-reversible replacement.
     /// If the replacement value is non-reversible, will return the original text and log a warning.
     fn tag_text_replace(text: &str, pattern: &str, replacement: &str) -> Result<String> {
-        let pattern = Regex::new(pattern)
-            .into_diagnostic()
-            .wrap_err_with(|| format!("Invalid regex: {pattern}"))?;
+        let pattern = create_regex(pattern)?;
         let after_replace = pattern.replace(text, replacement);
         if let Some(original_value) = pattern.find(text) {
             let original_value = original_value.as_str();
@@ -81,6 +79,12 @@ pub fn setup_tag_functions(eval_ctx: &EvalCtx) -> miette::Result<()> {
     Ok(())
 }
 
+fn create_regex(s: &str) -> Result<Regex> {
+    Regex::new(s)
+        .into_diagnostic()
+        .wrap_err_with(|| format!("Invalid regex: {s}"))
+}
+
 pub fn setup_pure_functions(eval_ctx: &EvalCtx) -> Result<()> {
     let globals = eval_ctx.lua().globals();
 
@@ -100,19 +104,14 @@ pub fn setup_pure_functions(eval_ctx: &EvalCtx) -> Result<()> {
     eval_ctx.register_fn(
         "regex_match",
         |_lua, (pattern, haystack): (String, String)| {
-            Ok(regex::Regex::new(&pattern)
-                .into_diagnostic()
-                .with_context(|| format!("Invalid regex: {pattern}"))?
-                .is_match(&haystack))
+            Ok(create_regex(&pattern)?.is_match(&haystack))
         },
     )?;
 
     eval_ctx.register_fn(
         "regex_replace",
         |_lua, (pattern, haystack, replacement): (String, String, String)| {
-            Ok(regex::Regex::new(&pattern)
-                .into_diagnostic()
-                .with_context(|| format!("Invalid regex: {pattern}"))?
+            Ok(create_regex(&pattern)?
                 .replace_all(&haystack, &replacement)
                 .to_string())
         },
