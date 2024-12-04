@@ -35,7 +35,7 @@ impl Yolk {
     /// - If it is a file, symlink.
     /// - If it is a directory that does not exist in the target location, symlink.
     /// - If it is a directory that already exists in the target location, recurse into it.
-    fn use_recursively(&self, egg_name: &str, path: &impl AsRef<Path>) -> Result<()> {
+    fn deploy_recursively(&self, egg_name: &str, path: &impl AsRef<Path>) -> Result<()> {
         let path = path.as_ref();
         let path = path.fs_err_canonicalize().into_diagnostic()?;
         tracing::debug!("use_recursively({}, {})", egg_name, path.display());
@@ -57,7 +57,7 @@ impl Yolk {
             } else if in_home.is_dir() && path.is_dir() {
                 for entry in path.fs_err_read_dir().into_diagnostic()? {
                     let entry = entry.into_diagnostic()?;
-                    self.use_recursively(egg_name, &entry.path())?;
+                    self.deploy_recursively(egg_name, &entry.path())?;
                 }
             } else if !in_home.is_symlink() {
                 miette::bail!("File {} already exists", in_home.display());
@@ -75,11 +75,11 @@ impl Yolk {
         Ok(())
     }
 
-    pub fn use_egg(&self, egg_name: &str) -> Result<()> {
-        tracing::info!("Using egg {}", egg_name);
+    pub fn deploy_egg(&self, egg_name: &str) -> Result<()> {
+        tracing::info!("Deploying egg {}", egg_name);
         let egg = self.yolk_paths.get_egg(egg_name)?;
         for entry in egg.entries()? {
-            self.use_recursively(egg_name, &entry.path())?;
+            self.deploy_recursively(egg_name, &entry.path())?;
         }
         self.sync_to_mode(EvalMode::Local)?;
         Ok(())
@@ -103,7 +103,7 @@ impl Yolk {
         fs_err::rename(&original_path, &new_local_path).into_diagnostic()?;
         // TODO: This can be optimized a lot, as we assume we only need to re-use that one entry we just added.
         // However, we can't just naively create a symlink, as we don't know on that dir level to start symlinking.
-        self.use_egg(egg_name)?;
+        self.deploy_egg(egg_name)?;
         Ok(())
     }
 
@@ -286,7 +286,7 @@ mod test {
         fs_err::remove_file(home.child("config/foo.toml"))?;
         fs_err::remove_dir(home.child("config"))?;
         home.child("config").assert(exists().not());
-        yolk.use_egg("foo")?;
+        yolk.deploy_egg("foo")?;
         home.child("config").assert(is_symlink());
         Ok(())
     }
@@ -396,7 +396,7 @@ mod test {
         home.child("yolk/eggs/foo/yolk_templates")
             .assert("config/foo.toml");
         home.child("yolk_templates").assert(exists().not());
-        yolk.use_egg("foo")?;
+        yolk.deploy_egg("foo")?;
         home.child("yolk_templates").assert(exists().not());
         Ok(())
     }
@@ -426,7 +426,7 @@ mod test {
         yolk.add_to_egg("foo", home.child("test"))?;
         home.child("yolk/eggs/foo/bar.toml").write_str("")?;
         home.child("yolk/eggs/foo/test/bar.toml").write_str("")?;
-        yolk.use_egg("foo")?;
+        yolk.deploy_egg("foo")?;
         home.child("bar.toml").assert(is_symlink());
         home.child("test").assert(is_symlink());
         home.child("test/foo.toml").assert(is_direct_file());
@@ -463,7 +463,7 @@ mod test {
             .write_str("")?;
         home.child("yolk/eggs/foo/existing-dir/new-file.toml")
             .write_str("")?;
-        yolk.use_egg("foo")?;
+        yolk.deploy_egg("foo")?;
         home.child("new-dir").assert(is_symlink());
         home.child("existing-dir")
             .assert(is_symlink().not().and(is_dir()));

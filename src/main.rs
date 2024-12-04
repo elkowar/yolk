@@ -33,8 +33,8 @@ struct Args {
 enum Command {
     /// Initialize the yolk directory
     Init,
-    /// Use an egg
-    Use { name: String },
+    /// Deploy an egg
+    Deploy { name: String },
     /// Evaluate an expression like it would be done in a template
     Eval {
         /// Evaluate in canonical context instead.
@@ -108,7 +108,7 @@ fn run_command(args: Args) -> Result<()> {
     let yolk = Yolk::new(yolk_paths);
     match &args.command {
         Command::Init => yolk.init_yolk()?,
-        Command::Use { name: egg } => yolk.use_egg(egg)?,
+        Command::Deploy { name: egg } => yolk.use_egg(egg)?,
         Command::Add { name: egg, path } => yolk.add_to_egg(egg, path)?,
         Command::Sync { canonical } => {
             let mode = if *canonical {
