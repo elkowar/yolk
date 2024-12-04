@@ -1,5 +1,5 @@
 <div class="oranda-hide">
-<img src="./.github/images/yolk_banner.svg" height="200" align="right"/>
+    <img src="./.github/images/yolk_banner.svg" height="200" align="center"/>
 
 # Yolk – Painfree Templated Dotfile Management
 
