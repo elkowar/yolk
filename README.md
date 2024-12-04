@@ -32,8 +32,8 @@ font="Fira Code"
 
 [colors]
 # Load your colors from your yolk configuration
-background="#282828" # {< replace(`".*"`, `"${data.colors.background}"`) >}
-foreground="#ebdbb2" # {< replace(`".*"`, `"${data.colors.foreground}"`) >}
+background="#282828" # {< replace_color(data.colors.background) >}
+foreground="#ebdbb2" # {< replace_color(data.colors.foreground) >}
 ```
 
 Yolk will now be able to run the corresponding modifications on the file itself, allowing you to set
@@ -47,7 +47,7 @@ which allows you to fetch data dynamically from your system, or reference differ
 
 ### Version Control
 
-How does this work with version control?
+How does this work with git?
 Given that the concrete files in use on your system may be different across machines,
 adding those to version control directly would result in a lot of merge conflicts frequently.
 Yolk solves this by only commiting a "canonical" version of your templates, generated right before you commit.

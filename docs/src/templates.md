@@ -60,12 +60,10 @@ Yolk supports three different types of tags:
 You can use whichever of these you want, wherever you want. For example, all of these do the same:
 ```toml
 background_color = "#000000" # {< replace(`".*"`, `"{colors.background}"`) >}
-```
-```toml
+
 # {# replace(`".*"`, `"{colors.background}"`) #}
 background_color = "#000000"
-```
-```toml
+
 # {% replace(`".*"`, `"{colors.background}"`) %}
 background_color = "#000000"
 # {% end %}
