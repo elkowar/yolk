@@ -15,12 +15,12 @@ const DEFAULT_LUA: &str = indoc::indoc! {r#"
 
 pub struct YolkPaths {
     /// Path to the yolk directory.
-    root_path: std::path::PathBuf,
-    home: std::path::PathBuf,
+    root_path: PathBuf,
+    home: PathBuf,
 }
 
 impl YolkPaths {
-    pub fn new(path: std::path::PathBuf, home: std::path::PathBuf) -> Self {
+    pub fn new(path: PathBuf, home: PathBuf) -> Self {
         YolkPaths {
             root_path: path,
             home,
@@ -29,15 +29,8 @@ impl YolkPaths {
 
     #[allow(unused)]
     pub fn testing() -> Self {
-        let base_dir = std::path::PathBuf::from(std::env!("CARGO_MANIFEST_DIR")).join("test_home");
+        let base_dir = PathBuf::from(std::env!("CARGO_MANIFEST_DIR")).join("test_home");
         Self::new(base_dir.join("yolk"), base_dir)
-    }
-
-    pub fn from_env_with_root(root_path: PathBuf) -> Self {
-        Self {
-            root_path,
-            home: dirs::home_dir().expect("No config dir available"),
-        }
     }
 
     pub fn from_env() -> Self {
@@ -47,6 +40,13 @@ impl YolkPaths {
                 .join("yolk"),
             home: dirs::home_dir().expect("No config dir available"),
         }
+    }
+
+    pub fn set_yolk_dir(&mut self, path: PathBuf) {
+        self.root_path = path;
+    }
+    pub fn set_home_dir(&mut self, path: PathBuf) {
+        self.home = path;
     }
 
     #[allow(unused)]
@@ -93,13 +93,13 @@ impl YolkPaths {
     pub fn home_path(&self) -> &std::path::Path {
         &self.home
     }
-    pub fn script_path(&self) -> std::path::PathBuf {
+    pub fn script_path(&self) -> PathBuf {
         self.root_path.join("yolk.lua")
     }
-    pub fn eggs_dir_path(&self) -> std::path::PathBuf {
+    pub fn eggs_dir_path(&self) -> PathBuf {
         self.root_path.join("eggs")
     }
-    pub fn egg_path(&self, egg_name: &str) -> std::path::PathBuf {
+    pub fn egg_path(&self, egg_name: &str) -> PathBuf {
         self.eggs_dir_path().join(egg_name)
     }
 

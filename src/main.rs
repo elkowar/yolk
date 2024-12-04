@@ -21,8 +21,12 @@ struct Args {
     command: Command,
 
     /// Provide a custom yolk directory
-    #[arg(short = 'd', long, env = "YOLK_DIR", global = true)]
+    #[arg(long, env = "YOLK_DIR", global = true)]
     yolk_dir: Option<PathBuf>,
+
+    /// Provide a custom home directory that everything will be resolved relative to
+    #[arg(long, env = "YOLK_HOME_DIR", global = true)]
+    home_dir: Option<PathBuf>,
 
     /// Enable debug logging
     #[arg(long, short = 'v', global = true)]
@@ -102,11 +106,13 @@ pub(crate) fn main() -> Result<()> {
 }
 
 fn run_command(args: Args) -> Result<()> {
-    let yolk_paths = if let Some(yolk_dir) = args.yolk_dir {
-        yolk_paths::YolkPaths::from_env_with_root(yolk_dir)
-    } else {
-        yolk_paths::YolkPaths::from_env()
-    };
+    let mut yolk_paths = yolk_paths::YolkPaths::from_env();
+    if let Some(d) = args.yolk_dir {
+        yolk_paths.set_yolk_dir(d);
+    }
+    if let Some(d) = args.home_dir {
+        yolk_paths.set_home_dir(d);
+    }
 
     let yolk = Yolk::new(yolk_paths);
     match &args.command {
