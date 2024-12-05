@@ -163,7 +163,7 @@ impl Yolk {
             .into_diagnostic()
     }
 
-    /// Evaluate a templated file
+    /// Evaluate a templated file and return the rendered content.
     pub fn eval_template(&self, eval_ctx: &mut EvalCtx, content: &str) -> Result<String> {
         let doc = Document::parse_string(content).context("Failed to parse document")?;
         doc.render(eval_ctx)
@@ -171,6 +171,7 @@ impl Yolk {
             .context("Failed to render document")
     }
 
+    /// Sync a single template file in place on the filesystem.
     pub fn sync_template_file(&self, eval_ctx: &mut EvalCtx, path: impl AsRef<Path>) -> Result<()> {
         tracing::info!("Syncing file {}", path.as_ref().display());
         let content = fs_err::read_to_string(&path).into_diagnostic()?;
