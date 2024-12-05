@@ -1,10 +1,6 @@
-use std::{
-    ops::Range,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
-use miette::{Context as _, IntoDiagnostic as _, LabeledSpan};
-use pest::Span;
+use miette::{Context as _, IntoDiagnostic as _};
 
 /// Create a symlink at `link` pointing to `original`.
 pub fn create_symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> miette::Result<()> {
@@ -25,20 +21,6 @@ pub fn create_symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> mie
         }
     }
     Ok(())
-}
-
-#[extend::ext(pub)]
-impl<T> Result<T, miette::Report> {
-    fn as_span_diagnostic_range(self, span: Range<usize>) -> Result<T, miette::Report> {
-        self.map_err(|e| create_diagnostic(span, e))
-    }
-    fn as_span_diagnostic(self, span: Span<'_>) -> Result<T, miette::Report> {
-        self.map_err(|e| create_diagnostic(span.start()..span.end(), e))
-    }
-}
-
-pub fn create_diagnostic(span: Range<usize>, e: miette::Report) -> miette::Report {
-    miette::miette!(labels = vec![LabeledSpan::at(span, "here")], "{}", e)
 }
 
 #[extend::ext(pub)]

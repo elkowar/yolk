@@ -1,4 +1,4 @@
-use crate::{eval_ctx::EvalCtx, util::ResultTmietteReportExt as _};
+use crate::eval_ctx::EvalCtx;
 use miette::Result;
 use pest::Span;
 
@@ -44,15 +44,12 @@ impl<'a> Element<'a> {
             Element::Plain(s) => Ok(s.as_str().to_string()),
             Element::Inline { line, expr, is_if } => match is_if {
                 true => {
-                    let eval_result = eval_ctx
-                        .eval_lua("template", expr.as_str())
-                        .as_span_diagnostic(*expr)?;
+                    let eval_result = eval_ctx.eval_lua::<bool>("template", expr.as_str())?;
                     Ok(render_ctx.string_toggled(line.full_line.as_str(), eval_result))
                 }
                 false => Ok(format!(
                     "{}{}{}",
-                    run_transformation_expr(eval_ctx, line.left, expr.as_str())
-                        .as_span_diagnostic(*expr)?,
+                    run_transformation_expr(eval_ctx, line.left, expr.as_str())?,
                     line.tag,
                     line.right
                 )),
@@ -68,16 +65,13 @@ impl<'a> Element<'a> {
                     line.full_line.as_str(),
                     &render_ctx.string_toggled(
                         next_line,
-                        eval_ctx
-                            .eval_lua("template", expr.as_str())
-                            .as_span_diagnostic(*expr)?
+                        eval_ctx.eval_lua::<bool>("template", expr.as_str())?
                     )
                 )),
                 false => Ok(format!(
                     "{}{}",
                     line.full_line.as_str(),
-                    run_transformation_expr(eval_ctx, next_line, expr.as_str())
-                        .as_span_diagnostic(*expr)?
+                    run_transformation_expr(eval_ctx, next_line, expr.as_str())?
                 )),
             },
             Element::MultiLine {
@@ -90,8 +84,7 @@ impl<'a> Element<'a> {
                 Ok(format!(
                     "{}{}{}",
                     line.full_line.as_str(),
-                    &run_transformation_expr(eval_ctx, &rendered_body, expr.as_str())
-                        .as_span_diagnostic(*expr)?,
+                    &run_transformation_expr(eval_ctx, &rendered_body, expr.as_str())?,
                     end.full_line.as_str(),
                 ))
             }
@@ -104,10 +97,7 @@ impl<'a> Element<'a> {
                     // If there isn't, we're on the else block, which should be true iff we haven't had a true block yet.
                     let expr_true = match block.expr {
                         Some(expr) => {
-                            !had_true
-                                && eval_ctx
-                                    .eval_lua("template", expr.as_str())
-                                    .as_span_diagnostic(expr)?
+                            !had_true && eval_ctx.eval_lua::<bool>("template", expr.as_str())?
                         }
                         None => !had_true,
                     };
@@ -172,6 +162,28 @@ mod test {
         let doc = Document::parse_string("/* {# string.upper(YOLK_TEXT) #} */\nfoo\n")?;
         assert_eq!(
             "/* {# string.upper(YOLK_TEXT) #} */\nFOO\n",
+            doc.render(&mut eval_ctx)?
+        );
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_render_inline_conditional() -> TestResult {
+        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
+        let doc = Document::parse_string("foo/* {< if false >} */")?;
+        assert_eq!(
+            "#<yolk> foo/* {< if false >} */",
+            doc.render(&mut eval_ctx)?
+        );
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_render_next_line_conditional() -> TestResult {
+        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
+        let doc = Document::parse_string("/* {# if false #} */\nfoo\n")?;
+        assert_eq!(
+            "/* {# if false #} */\n#<yolk> foo\n",
             doc.render(&mut eval_ctx)?
         );
         Ok(())

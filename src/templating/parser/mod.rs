@@ -5,7 +5,7 @@ pub mod comment_style;
 pub mod document_parser;
 pub mod linewise;
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct TaggedLine<'a> {
     pub left: &'a str,
     pub tag: &'a str,

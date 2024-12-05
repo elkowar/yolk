@@ -6,7 +6,7 @@ use pest::{
 
 use super::{Rule, TaggedLine, YolkParser};
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum ParsedLine<'a> {
     MultiLineTag {
         line: TaggedLine<'a>,
@@ -23,7 +23,7 @@ pub enum ParsedLine<'a> {
     Plain(Span<'a>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum MultiLineTagKind<'a> {
     Regular(Span<'a>),
     If(Span<'a>),
@@ -43,7 +43,7 @@ impl<'a> MultiLineTagKind<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum TagKind<'a> {
     Regular(Span<'a>),
     If(Span<'a>),
@@ -157,5 +157,98 @@ fn parse_tagged_line<'a>(span: Span<'a>, inner: Pairs<'a, Rule>) -> TaggedLine<'
         tag: tag.as_str(),
         right: right.as_str(),
         full_line: span,
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use assert_matches::assert_matches;
+
+    use testresult::TestResult;
+
+    use crate::templating::parser::linewise::{MultiLineTagKind, ParsedLine, TagKind};
+
+    #[test]
+    pub fn test_parse_plain() -> TestResult {
+        let parsed = ParsedLine::try_from_str("foo bar")?;
+        assert_matches!(parsed, ParsedLine::Plain(_));
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_parse_inline() -> TestResult {
+        assert_matches!(
+            ParsedLine::try_from_str("{< foo >}")?,
+            ParsedLine::InlineTag {
+                line: _,
+                kind: TagKind::Regular(_)
+            }
+        );
+        assert_matches!(
+            ParsedLine::try_from_str("{< if foo >}")?,
+            ParsedLine::InlineTag {
+                line: _,
+                kind: TagKind::If(_)
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_parse_next_line() -> TestResult {
+        assert_matches!(
+            ParsedLine::try_from_str("{# foo #}")?,
+            ParsedLine::NextLineTag {
+                line: _,
+                kind: TagKind::Regular(_)
+            }
+        );
+        assert_matches!(
+            ParsedLine::try_from_str("{# if foo #}")?,
+            ParsedLine::NextLineTag {
+                line: _,
+                kind: TagKind::If(_)
+            }
+        );
+        Ok(())
+    }
+    #[test]
+    pub fn test_parse_multiline() -> TestResult {
+        assert_matches!(
+            ParsedLine::try_from_str("{% foo %}")?,
+            ParsedLine::MultiLineTag {
+                line: _,
+                kind: MultiLineTagKind::Regular(_)
+            }
+        );
+        assert_matches!(
+            ParsedLine::try_from_str("{% if foo %}")?,
+            ParsedLine::MultiLineTag {
+                line: _,
+                kind: MultiLineTagKind::If(_)
+            }
+        );
+        assert_matches!(
+            ParsedLine::try_from_str("{% elif foo %}")?,
+            ParsedLine::MultiLineTag {
+                line: _,
+                kind: MultiLineTagKind::Elif(_)
+            }
+        );
+        assert_matches!(
+            ParsedLine::try_from_str("{% else %}")?,
+            ParsedLine::MultiLineTag {
+                line: _,
+                kind: MultiLineTagKind::Else
+            }
+        );
+        assert_matches!(
+            ParsedLine::try_from_str("{% end %}")?,
+            ParsedLine::MultiLineTag {
+                line: _,
+                kind: MultiLineTagKind::End
+            }
+        );
+        Ok(())
     }
 }
