@@ -46,3 +46,18 @@ impl Path {
         }
     }
 }
+
+/// like <https://crates.io/crates/testresult>, but shows the debug output instead of display.
+pub type TestResult<T = ()> = std::result::Result<T, TestError>;
+
+#[derive(Debug)]
+pub enum TestError {}
+
+impl<T: std::fmt::Debug + std::fmt::Display> From<T> for TestError {
+    #[track_caller] // Will show the location of the caller in test failure messages
+    fn from(error: T) -> Self {
+        // Use alternate format for rich error message for anyhow
+        // See: https://docs.rs/anyhow/latest/anyhow/struct.Error.html#display-representations
+        panic!("error: {} - {:?}", std::any::type_name::<T>(), error);
+    }
+}

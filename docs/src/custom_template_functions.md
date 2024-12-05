@@ -11,7 +11,7 @@ A template tag function then returns a string which yolk will replace the old te
 
 ## Example
 
-Let's define a simple, useless template tag function in your `yolk.luau`.
+Let's define a simple, useless template tag function in your `yolk.rhai`.
 
 ```lua
 function scream_or_not(should_scream)

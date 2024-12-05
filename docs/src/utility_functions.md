@@ -1,6 +1,6 @@
 # Utility functions
 
-Yolk provides a set of utility functions that can be used in your [yolk.luau](./yolk_lua.md) or your templates.
+Yolk provides a set of utility functions that can be used in your [yolk.rhai](./yolk_lua.md) or your templates.
 
 ## Miscellaneous
 

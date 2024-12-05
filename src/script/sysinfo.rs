@@ -1,38 +1,36 @@
+use rhai::{CustomType, TypeBuilder};
 use std::path::PathBuf;
 
-use mlua::{IntoLua, LuaSerdeExt};
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone, CustomType)]
 pub struct SystemInfo {
+    #[rhai_type(readonly)]
     hostname: Option<String>,
+    #[rhai_type(readonly)]
     username: String,
+    #[rhai_type(readonly)]
     distro: String,
+    #[rhai_type(readonly)]
     device_name: Option<String>,
+    #[rhai_type(readonly)]
     arch: String,
+    #[rhai_type(readonly)]
     desktop_env: String,
+    #[rhai_type(readonly)]
     platform: String,
+    #[rhai_type(readonly)]
     paths: SystemInfoPaths,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone, CustomType)]
 pub struct SystemInfoPaths {
+    #[rhai_type(readonly)]
     cache_dir: Option<PathBuf>,
+    #[rhai_type(readonly)]
     config_dir: Option<PathBuf>,
+    #[rhai_type(readonly)]
     home_dir: Option<PathBuf>,
+    #[rhai_type(readonly)]
     yolk_dir: PathBuf,
-}
-
-impl IntoLua for SystemInfo {
-    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
-        lua.to_value(&self)
-    }
-}
-
-impl IntoLua for SystemInfoPaths {
-    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
-        lua.to_value(&self)
-    }
 }
 
 impl SystemInfo {

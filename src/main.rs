@@ -4,6 +4,7 @@ use clap::{Parser, Subcommand};
 use miette::{IntoDiagnostic, Result};
 use notify_debouncer_full::{new_debouncer, DebounceEventResult};
 use owo_colors::OwoColorize as _;
+use rhai::Dynamic;
 use script::eval_ctx;
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _, EnvFilter};
 use util::PathExt as _;
@@ -79,7 +80,7 @@ enum Command {
     },
     /// List all the eggs in your yolk directory
     List,
-    /// Open your `yolk.luau` or the given egg in your `$EDITOR` of choice
+    /// Open your `yolk.rhai` or the given egg in your `$EDITOR` of choice
     Edit { egg: Option<String> },
     Watch {
         #[arg(long)]
@@ -156,19 +157,16 @@ fn run_command(args: Args) -> Result<()> {
                 );
             }
         }
-        Command::Sync { canonical } => {
-            let mode = match *canonical {
-                true => EvalMode::Canonical,
-                false => EvalMode::Local,
-            };
-            yolk.sync_to_mode(mode)?
-        }
+        Command::Sync { canonical } => yolk.sync_to_mode(match *canonical {
+            true => EvalMode::Canonical,
+            false => EvalMode::Local,
+        })?,
         Command::Eval { expr, canonical } => {
-            let mode = match *canonical {
+            let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(match *canonical {
                 true => EvalMode::Canonical,
                 false => EvalMode::Local,
-            };
-            println!("{}", yolk.eval_template_lua(mode, expr)?);
+            })?;
+            println!("{}", eval_ctx.eval_rhai::<Dynamic>(expr)?);
         }
         Command::Git { command } => {
             let mut cmd = yolk.paths().start_git_command_builder()?;
@@ -195,11 +193,10 @@ fn run_command(args: Args) -> Result<()> {
                     buffer
                 }
             };
-            let mode = match *canonical {
+            let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(match *canonical {
                 true => EvalMode::Canonical,
                 false => EvalMode::Local,
-            };
-            let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(mode)?;
+            })?;
             let result = yolk.eval_template(&mut eval_ctx, "unnamed", &text)?;
             println!("{}", result);
         }
@@ -210,7 +207,7 @@ fn run_command(args: Args) -> Result<()> {
                     egg.find_first_targetting_symlink()?
                         .unwrap_or_else(|| yolk.paths().egg_path(egg_name))
                 }
-                None => yolk.paths().yolk_lua_path(),
+                None => yolk.paths().yolk_rhai_path(),
             };
 
             if let Some(parent) = path.parent() {
@@ -226,7 +223,7 @@ fn run_command(args: Args) -> Result<()> {
 
             let mut dirs_to_watch = HashSet::new();
             let mut files_to_watch = HashSet::new();
-            let script_path = yolk.paths().yolk_lua_path();
+            let script_path = yolk.paths().yolk_rhai_path();
             files_to_watch.insert(script_path.clone());
 
             for egg in yolk.paths().list_eggs()? {
@@ -260,7 +257,7 @@ fn run_command(args: Args) -> Result<()> {
                                 })
                                 .flat_map(|x| x.paths.clone().into_iter())
                                 .collect::<HashSet<_>>();
-                            if changed.contains(&yolk.paths().yolk_lua_path()) {
+                            if changed.contains(&yolk.paths().yolk_rhai_path()) {
                                 if let Err(e) = yolk.sync_to_mode(mode) {
                                     eprintln!("Error: {e:?}");
                                 }
@@ -284,7 +281,7 @@ fn run_command(args: Args) -> Result<()> {
                     .watch(&dir, notify::RecursiveMode::Recursive)
                     .into_diagnostic()?;
             }
-            // Watch the yolk dir non-recursively to catch updates to yolk.luau
+            // Watch the yolk dir non-recursively to catch updates to yolk.rhai
             debouncer
                 .watch(&script_path, notify::RecursiveMode::NonRecursive)
                 .into_diagnostic()?;

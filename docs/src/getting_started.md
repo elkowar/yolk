@@ -20,7 +20,7 @@ To get started with Yolk, you'll first need to set up the Yolk file structure.
 $ yolk init
 ```
 
-This will create the yolk directory, with a default `yolk.luau` file, and an `eggs` directory.
+This will create the yolk directory, with a default `yolk.rhai` file, and an `eggs` directory.
 
 ### Adding your first egg
 
@@ -61,7 +61,7 @@ Because you too are very indecisive about your terminal colors,
 you now decide you want to use yolk to manage your color theme for alacritty, and any other applications that you might add later.
 You also decide that you want to use a different color scheme on your desktop and your laptop.
 
-To achieve this, let's first declare your color theme in your `~/.config/yolk/yolk.luau` file:
+To achieve this, let's first declare your color theme in your `~/.config/yolk/yolk.rhai` file:
 
 ```lua
 data = {
@@ -109,4 +109,4 @@ Now, run:
 $ yolk sync
 ```
 
-You will see that, your `alacritty.toml` has changed, and the colors from your `yolk.luau` file have been applied, depending on your hostname.
+You will see that, your `alacritty.toml` has changed, and the colors from your `yolk.rhai` file have been applied, depending on your hostname.

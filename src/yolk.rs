@@ -3,13 +3,12 @@ use std::{collections::HashMap, path::Path};
 use expanduser::expanduser;
 use fs_err::PathExt as _;
 use miette::{Context, IntoDiagnostic, NamedSource, Result};
-use mlua::Value;
 
 use crate::{
     eggs_config::EggConfig,
     eval_ctx::EvalCtx,
-    script::sysinfo::SystemInfo,
-    templating::{document::Document, template_error::TemplateError},
+    script::{lua_error::RhaiError, sysinfo::SystemInfo},
+    templating::document::Document,
     util::{self, PathExt as _},
     yolk_paths::{Egg, YolkPaths},
 };
@@ -30,25 +29,6 @@ impl Yolk {
 
     pub fn paths(&self) -> &YolkPaths {
         &self.yolk_paths
-    }
-
-    pub fn eval_eggs_lua(&self, eval_ctx: &mut EvalCtx) -> Result<HashMap<String, EggConfig>> {
-        tracing::debug!("Evaluating eggs.luau");
-        let eggs_lua_path = self.yolk_paths.eggs_lua_path();
-        let eggs_lua_content = fs_err::read_to_string(&eggs_lua_path).into_diagnostic()?;
-        eval_ctx
-            .eval_lua::<HashMap<String, EggConfig>>(
-                &eggs_lua_path.to_string_lossy(),
-                &eggs_lua_content,
-            )
-            .map_err(|e| {
-                miette::Report::from(e)
-                    .with_source_code(
-                        NamedSource::new(eggs_lua_path.to_string_lossy(), eggs_lua_content)
-                            .with_language("lua"),
-                    )
-                    .wrap_err("Failed to execute eggs.luau")
-            })
     }
 
     /// Deploy or un-deploy a given [`EggConfig`]
@@ -101,7 +81,15 @@ impl Yolk {
             .prepare_eval_ctx_for_templates(mode)
             .context("Failed to prepare evaluation context")?;
 
-        let egg_configs = self.eval_eggs_lua(&mut eval_ctx)?;
+        let eggs_map = eval_ctx
+            .scope_mut()
+            .get_value::<rhai::Map>("eggs")
+            .ok_or_else(|| miette::miette!("yolk.rhai did not define a global `eggs` variable"))?;
+        let egg_configs: HashMap<String, EggConfig> = eggs_map
+            .into_iter()
+            .map(|(x, v)| Ok((x.into(), EggConfig::from_dynamic(v)?)))
+            .collect::<Result<HashMap<_, _>, RhaiError>>()?;
+
         for (egg, egg_config) in &egg_configs {
             let egg = match self.yolk_paths.get_egg(egg) {
                 Ok(egg) => egg,
@@ -160,38 +148,25 @@ impl Yolk {
             EvalMode::Canonical => SystemInfo::canonical(),
             EvalMode::Local => SystemInfo::generate(),
         };
-        let eval_ctx = EvalCtx::new_in_mode(mode)?;
+        let mut eval_ctx = EvalCtx::new_in_mode(mode)?;
         let yolk_file =
-            fs_err::read_to_string(self.yolk_paths.yolk_lua_path()).into_diagnostic()?;
+            fs_err::read_to_string(self.yolk_paths.yolk_rhai_path()).into_diagnostic()?;
 
-        let globals = eval_ctx.lua().globals();
-        globals.set("SYSTEM", sysinfo).into_diagnostic()?;
-        globals
-            .set("LOCAL", mode == EvalMode::Local)
-            .into_diagnostic()?;
-        eval_ctx.exec_lua("yolk.luau", &yolk_file).map_err(|e| {
+        eval_ctx.set_global("SYSTEM", sysinfo);
+        eval_ctx.set_global("LOCAL", mode == EvalMode::Local);
+        eval_ctx.set_and_run_header_ast(&yolk_file).map_err(|e| {
             miette::Report::from(e)
                 .with_source_code(
-                    NamedSource::new(self.yolk_paths.yolk_lua_path().to_string_lossy(), yolk_file)
-                        .with_language("lua"),
+                    NamedSource::new(
+                        self.yolk_paths.yolk_rhai_path().to_string_lossy(),
+                        yolk_file,
+                    )
+                    .with_language("rust"),
                 )
-                .wrap_err("Failed to execute yolk.luau")
+                .wrap_err("Failed to execute yolk.rhai")
         })?;
-        Ok(eval_ctx)
-    }
 
-    /// Evaluate a lua expression as though it was included in a template tag.
-    pub fn eval_template_lua(&self, mode: EvalMode, expr: &str) -> Result<String> {
-        let eval_ctx = self
-            .prepare_eval_ctx_for_templates(mode)
-            .context("Failed to prepare evaluation context")?;
-        tracing::debug!("Evaluating lua expression: {}", expr);
-        eval_ctx
-            .eval_template_lua::<Value>("expr", expr)
-            .map_err(|e| TemplateError::from_lua_error(e, 0..expr.len()))
-            .map_err(|e| miette::Report::from(e).with_source_code(expr.to_string()))?
-            .to_string()
-            .into_diagnostic()
+        Ok(eval_ctx)
     }
 
     /// Evaluate a templated file and return the rendered content.
@@ -336,6 +311,7 @@ pub enum EvalMode {
 #[cfg(test)]
 mod test {
 
+    use crate::util::TestResult;
     use assert_fs::{
         assert::PathAssert,
         prelude::{FileWriteStr, PathChild, PathCreateDir},
@@ -344,7 +320,6 @@ mod test {
     use p::path::{exists, is_dir, is_symlink};
     use predicates::prelude::PredicateBooleanExt;
     use predicates::{self as p};
-    use testresult::TestResult;
 
     use crate::{eggs_config::EggConfig, yolk_paths::YolkPaths};
 
@@ -354,6 +329,7 @@ mod test {
     {
         let home = assert_fs::TempDir::new().into_diagnostic()?;
         let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
+        std::env::set_var("HOME", home.to_string_lossy().to_string());
         let eggs = home.child("yolk/eggs");
         yolk.init_yolk()?;
         Ok((home, yolk, eggs))
@@ -416,29 +392,30 @@ mod test {
     fn test_syncing() -> TestResult {
         let (home, yolk, eggs) = setup_and_init()?;
         let foo_toml_initial = "{# data.value #}\nfoo";
-        home.child("yolk/yolk.luau").write_str(indoc::indoc! {r#"
-            data = if LOCAL then {value = "local"} else {value = "canonical"}
+        home.child("yolk/yolk.rhai").write_str(&indoc::indoc! {r#"
+            const data = if LOCAL { #{value: "local"} } else { #{value: "canonical"} };
+            let eggs = #{foo: `~`};
         "#})?;
-        home.child("yolk/eggs.luau")
-            .write_str(&format!("return {{ foo = `{}` }}", home.display()))?;
         eggs.child("foo/foo.toml").write_str(foo_toml_initial)?;
         yolk.sync_to_mode(EvalMode::Local)?;
-        // No template set in eggs.luau, so no templating should happen
+        // No template set in eggs.rhai, so no templating should happen
         home.child("foo.toml").assert(is_symlink());
         eggs.child("foo/foo.toml").assert(foo_toml_initial);
 
         // Now we make the file a template, so it should be updated
-        home.child("yolk/eggs.luau").write_str(&format!(
-            r#"return {{ foo = {{targets = "{}", templates = {{"foo.toml"}} }} }}"#,
-            home.display()
-        ))?;
+        home.child("yolk/yolk.rhai").write_str(&indoc::indoc! {r#"
+            const data = if LOCAL {#{value: "local"}} else {#{value: "canonical"}};
+            let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"]}};
+        "#})?;
+
         yolk.sync_to_mode(EvalMode::Local)?;
         eggs.child("foo/foo.toml").assert("{# data.value #}\nlocal");
 
         // Update the state, to see if applying again just works :tm:
-        home.child("yolk/yolk.luau").write_str(indoc::indoc! {r#"
-            data = if LOCAL then {value = "new local"} else {value = "new canonical"}
-        "#})?;
+        home.child("yolk/yolk.rhai").write_str(&indoc::indoc! {r#"
+                const data = if LOCAL {#{value: "new local"}} else {#{value: "new canonical"}};
+                let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"]}};
+            "#})?;
         yolk.sync_to_mode(EvalMode::Local)?;
         home.child("foo.toml").assert("{# data.value #}\nnew local");
         yolk.with_canonical_state(|| {
@@ -449,3 +426,5 @@ mod test {
         Ok(())
     }
 }
+
+// TODO: write test to verify that hostname can be accessed from within templates and the scripts

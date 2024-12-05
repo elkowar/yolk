@@ -141,7 +141,7 @@ fn create_regex(s: String) -> Result<Regex, regex::Error> {
 
 #[cfg(test)]
 mod test {
-    use testresult::TestResult;
+    use crate::util::TestResult;
 
     use crate::templating::element::Element;
 

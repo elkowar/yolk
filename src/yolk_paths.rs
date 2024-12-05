@@ -9,12 +9,11 @@ use miette::{IntoDiagnostic, Result};
 use crate::util::PathExt as _;
 
 const DEFAULT_LUA: &str = indoc::indoc! {r#"
-    data = {
-        generating_for_vcs = not LOCAL,
-        cool_setting = if SYSTEM.hostname == "foo" then
-            10
-        else
-            25
+    fn data() {
+        #{
+            for_vcs: LOCAL,
+            cool_setting: if SYSTEM.hostname == "foo" { 10 } else { 25 }
+        }
     }
 "#};
 
@@ -74,10 +73,10 @@ impl YolkPaths {
                 self.root_path().to_abbrev_str()
             );
         }
-        if !self.yolk_lua_path().exists() {
+        if !self.yolk_rhai_path().exists() {
             miette::bail!(
-                "Yolk directory does not contain a yolk.luau file at {}",
-                self.yolk_lua_path().to_abbrev_str()
+                "Yolk directory does not contain a yolk.rhai file at {}",
+                self.yolk_rhai_path().to_abbrev_str()
             );
         }
         if !self.eggs_dir_path().exists() {
@@ -100,7 +99,7 @@ impl YolkPaths {
         fs_err::create_dir_all(path).into_diagnostic()?;
         fs_err::create_dir_all(self.eggs_dir_path()).into_diagnostic()?;
         fs_err::write(self.root_path().join(".gitignore"), DEFAULT_GITIGNORE).into_diagnostic()?;
-        fs_err::write(self.yolk_lua_path(), DEFAULT_LUA).into_diagnostic()?;
+        fs_err::write(self.yolk_rhai_path(), DEFAULT_LUA).into_diagnostic()?;
         fs_err::write(self.eggs_lua_path(), DEFAULT_EGGS_LUA).into_diagnostic()?;
 
         Ok(())
@@ -163,14 +162,14 @@ impl YolkPaths {
         }
     }
     ///
-    /// Path to the `yolk.luau` file
-    pub fn yolk_lua_path(&self) -> PathBuf {
-        self.root_path.join("yolk.luau")
+    /// Path to the `yolk.rhai` file
+    pub fn yolk_rhai_path(&self) -> PathBuf {
+        self.root_path.join("yolk.rhai")
     }
 
-    /// Path to the `eggs.luau` file
+    /// Path to the `eggs.rhai` file
     pub fn eggs_lua_path(&self) -> PathBuf {
-        self.root_path.join("eggs.luau")
+        self.root_path.join("eggs.rhai")
     }
 
     /// Path to the `eggs` directory
@@ -336,12 +335,12 @@ fn check_is_deployed_recursive(
 
 #[cfg(test)]
 mod test {
+    use crate::util::TestResult;
     use assert_fs::{
         assert::PathAssert,
         prelude::{FileWriteStr, PathChild, PathCreateDir},
     };
     use predicates::{path::exists, prelude::PredicateBooleanExt};
-    use testresult::TestResult;
 
     use crate::{eggs_config::EggConfig, yolk::Yolk};
 
@@ -355,7 +354,7 @@ mod test {
         yolk_paths.create().unwrap();
         assert!(yolk_paths.check().is_ok());
         root.child("yolk/eggs").assert(exists());
-        root.child("yolk/yolk.luau").assert(exists());
+        root.child("yolk/yolk.rhai").assert(exists());
     }
 
     #[test]

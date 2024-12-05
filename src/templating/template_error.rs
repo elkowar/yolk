@@ -1,13 +1,13 @@
 use miette::SourceSpan;
 
-use crate::script::lua_error::LuaError;
+use crate::script::lua_error::RhaiError;
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum TemplateError {
     #[error("Error evaluating lua")]
-    LuaEvalError {
+    Rhai {
         #[source]
-        lua_error: LuaError,
+        error: RhaiError,
         #[label(primary, "here")]
         error_span: Option<SourceSpan>,
     },
@@ -16,19 +16,19 @@ pub enum TemplateError {
 }
 
 impl TemplateError {
-    pub fn from_lua_error(lua_error: LuaError, lua_expr_span: impl Into<SourceSpan>) -> Self {
-        match lua_error {
-            LuaError::SourceError { ref span, .. } => {
-                let lua_expr_span = lua_expr_span.into();
-                let lua_start = lua_expr_span.offset() + span.start;
-                let lua_end = lua_expr_span.offset() + span.end;
-                Self::LuaEvalError {
-                    lua_error,
-                    error_span: Some((lua_start..lua_end).into()),
+    pub fn from_rhai(error: RhaiError, expr_span: impl Into<SourceSpan>) -> Self {
+        match error {
+            RhaiError::SourceError { ref span, .. } => {
+                let expr_span = expr_span.into();
+                let start = expr_span.offset() + span.start;
+                let end = expr_span.offset() + span.end;
+                Self::Rhai {
+                    error,
+                    error_span: Some((start..end).into()),
                 }
             }
-            lua_error => Self::LuaEvalError {
-                lua_error,
+            error => Self::Rhai {
+                error,
                 error_span: None,
             },
         }

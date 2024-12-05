@@ -9,7 +9,7 @@ pub(crate) const COMMENT_START: &str = "<yolk> ";
 
 #[cfg(test)]
 mod test {
-    use testresult::TestResult;
+    use crate::util::TestResult;
 
     use crate::script::eval_ctx::EvalCtx;
     use crate::templating::document::Document;
@@ -18,9 +18,9 @@ mod test {
     #[test]
     pub fn test_render_inline() -> TestResult {
         let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
-        let doc = Document::parse_string("foo /* {< string.upper(YOLK_TEXT) >} */")?;
+        let doc = Document::parse_string("foo /* {< get_yolk_text().to_upper() >} */")?;
         assert_eq!(
-            "FOO /* {< string.upper(YOLK_TEXT) >} */",
+            "FOO /* {< get_yolk_text().to_upper() >} */",
             doc.render(&mut eval_ctx)?
         );
         Ok(())
@@ -29,10 +29,10 @@ mod test {
     #[test]
     pub fn test_render_next_line() -> TestResult {
         let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
-        let doc = Document::parse_string("/* {# string.upper(YOLK_TEXT) #} */\nfoo\n")?;
+        let doc = Document::parse_string("/* {# get_yolk_text().to_upper() #} */\nfoo\n")?;
         dbg!(&doc);
         assert_eq!(
-            "/* {# string.upper(YOLK_TEXT) #} */\nFOO\n",
+            "/* {# get_yolk_text().to_upper() #} */\nFOO\n",
             doc.render(&mut eval_ctx)?
         );
         Ok(())

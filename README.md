@@ -48,7 +48,7 @@ templated values while keeping the template directly in the same file.
 ### User Configuration
 
 Yolk template expressions and configuration are written in the [Luau](https://luau.org/) scripting language.
-You can provide custom data to use in your templates via the `yolk.luau` file in your yolk directory,
+You can provide custom data to use in your templates via the `yolk.rhai` file in your yolk directory,
 which allows you to fetch data dynamically from your system, or reference different static data depending on your system.
 
 ### Version Control
