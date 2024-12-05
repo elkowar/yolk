@@ -10,7 +10,7 @@ static LUA_ERROR_REGEX: LazyLock<Regex> =
 #[error("Error in lua code: {}", .message)]
 pub struct LuaError {
     message: String,
-    #[label()]
+    #[label("here")]
     span: Range<usize>,
     origin: mlua::Error,
 }
@@ -23,7 +23,7 @@ impl LuaError {
             let line_nr = caps.get(1).unwrap().as_str().parse::<usize>().unwrap();
             let err_msg = caps.get(2).unwrap().as_str();
             let offset_start = source_code
-                .lines()
+                .split_inclusive('\n')
                 .take(line_nr - 1)
                 .map(|x| x.len())
                 .sum::<usize>();
@@ -33,6 +33,11 @@ impl LuaError {
                     .nth(line_nr - 1)
                     .map(|x| x.len())
                     .unwrap_or_default();
+            let indent = source_code[offset_start..]
+                .chars()
+                .take_while(|x| x.is_whitespace())
+                .count();
+            let offset_start = offset_start + indent;
             span = offset_start..offset_end;
             msg = err_msg.to_string();
         }
