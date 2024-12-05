@@ -41,7 +41,7 @@ pub fn setup_tag_functions(eval_ctx: &mut EvalCtx) -> miette::Result<()> {
 
     eval_ctx.engine_mut().register_fn(
         "replace_in",
-        |nc: NativeCallContext, (between, replacement): (String, String)| {
+        |nc: NativeCallContext, between: ImmutableString, replacement: ImmutableString| {
             let text: String = nc.call_native_fn("get_yolk_text", ())?;
             let regex = format!("{between}[^{between}]*{between}");
             tag_text_replace(&text, &regex, &format!("{between}{replacement}{between}"))
@@ -49,7 +49,7 @@ pub fn setup_tag_functions(eval_ctx: &mut EvalCtx) -> miette::Result<()> {
     );
     eval_ctx.engine_mut().register_fn(
         "replace_in",
-        |nc: NativeCallContext, (between, replacement): (String, String)| {
+        |nc: NativeCallContext, between: ImmutableString, replacement: ImmutableString| {
             let text: String = nc.call_native_fn("get_yolk_text", ())?;
             let regex = format!("{between}[^{between}]*{between}");
             tag_text_replace(&text, &regex, &format!("{between}{replacement}{between}"))
@@ -151,10 +151,7 @@ mod test {
     pub fn test_inspect() -> TestResult {
         let mut eval_ctx = EvalCtx::new_empty();
         super::setup_pure_functions(&mut eval_ctx)?;
-        assert_eq!(
-            "{ 1, 2 }",
-            eval_ctx.eval_rhai("test", "inspect({1, 2})")?.to_string()
-        );
+        assert_eq!("[1, 2]", eval_ctx.eval_rhai("test", "[1, 2]")?.to_string());
 
         Ok(())
     }
@@ -163,17 +160,16 @@ mod test {
     pub fn test_replace() -> TestResult {
         let mut eval_ctx = EvalCtx::new_empty();
         super::setup_tag_functions(&mut eval_ctx)?;
-        eval_ctx.set_global("YOLK_TEXT", "foo:'aaa'".into());
         assert_eq!(
             "foo:'xxx'",
             eval_ctx
-                .eval_rhai("test", "replace(`'.*'`, `'xxx'`)")?
+                .eval_text_transformation("foo:'aaa'", "replace(`'.*'`, `'xxx'`)")?
                 .to_string()
         );
         assert_eq!(
             "foo:'aaa'",
             eval_ctx
-                .eval_rhai("test", "replace(`'.*'`, `xxx`)")?
+                .eval_text_transformation("foo:'aaa'", "replace(`'.*'`, `xxx`)")?
                 .to_string(),
             "replace performed non-reversible replacement",
         );
@@ -183,17 +179,16 @@ mod test {
     pub fn test_replace_in() -> TestResult {
         let mut eval_ctx = EvalCtx::new_empty();
         super::setup_tag_functions(&mut eval_ctx)?;
-        eval_ctx.set_global("YOLK_TEXT", "foo:'aaa'".into());
         assert_eq!(
             "foo:'xxx'",
             eval_ctx
-                .eval_rhai("test", "replace_in(`'`, `xxx`)")?
+                .eval_text_transformation("foo:'aaa'", "replace_in(`'`, `xxx`)")?
                 .to_string()
         );
         assert_eq!(
             "foo:'aaa'",
             eval_ctx
-                .eval_rhai("test", "replace_in(`'`, `x'xx`)")?
+                .eval_text_transformation("foo:'aaa'", "replace_in(`'`, `x'xx`)")?
                 .to_string(),
             "replace performed non-reversible replacement",
         );
@@ -204,30 +199,29 @@ mod test {
     pub fn test_replace_color() -> TestResult {
         let mut eval_ctx = EvalCtx::new_empty();
         super::setup_tag_functions(&mut eval_ctx)?;
-        eval_ctx.set_global("YOLK_TEXT", "foo: #ff0000".into());
         assert_eq!(
             "foo: #00ff00",
             eval_ctx
-                .eval_rhai("test", "replace_color(`#00ff00`)")?
+                .eval_text_transformation("foo: #ff0000", "replace_color(`#00ff00`)")?
                 .to_string(),
         );
         assert_eq!(
             "foo: #00ff0000",
             eval_ctx
-                .eval_rhai("test", "replace_color(`#00ff0000`)")?
+                .eval_text_transformation("foo: #ff0000", "replace_color(`#00ff0000`)")?
                 .to_string(),
         );
         assert_eq!(
             "foo: #ff0000",
             eval_ctx
-                .eval_rhai("test", "replace_color(`00ff00`)")?
+                .eval_text_transformation("foo: #ff0000", "replace_color(`00ff00`)")?
                 .to_string(),
             "replace_color performed non-reversible replacement",
         );
         assert_eq!(
             "foo: #ff0000",
             eval_ctx
-                .eval_rhai("test", "replace_color(`bad color`)")?
+                .eval_text_transformation("foo: #ff0000", "replace_color(`bad color`)")?
                 .to_string(),
             "replace_color performed non-reversible replacement",
         );

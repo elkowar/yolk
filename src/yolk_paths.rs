@@ -6,12 +6,11 @@ use miette::{IntoDiagnostic, Result};
 use crate::util::PathExt as _;
 
 const DEFAULT_LUA: &str = indoc::indoc! {r#"
-    data = {
-        generating_for_vcs = not LOCAL,
-        cool_setting = if SYSTEM.hostname == "foo" then
-            10
-        else
-            25
+    fn data() {
+        #{
+            for_vcs: LOCAL,
+            cool_setting: if SYSTEM.hostname == "foo" { 10 } else { 25 }
+        }
     }
 "#};
 

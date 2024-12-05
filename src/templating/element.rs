@@ -164,9 +164,9 @@ mod test {
     #[test]
     pub fn test_render_inline() -> TestResult {
         let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
-        let doc = Document::parse_string("foo /* {< string.upper(YOLK_TEXT) >} */\n")?;
+        let doc = Document::parse_string("foo /* {< get_yolk_text().to_upper() >} */\n")?;
         assert_eq!(
-            "FOO /* {< string.upper(YOLK_TEXT) >} */\n",
+            "FOO /* {< get_yolk_text().to_upper() >} */\n",
             doc.render(&mut eval_ctx)?
         );
         Ok(())
@@ -175,9 +175,9 @@ mod test {
     #[test]
     pub fn test_render_next_line() -> TestResult {
         let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
-        let doc = Document::parse_string("/* {# string.upper(YOLK_TEXT) #} */\nfoo\n")?;
+        let doc = Document::parse_string("/* {# get_yolk_text().to_upper() #} */\nfoo\n")?;
         assert_eq!(
-            "/* {# string.upper(YOLK_TEXT) #} */\nFOO\n",
+            "/* {# get_yolk_text().to_upper() #} */\nFOO\n",
             doc.render(&mut eval_ctx)?
         );
         Ok(())

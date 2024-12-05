@@ -44,7 +44,7 @@ impl EvalCtx {
 
     pub fn eval_rhai(&mut self, name: &str, content: &str) -> Result<Dynamic> {
         self.engine
-            .eval_with_scope(&mut self.scope, content)
+            .eval_expression_with_scope(&mut self.scope, content)
             .into_diagnostic()
     }
     pub fn exec_rhai(&mut self, name: &str, content: &str) -> Result<()> {
