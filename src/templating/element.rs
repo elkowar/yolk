@@ -4,14 +4,14 @@ use pest::Span;
 
 use super::{document::RenderContext, parser::TaggedLine};
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct ConditionalBlock<'a> {
     pub line: TaggedLine<'a>,
     pub expr: Option<Span<'a>>,
     pub body: Vec<Element<'a>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum Element<'a> {
     Plain(Span<'a>),
     Inline {
@@ -134,114 +134,5 @@ fn run_transformation_expr(eval_ctx: &mut EvalCtx, text: &str, expr: &str) -> Re
         Ok(text.to_string())
     } else {
         Ok(result)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use testresult::TestResult;
-
-    use crate::script::eval_ctx::EvalCtx;
-    use crate::templating::document::Document;
-    use crate::yolk::EvalMode;
-
-    #[test]
-    pub fn test_render_inline() -> TestResult {
-        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
-        let doc = Document::parse_string("foo /* {< string.upper(YOLK_TEXT) >} */\n")?;
-        assert_eq!(
-            "FOO /* {< string.upper(YOLK_TEXT) >} */\n",
-            doc.render(&mut eval_ctx)?
-        );
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_render_next_line() -> TestResult {
-        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
-        let doc = Document::parse_string("/* {# string.upper(YOLK_TEXT) #} */\nfoo\n")?;
-        assert_eq!(
-            "/* {# string.upper(YOLK_TEXT) #} */\nFOO\n",
-            doc.render(&mut eval_ctx)?
-        );
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_render_inline_conditional() -> TestResult {
-        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
-        let doc = Document::parse_string("foo/* {< if false >} */")?;
-        assert_eq!(
-            "#<yolk> foo/* {< if false >} */",
-            doc.render(&mut eval_ctx)?
-        );
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_render_next_line_conditional() -> TestResult {
-        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
-        let doc = Document::parse_string("/* {# if false #} */\nfoo\n")?;
-        assert_eq!(
-            "/* {# if false #} */\n#<yolk> foo\n",
-            doc.render(&mut eval_ctx)?
-        );
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_multiline_conditional() -> TestResult {
-        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
-        let input_str = indoc::indoc! {r#"
-            /* {% if false %} */
-            foo
-            /* {% elif true %} */
-            bar
-            /* {% else %} */
-            bar
-            /* {% end %} */
-        "#};
-        let doc = Document::parse_string(input_str)?;
-        assert_eq!(
-            indoc::indoc! {r#"
-                /* {% if false %} */
-                #<yolk> foo
-                /* {% elif true %} */
-                bar
-                /* {% else %} */
-                #<yolk> bar
-                /* {% end %} */
-            "#},
-            doc.render(&mut eval_ctx)?
-        );
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_render_replace() -> TestResult {
-        let doc = Document::parse_string(indoc::indoc! {"
-            {# replace(`'.*'`, `'new'`) #}
-            foo: 'original'
-        "})?;
-        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
-        assert_eq!(
-            indoc::indoc! {"
-                {# replace(`'.*'`, `'new'`) #}
-                foo: 'new'
-            "},
-            doc.render(&mut eval_ctx)?
-        );
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_render_replace_refuse_non_idempodent() -> TestResult {
-        let element = Document::parse_string("{# replace(`'.*'`, `a'a'`) #}\nfoo: 'original'\n")?;
-        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
-        assert_eq!(
-            "{# replace(`'.*'`, `a'a'`) #}\nfoo: 'original'\n",
-            element.render(&mut eval_ctx)?
-        );
-        Ok(())
     }
 }

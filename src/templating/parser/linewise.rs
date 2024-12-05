@@ -83,7 +83,6 @@ impl<'a> ParsedLine<'a> {
     #[allow(unused)]
     pub fn try_from_str(s: &'a str) -> Result<Self> {
         let mut result = YolkParser::parse(Rule::Line, s).into_diagnostic()?;
-        // .map_err(|e| e.with_source_code(s.to_string()))?;
         Ok(Self::from_pair(result.next().unwrap()))
     }
 
@@ -141,8 +140,8 @@ impl<'a> ParsedLine<'a> {
                     },
                 }
             }
-            _ => {
-                unreachable!("No other rules should be possible here")
+            rule => {
+                unreachable!("No other rules should be possible here, but got {rule:?}")
             }
         }
     }
@@ -172,6 +171,16 @@ mod test {
     pub fn test_parse_plain() -> TestResult {
         let parsed = ParsedLine::try_from_str("foo bar")?;
         assert_matches!(parsed, ParsedLine::Plain(_));
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_parse_plain_indented() -> TestResult {
+        let parsed = ParsedLine::try_from_str("  foo bar\n  foo bar")?;
+        assert_matches!(
+            parsed,
+            ParsedLine::Plain(span) => span.as_str() == "  foo bar\n  foo bar"
+        );
         Ok(())
     }
 

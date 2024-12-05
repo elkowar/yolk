@@ -1,6 +1,6 @@
 WHITESPACE = _{ " " | "\t" }
 
-nl = { NEWLINE }
+nl  = { NEWLINE }
 any = { ANY }
 
 InlineTag    = !{ "{<" ~ InlineTagInner ~ ">}" }
@@ -38,4 +38,4 @@ LineMultiLineTagStart = @{ (!(nl | "{#" | "{%" | "{<") ~ any)* }
 Plain = @{ ((!nl ~ any)* ~ nl) | ((!nl ~ any)+ ~ EOI) }
 
 Line     = _{ LineMultiLineTag | LineNextLineTag | LineInlineTag | Plain }
-Document = _{ Line* }
+Document = ${ Line* }

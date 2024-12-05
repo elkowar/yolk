@@ -273,3 +273,46 @@ impl<'a> DocumentParser<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use assert_matches::assert_matches;
+    use testresult::TestResult;
+
+    use crate::templating::{
+        document::Document,
+        element::Element,
+        parser::{document_parser::DocumentParser, linewise::ParsedLine},
+    };
+
+    #[test]
+    fn test_parse_plain() -> TestResult {
+        let parsed = ParsedLine::try_from_str("foo bar")?;
+        let parsed = DocumentParser::new("foo bar", vec![parsed]).parse()?;
+        assert_matches!(
+            parsed[0],
+            Element::Plain(span) => assert_eq!("foo bar", span.as_str())
+        );
+
+        let parsed = ParsedLine::try_from_str("  foo bar")?;
+        let parsed = DocumentParser::new("  foo bar", vec![parsed]).parse()?;
+        assert_matches!(
+            parsed[0],
+            Element::Plain(span) => assert_eq!("  foo bar", span.as_str())
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_plain_from_document() -> TestResult {
+        let parsed = Document::parse_string("normal\n indented")?;
+        assert_matches!(
+            &parsed.elements.as_slice(),
+            &[Element::Plain(span), Element::Plain(span2)] => {
+                assert_eq!("normal\n", span.as_str());
+                assert_eq!(" indented", span2.as_str());
+            }
+        );
+        Ok(())
+    }
+}
