@@ -82,9 +82,8 @@ impl<'a> ParsedLine<'a> {
     }
     #[allow(unused)]
     pub fn try_from_str(s: &'a str) -> Result<Self> {
-        let mut result = YolkParser::parse(Rule::Line, s)
-            .into_diagnostic()
-            .map_err(|e| e.with_source_code(s.to_string()))?;
+        let mut result = YolkParser::parse(Rule::Line, s).into_diagnostic()?;
+        // .map_err(|e| e.with_source_code(s.to_string()))?;
         Ok(Self::from_pair(result.next().unwrap()))
     }
 

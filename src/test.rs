@@ -14,7 +14,7 @@ pub fn test_custom_functions_in_text_transformer_tag() -> TestResult {
     let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(crate::yolk::EvalMode::Local)?;
     assert_eq!(
         "TEST{< scream() >}",
-        yolk.eval_template(&mut eval_ctx, "test{< scream() >}")?
+        yolk.eval_template(&mut eval_ctx, "", "test{< scream() >}")?
     );
 
     Ok(())

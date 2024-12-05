@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use fs_err::PathExt as _;
-use miette::{Context, IntoDiagnostic, Result};
+use miette::{Context, IntoDiagnostic, NamedSource, Result};
 use mlua::Value;
 
 use crate::{
@@ -164,20 +164,30 @@ impl Yolk {
     }
 
     /// Evaluate a templated file and return the rendered content.
-    pub fn eval_template(&self, eval_ctx: &mut EvalCtx, content: &str) -> Result<String> {
-        let doc = Document::parse_string(content).context("Failed to parse document")?;
-        doc.render(eval_ctx)
-            .map_err(|e| e.with_source_code(content.to_string()))
-            .context("Failed to render document")
+    ///
+    /// The `file_path` is just used for error reporting.
+    pub fn eval_template(
+        &self,
+        eval_ctx: &mut EvalCtx,
+        file_path: &str,
+        content: &str,
+    ) -> Result<String> {
+        let mut eval = move || {
+            let doc = Document::parse_string(content).context("Failed to parse document")?;
+            doc.render(eval_ctx).context("Failed to render document")
+        };
+        eval().map_err(|e| e.with_source_code(NamedSource::new(file_path, content.to_string())))
     }
 
     /// Sync a single template file in place on the filesystem.
     pub fn sync_template_file(&self, eval_ctx: &mut EvalCtx, path: impl AsRef<Path>) -> Result<()> {
         tracing::info!("Syncing file {}", path.as_ref().display());
         let content = fs_err::read_to_string(&path).into_diagnostic()?;
-        let rendered = self.eval_template(eval_ctx, &content).with_context(|| {
-            format!("Failed to eval template file: {}", path.as_ref().display())
-        })?;
+        let rendered = self
+            .eval_template(eval_ctx, &path.as_ref().to_string_lossy(), &content)
+            .with_context(|| {
+                format!("Failed to eval template file: {}", path.as_ref().display())
+            })?;
         fs_err::write(&path, rendered).into_diagnostic()?;
         Ok(())
     }

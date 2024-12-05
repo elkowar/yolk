@@ -6,7 +6,7 @@ use super::{
     parser::{comment_style::CommentStyle, document_parser::DocumentParser, Rule, YolkParser},
 };
 
-use miette::{Diagnostic, LabeledSpan, Result, SourceCode};
+use miette::{Diagnostic, LabeledSpan, Result};
 use pest::Parser as _;
 
 #[derive(Debug)]
@@ -33,12 +33,12 @@ pub enum ParseError {
 }
 
 impl Diagnostic for ParseError {
-    fn source_code(&self) -> Option<&dyn SourceCode> {
-        match self {
-            ParseError::Pest(text, _) => Some(text),
-            ParseError::DocumentParser(text, _) => Some(text),
-        }
-    }
+    // fn source_code(&self) -> Option<&dyn SourceCode> {
+    //     match self {
+    //         ParseError::Pest(text, _) => Some(text),
+    //         ParseError::DocumentParser(text, _) => Some(text),
+    //     }
+    // }
     fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
         match self {
             ParseError::Pest(_, e) => Some(Box::new(std::iter::once(LabeledSpan::at(
