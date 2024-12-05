@@ -36,9 +36,7 @@ impl EvalCtx {
     pub fn new_in_mode(mode: EvalMode) -> Result<Self> {
         let ctx = Self::new_empty();
         stdlib::setup_tag_functions(&ctx)?;
-        if mode == EvalMode::Local {
-            stdlib::setup_impure_functions(&ctx)?;
-        }
+        stdlib::setup_stdlib(mode, &ctx)?;
         Ok(ctx)
     }
 
