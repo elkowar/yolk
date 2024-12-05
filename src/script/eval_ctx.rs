@@ -1,3 +1,6 @@
+use std::ops::Range;
+
+use miette::Diagnostic;
 use miette::IntoDiagnostic;
 
 use miette::Result;
@@ -9,12 +12,60 @@ use mlua::IntoLuaMulti;
 use mlua::Lua;
 use mlua::MaybeSend;
 use mlua::Value;
+use regex::Regex;
 
 use crate::yolk::EvalMode;
 
 use super::stdlib;
 
 pub const YOLK_TEXT_NAME: &str = "YOLK_TEXT";
+
+#[derive(Debug, thiserror::Error, Diagnostic)]
+#[error("Error in lua code: {}", .message)]
+pub struct LuaError {
+    message: String,
+    #[label()]
+    span: Range<usize>,
+    origin: mlua::Error,
+}
+
+impl LuaError {
+    pub fn from_mlua(err: mlua::Error) -> Self {
+        Self {
+            message: err.to_string(),
+            span: 0..0,
+            origin: err,
+        }
+    }
+    pub fn from_mlua_with_source(source_code: &str, err: mlua::Error) -> Self {
+        let mut msg = err.to_string();
+        let re = Regex::new(r"^.*: \[.*?\]:(\d+): (.*)$").unwrap();
+
+        let mut span = 0..0;
+        if let Some(caps) = re.captures(&msg) {
+            let line_nr = caps.get(1).unwrap().as_str().parse::<usize>().unwrap();
+            let err_msg = caps.get(2).unwrap().as_str();
+            let offset_start = source_code
+                .lines()
+                .take(line_nr - 1)
+                .map(|x| x.len())
+                .sum::<usize>();
+            let offset_end = offset_start
+                + source_code
+                    .lines()
+                    .nth(line_nr - 1)
+                    .map(|x| x.len())
+                    .unwrap_or_default();
+            span = offset_start..offset_end;
+            msg = err_msg.to_string();
+        }
+        Self {
+            message: msg,
+            span,
+            origin: err,
+        }
+    }
+}
 
 pub struct EvalCtx {
     lua: Lua,
@@ -45,14 +96,18 @@ impl EvalCtx {
             .load(content)
             .set_name(name)
             .eval()
+            .map_err(|e| LuaError::from_mlua_with_source(content, e))
             .into_diagnostic()
+            .map_err(|e| e.with_source_code(content.to_string()))
     }
     pub fn exec_lua(&self, name: &str, content: &str) -> Result<()> {
         self.lua()
             .load(content)
             .set_name(name)
             .exec()
+            .map_err(|e| LuaError::from_mlua_with_source(content, e))
             .into_diagnostic()
+            .map_err(|e| e.with_source_code(content.to_string()))
     }
 
     pub fn eval_text_transformation(&self, text: &str, expr: &str) -> Result<String> {
