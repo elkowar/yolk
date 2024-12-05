@@ -97,6 +97,9 @@ impl YolkPaths {
     pub fn home_path(&self) -> &std::path::Path {
         &self.home
     }
+    pub fn yolk_internal_path(&self) -> PathBuf {
+        self.root_path.join(".internal")
+    }
     pub fn script_path(&self) -> PathBuf {
         self.root_path.join("yolk.lua")
     }

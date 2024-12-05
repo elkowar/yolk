@@ -197,10 +197,10 @@ impl Yolk {
     /// First syncs them to canonical then runs the closure, then syncs them back to local.
     pub fn with_canonical_state<T>(&self, f: impl FnOnce() -> Result<T>) -> Result<T> {
         // TODO: Consider using a pre_commit and post_commit hook instead of doing all this stuff.
-        println!("Converting all templates into their canonical state");
+        tracing::info!("Converting all templates into their canonical state");
         self.sync_to_mode(EvalMode::Canonical)?;
         let result = f();
-        println!("Converting all templates back to the local state");
+        tracing::info!("Converting all templates back to the local state");
         self.sync_to_mode(EvalMode::Local)?;
         result
     }

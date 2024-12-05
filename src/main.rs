@@ -61,6 +61,7 @@ enum Command {
         canonical: bool,
     },
     /// Run a git-command within the yolk directory while in canonical state.
+    #[clap(alias = "g")]
     Git {
         #[clap(allow_hyphen_values = true)]
         command: Vec<String>,
@@ -151,6 +152,12 @@ fn run_command(args: Args) -> Result<()> {
             yolk.with_canonical_state(|| {
                 std::process::Command::new("git")
                     .args(command)
+                    .args(&[
+                        "--git-dir",
+                        &yolk.paths().yolk_internal_path().to_string_lossy(),
+                        "--work-tree",
+                        &yolk.paths().root_path().to_string_lossy(),
+                    ])
                     .current_dir(yolk.paths().root_path())
                     .status()
                     .into_diagnostic()?;
