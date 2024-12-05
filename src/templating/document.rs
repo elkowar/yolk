@@ -1,5 +1,5 @@
+use crate::eval_ctx::EvalCtx;
 use crate::templating::parser::linewise::ParsedLine;
-use crate::{eval_ctx::EvalCtx, templating::parser::document_parser};
 
 use super::{
     element,
@@ -24,35 +24,6 @@ impl<'a> Default for Document<'a> {
     }
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum ParseError {
-    #[error("{}", .1)]
-    Pest(String, Box<pest::error::Error<Rule>>),
-    #[error("{}", .1)]
-    DocumentParser(String, document_parser::Error),
-}
-
-impl Diagnostic for ParseError {
-    // fn source_code(&self) -> Option<&dyn SourceCode> {
-    //     match self {
-    //         ParseError::Pest(text, _) => Some(text),
-    //         ParseError::DocumentParser(text, _) => Some(text),
-    //     }
-    // }
-    fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
-        match self {
-            ParseError::Pest(_, e) => Some(Box::new(std::iter::once(LabeledSpan::at(
-                match e.location {
-                    pest::error::InputLocation::Pos(x) => x..x,
-                    pest::error::InputLocation::Span((x, y)) => x..y,
-                },
-                format!("{}", e),
-            )))),
-            ParseError::DocumentParser(_, e) => e.labels(),
-        }
-    }
-}
-
 impl<'a> Document<'a> {
     pub fn render(&self, eval_ctx: &mut EvalCtx) -> Result<String> {
         let mut output = String::new();
@@ -65,17 +36,29 @@ impl<'a> Document<'a> {
         Ok(output)
     }
 
-    pub fn parse_string(s: &'a str) -> Result<Self, ParseError> {
-        let result_lines = YolkParser::parse(Rule::Document, s)
-            .map_err(|e| ParseError::Pest(s.to_string(), Box::new(e)))?;
+    pub fn parse_string(s: &'a str) -> Result<Self> {
+        let result_lines = YolkParser::parse(Rule::Document, s).map_err(|e| {
+            let span = LabeledSpan::at(
+                match e.location {
+                    pest::error::InputLocation::Pos(x) => x..x,
+                    pest::error::InputLocation::Span((x, y)) => x..y,
+                },
+                "here",
+            );
+            miette::miette!(labels = vec![span], "{e}")
+        })?;
         let lines = result_lines
             .into_iter()
             .map(ParsedLine::from_pair)
             .collect();
         let parser = DocumentParser::new(s, lines);
-        let elements = parser
-            .parse()
-            .map_err(|e| ParseError::DocumentParser(s.to_string(), e))?;
+        let elements = parser.parse().map_err(|e| {
+            let labels = match e.labels().and_then(|mut x| x.next()) {
+                Some(label) => vec![label],
+                None => vec![],
+            };
+            miette::miette!(labels = labels, "{e}")
+        })?;
         Ok(Self {
             elements,
             ..Default::default()
