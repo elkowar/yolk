@@ -134,18 +134,16 @@ fn run_command(args: Args) -> Result<()> {
             }
         }
         Command::Sync { canonical } => {
-            let mode = if *canonical {
-                EvalMode::Canonical
-            } else {
-                EvalMode::Local
+            let mode = match *canonical {
+                true => EvalMode::Canonical,
+                false => EvalMode::Local,
             };
             yolk.sync_to_mode(mode)?
         }
         Command::Eval { expr, canonical } => {
-            let mode = if *canonical {
-                EvalMode::Canonical
-            } else {
-                EvalMode::Local
+            let mode = match *canonical {
+                true => EvalMode::Canonical,
+                false => EvalMode::Local,
             };
             println!("{}", yolk.eval_template_lua(mode, expr)?);
         }
@@ -173,10 +171,9 @@ fn run_command(args: Args) -> Result<()> {
                     buffer
                 }
             };
-            let mode = if *canonical {
-                EvalMode::Canonical
-            } else {
-                EvalMode::Local
+            let mode = match *canonical {
+                true => EvalMode::Canonical,
+                false => EvalMode::Local,
             };
             let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(mode)?;
             let result = yolk.eval_template(&mut eval_ctx, &text)?;
