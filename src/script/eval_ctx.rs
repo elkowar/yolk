@@ -89,3 +89,33 @@ impl EvalCtx {
         &mut self.lua
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::collections::HashSet;
+
+    use mlua::Value;
+    use testresult::TestResult;
+
+    use super::{EvalCtx, EvalMode};
+
+    #[test]
+    pub fn test_globals_match_between_local_and_canonical() -> TestResult {
+        let local = EvalCtx::new_in_mode(EvalMode::Local).unwrap();
+        let canonical = EvalCtx::new_in_mode(EvalMode::Canonical).unwrap();
+        let canonical_entries: HashSet<_> = canonical
+            .lua
+            .globals()
+            .pairs::<Value, Value>()
+            .map(|x| x.unwrap().0.to_string().unwrap())
+            .collect();
+        let local_entries: HashSet<_> = local
+            .lua
+            .globals()
+            .pairs::<Value, Value>()
+            .map(|x| x.unwrap().0.to_string().unwrap())
+            .collect();
+        assert_eq!(local_entries, canonical_entries);
+        Ok(())
+    }
+}

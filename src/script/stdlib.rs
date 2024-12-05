@@ -181,7 +181,6 @@ mod test {
             "{ 1, 2 }",
             eval_ctx.eval_lua::<String>("test", "inspect({1, 2})")?
         );
-
         Ok(())
     }
 
