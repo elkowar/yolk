@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use fs_err::PathExt as _;
 use miette::{Context, IntoDiagnostic, Result};
-use mlua::Value;
+use rhai::Dynamic;
 
 use crate::{
     eval_ctx::EvalCtx,
@@ -138,29 +138,23 @@ impl Yolk {
             EvalMode::Canonical => SystemInfo::canonical(),
             EvalMode::Local => SystemInfo::generate(),
         };
-        let eval_ctx = EvalCtx::new_in_mode(mode)?;
+        let mut eval_ctx = EvalCtx::new_in_mode(mode)?;
         let yolk_file = fs_err::read_to_string(self.yolk_paths.script_path()).into_diagnostic()?;
 
         // TODO: In the future, parse the lua error message for line number
         // and show a proper error span
-        let globals = eval_ctx.lua().globals();
-        globals.set("SYSTEM", sysinfo).into_diagnostic()?;
-        globals
-            .set("LOCAL", mode == EvalMode::Local)
-            .into_diagnostic()?;
-        eval_ctx.exec_lua("yolk.lua", &yolk_file)?;
+        eval_ctx.set_global("SYSTEM", Dynamic::from(sysinfo));
+        eval_ctx.set_global("LOCAL", (mode == EvalMode::Local).into());
+        eval_ctx.exec_rhai("yolk.rhai", &yolk_file)?;
         Ok(eval_ctx)
     }
 
     /// Evaluate a lua expression as though it was included in a template tag.
     pub fn eval_template_lua(&self, mode: EvalMode, expr: &str) -> Result<String> {
-        let eval_ctx = self
+        let mut eval_ctx = self
             .prepare_eval_ctx_for_templates(mode)
             .context("Failed to prepare eval_ctx")?;
-        eval_ctx
-            .eval_lua::<Value>("expr", &expr)?
-            .to_string()
-            .into_diagnostic()
+        Ok(eval_ctx.eval_rhai("expr", &expr)?.to_string())
     }
 
     /// Evaluate a templated file

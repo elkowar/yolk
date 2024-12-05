@@ -45,8 +45,10 @@ impl<'a> Element<'a> {
             Element::Inline { line, expr, is_if } => match is_if {
                 true => {
                     let eval_result = eval_ctx
-                        .eval_lua("template", expr.as_str())
-                        .as_span_diagnostic(*expr)?;
+                        .eval_rhai("template", expr.as_str())
+                        .as_span_diagnostic(*expr)?
+                        .as_bool()
+                        .map_err(|e| miette::miette!(e))?;
                     Ok(render_ctx.string_toggled(line.full_line.as_str(), eval_result))
                 }
                 false => Ok(format!(
@@ -69,8 +71,10 @@ impl<'a> Element<'a> {
                     &render_ctx.string_toggled(
                         next_line,
                         eval_ctx
-                            .eval_lua("template", expr.as_str())
+                            .eval_rhai("template", expr.as_str())
                             .as_span_diagnostic(*expr)?
+                            .as_bool()
+                            .map_err(|e| miette::miette!(e))?
                     )
                 )),
                 false => Ok(format!(
@@ -106,8 +110,10 @@ impl<'a> Element<'a> {
                         Some(expr) => {
                             !had_true
                                 && eval_ctx
-                                    .eval_lua("template", expr.as_str())
+                                    .eval_rhai("template", expr.as_str())
                                     .as_span_diagnostic(expr)?
+                                    .as_bool()
+                                    .map_err(|e| miette::miette!(e))?
                         }
                         None => !had_true,
                     };

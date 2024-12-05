@@ -7,12 +7,6 @@ edition = "2021"
 repository = "https://github.com/elkowar/yolk"
 homepage = "https://elkowar.github.io/yolk"
 
-[package.metadata.wix]
-upgrade-guid = "04CA81A1-EF78-4B08-8D76-74A8DB52A323"
-path-guid = "0EBEA995-6928-4AE1-99B4-EF89713778B1"
-license = false
-eula = false
-
 [dependencies]
 assert_fs = "1.1.2"
 cached = "0.54.0"
@@ -23,14 +17,7 @@ extend = "1.2.0"
 fs-err = "3.0.0"
 indoc = "2.0.5"
 miette = { version = "7.4.0", features = ["fancy"] }
-mlua = { version = "0.10.1", features = [
-    "luau",
-    # "lua52",
-    # "vendored",
-    "error-send",
-    "anyhow",
-    "send",
-] }
+rhai = { version = "1.20.0", features = ["std", "sync"] }
 pest = { version = "2.7.14" }
 pest_derive = { version = "2.7.14", features = ["grammar-extras"] }
 predicates = "3.1.2"
