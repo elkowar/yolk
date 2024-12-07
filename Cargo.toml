@@ -2,7 +2,7 @@
 name = "yolk"
 authors = ["ElKowar <dev@elkowar.dev>"]
 description = "Templated dotfile management without template files"
-version = "0.0.5"
+version = "0.0.6"
 edition = "2021"
 repository = "https://github.com/elkowar/yolk"
 homepage = "https://elkowar.github.io/yolk"

@@ -1623,7 +1623,7 @@ checksum = "d135d17ab770252ad95e9a872d365cf3090e3be864a34ab46f48555993efc904"
 
 [[package]]
 name = "yolk"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "assert_fs",
  "assert_matches",
