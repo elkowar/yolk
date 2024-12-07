@@ -27,12 +27,16 @@ impl CommentStyle {
     pub fn try_infer(element: &Element<'_>) -> Option<Self> {
         let line = match &element {
             Element::Inline { line, .. }
-            | Element::NextLine { line, .. }
+            | Element::NextLine {
+                tagged_line: line, ..
+            }
             | Element::MultiLine {
-                block: Block { line, .. },
+                block: Block {
+                    tagged_line: line, ..
+                },
                 ..
             } => &line,
-            Element::Conditional { blocks, .. } => &blocks.first()?.line,
+            Element::Conditional { blocks, .. } => &blocks.first()?.tagged_line,
             Element::Plain(_) => return None,
         };
         let (left, right) = (line.left, line.right);
