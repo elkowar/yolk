@@ -1,6 +1,5 @@
 use crate::eval_ctx::EvalCtx;
 use miette::Result;
-use pest::Span;
 
 use super::{
     document::RenderContext,
@@ -40,13 +39,13 @@ pub enum Element<'a> {
         else_block: Option<Block<'a, ()>>,
         end: TaggedLine<'a>,
     },
-    Eof,
 }
 
 impl<'a> Element<'a> {
     pub fn try_from_str(s: &'a str) -> Result<Self> {
         parser::parse_element(s)
     }
+
     pub fn render(&self, render_ctx: &RenderContext, eval_ctx: &mut EvalCtx) -> Result<String> {
         match self {
             Element::Plain(s) => Ok(s.as_str().to_string()),
@@ -119,7 +118,6 @@ impl<'a> Element<'a> {
                 }
                 Ok(output)
             }
-            Element::Eof => Ok("".to_string()),
         }
     }
 }

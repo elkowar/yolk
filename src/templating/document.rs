@@ -5,7 +5,7 @@ use super::{
     parser::{self, comment_style::CommentStyle},
 };
 
-use miette::{LabeledSpan, Result};
+use miette::Result;
 
 #[derive(Debug)]
 pub struct Document<'a> {

@@ -15,9 +15,9 @@ mod test {
     #[test]
     pub fn test_render_inline() -> TestResult {
         let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
-        let doc = Document::parse_string("foo /* {< string.upper(YOLK_TEXT) >} */\n")?;
+        let doc = Document::parse_string("foo /* {< string.upper(YOLK_TEXT) >} */")?;
         assert_eq!(
-            "FOO /* {< string.upper(YOLK_TEXT) >} */\n",
+            "FOO /* {< string.upper(YOLK_TEXT) >} */",
             doc.render(&mut eval_ctx)?
         );
         Ok(())
@@ -27,6 +27,7 @@ mod test {
     pub fn test_render_next_line() -> TestResult {
         let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
         let doc = Document::parse_string("/* {# string.upper(YOLK_TEXT) #} */\nfoo\n")?;
+        dbg!(&doc);
         assert_eq!(
             "/* {# string.upper(YOLK_TEXT) #} */\nFOO\n",
             doc.render(&mut eval_ctx)?
@@ -85,7 +86,7 @@ mod test {
     }
 
     #[test]
-    pub fn test_render_replace() -> TestResult {
+    pub fn test_render_replacex() -> TestResult {
         let doc = Document::parse_string(indoc::indoc! {"
             {# replace(`'.*'`, `'new'`) #}
             foo: 'original'
@@ -96,7 +97,7 @@ mod test {
                 {# replace(`'.*'`, `'new'`) #}
                 foo: 'new'
             "},
-            doc.render(&mut eval_ctx)?
+            dbg!(doc).render(&mut eval_ctx)?
         );
         Ok(())
     }
