@@ -3,8 +3,8 @@ use std::ops::Range;
 use winnow::{
     ascii::{line_ending, till_line_ending},
     combinator::{
-        alt, cut_err, delimited, eof, not, opt, peek, preceded, repeat, repeat_till, terminated,
-        trace,
+        alt, cut_err, delimited, eof, fail, not, opt, peek, preceded, repeat, repeat_till,
+        terminated, trace,
     },
     error::{ContextError, StrContext},
     token::{any, literal},
@@ -12,8 +12,6 @@ use winnow::{
 };
 
 use super::element::{Block, Element};
-
-pub mod comment_style;
 
 type Input<'a> = winnow::Located<&'a str>;
 // type Input<'a> = winnow::stream::Recoverable<winnow::Located<&'a str>, ContextError>;
@@ -110,6 +108,7 @@ fn p_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
         p_nextline_element.context(lbl("nextline element")),
         p_inline_element.context(lbl("inline element")),
         p_plain_line_element.context(lbl("plain line")),
+        fail.context(exp("valid element")),
     ))
     .parse_next(input)
 }
@@ -154,34 +153,26 @@ fn p_tag_line<'a, T>(
     start: &'a str,
     p_inner: impl winnow::Parser<Input<'a>, T, ContextError>,
     end: &'a str,
-) -> impl winnow::Parser<Input<'a>, (&'a str, Sp<T>, &'a str, &'a str), ContextError> {
+) -> impl winnow::Parser<Input<'a>, (TaggedLine<'a>, Sp<T>), ContextError> {
     let left_p = repeat_till(0.., (not(line_ending), not(start), any), peek(start))
         .map(|(_, _): ((), _)| ())
         .context(lbl("left of tag"))
         .take();
     let tag_p = p_tag(start, p_inner, end).with_taken();
-    (left_p, tag_p, (till_line_ending, opt(line_ending)).take()).map(|(l, t, r)| (l, t.0, t.1, r))
-}
-
-fn p_tagged_line<'a>(
-    start: &'a str,
-    p_inner: impl winnow::Parser<Input<'a>, &'a str, ContextError>,
-    end: &'a str,
-) -> impl winnow::Parser<Input<'a>, (TaggedLine<'a>, Sp<&'a str>), ContextError> {
-    p_tag_line(start, p_inner, end)
-        .with_taken()
-        .with_span()
-        .map(|(((left, expr, tag, right), line), span)| {
+    let right_p = (till_line_ending, opt(line_ending)).take();
+    (left_p, tag_p, right_p).with_span().with_taken().map(
+        |(((left, (inner_res, tag), right), full_line_span), full_line)| {
             (
                 TaggedLine {
                     left,
                     tag,
                     right,
-                    full_line: Sp::new(span, line),
+                    full_line: Sp::new(full_line_span, full_line),
                 },
-                expr,
+                inner_res,
             )
-        })
+        },
+    )
 }
 
 fn p_nextline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
@@ -189,22 +180,14 @@ fn p_nextline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
         opt((literal("if"), wsp)).map(|x| x.is_some()),
         p_regular_tag_inner("#}"),
     );
-    let ((left, expr, tag, right), full_line) = p_tag_line("{#", p_inner, "#}")
-        .with_taken()
-        .with_span()
-        .map(|((tag, line), span)| (tag, Sp::new(span, line)))
+    let (tagged_line, expr) = p_tag_line("{#", p_inner, "#}")
         .context(StrContext::Expected("line with a next-line tag".into()))
         .parse_next(input)?;
     let next_line = till_line_ending
         .context(StrContext::Expected("Another line".into()))
         .parse_next(input)?;
     Ok(Element::NextLine {
-        line: TaggedLine {
-            left,
-            tag,
-            right,
-            full_line,
-        },
+        tagged_line,
         is_if: expr.content().0,
         expr: expr.map(|x| x.1),
         next_line,
@@ -217,19 +200,9 @@ fn p_inline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
         p_regular_tag_inner(">}"),
     )
         .context(lbl("tag-inner"));
-    let ((left, expr, tag, right), full_line) = p_tag_line("{<", p_inner, ">}")
-        .with_taken()
-        .with_span()
-        .map(|((tag, line), span)| (tag, Sp::new(span, line)))
-        .parse_next(input)?;
-
+    let (tagged_line, expr) = p_tag_line("{<", p_inner, ">}").parse_next(input)?;
     Ok(Element::Inline {
-        line: TaggedLine {
-            left,
-            tag,
-            right,
-            full_line,
-        },
+        line: tagged_line,
         is_if: expr.content().0,
         expr: expr.map(|x| x.1),
     })
@@ -241,7 +214,7 @@ fn p_multiline_body<'a>(input: &mut Input<'a>) -> PResult<Vec<Element<'a>>> {
         repeat_till(
             0..,
             p_element,
-            peek(p_tagged_line(
+            peek(p_tag_line(
                 "{%",
                 alt((
                     "end",
@@ -257,22 +230,14 @@ fn p_multiline_body<'a>(input: &mut Input<'a>) -> PResult<Vec<Element<'a>>> {
 }
 
 fn p_multiline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
-    let ((left, expr, tag, right), full_line) = p_tag_line("{%", p_regular_tag_inner("%}"), "%}")
-        .with_taken()
-        .with_span()
-        .map(|((tag, line), span)| (tag, Sp::new(span, line)))
-        .parse_next(input)?;
+    let (tagged_line, expr) =
+        p_tag_line("{%", p_regular_tag_inner("%}"), "%}").parse_next(input)?;
     let elements = p_multiline_body.parse_next(input)?;
-    let (end, _end_expr) = p_tagged_line("{%", "end", "%}").parse_next(input)?;
+    let (end, _end_expr) = p_tag_line("{%", "end", "%}").parse_next(input)?;
 
     Ok(Element::MultiLine {
         block: Block {
-            line: TaggedLine {
-                left,
-                tag,
-                right,
-                full_line,
-            },
+            tagged_line,
             expr,
             body: elements,
         },
@@ -281,22 +246,11 @@ fn p_multiline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
 }
 
 fn p_multiline_block_starting_with<'a, Expr>(
-    start_p: impl winnow::Parser<Input<'a>, (&'a str, Expr, &'a str, &'a str), ContextError>,
+    start_p: impl winnow::Parser<Input<'a>, (TaggedLine<'a>, Expr), ContextError>,
 ) -> impl winnow::Parser<Input<'a>, Block<'a, Expr>, ContextError> {
-    let p = (
-        start_p
-            .with_taken()
-            .with_span()
-            .map(|((tag, line), span)| (tag, Sp::new(span, line))),
-        p_multiline_body,
-    );
-    let p = p.map(|(((left, expr, tag, right), full_line), body)| Block {
-        line: TaggedLine {
-            left,
-            tag,
-            right,
-            full_line,
-        },
+    let p = (start_p, p_multiline_body);
+    let p = p.map(|((tagged_line, expr), body)| Block {
+        tagged_line,
         expr,
         body,
     });
@@ -304,27 +258,23 @@ fn p_multiline_block_starting_with<'a, Expr>(
 }
 
 fn p_conditional_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
+    let p_if = p_multiline_block_starting_with::<Sp<&'a str>>(p_tag_line(
+        "{%",
+        preceded(("if", wsp), p_regular_tag_inner("%}")),
+        "%}",
+    ));
+    let p_elif = p_multiline_block_starting_with::<Sp<&'a str>>(p_tag_line(
+        "{%",
+        preceded(("elif", wsp), p_regular_tag_inner("%}")),
+        "%}",
+    ));
+    let p_else = p_multiline_block_starting_with(p_tag_line("{%", "else".void(), "%}"));
+    let p_end = terminated(p_tag_line("{%", "end", "%}"), opt(line_ending));
     let (if_body, elif_bodies, else_block, end_line): (_, Vec<_>, Option<Block<'a, _>>, _) = (
-        p_multiline_block_starting_with::<Sp<&'a str>>(p_tag_line(
-            "{%",
-            preceded(("if", wsp), p_regular_tag_inner("%}")),
-            "%}",
-        ))
-        .context(lbl("if block")),
-        repeat(
-            0..,
-            p_multiline_block_starting_with::<Sp<&'a str>>(p_tag_line(
-                "{%",
-                preceded(("elif", wsp), p_regular_tag_inner("%}")),
-                "%}",
-            ))
-            .context(lbl("elif block")),
-        ),
-        opt(p_multiline_block_starting_with::<()>(
-            p_tag_line("{%", "else", "%}").map(|(l, _, t, r)| (l, (), t, r)),
-        )
-        .context(lbl("else block"))),
-        terminated(p_tagged_line("{%", "end", "%}"), opt(line_ending)),
+        p_if.context(lbl("if block")),
+        repeat(0.., p_elif.context(lbl("elif block"))),
+        opt(p_else.context(lbl("else block"))),
+        p_end.context(exp("end tag")),
     )
         .context(lbl("conditional element"))
         .parse_next(input)?;
@@ -334,7 +284,7 @@ fn p_conditional_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     blocks.extend(elif_bodies.into_iter());
     Ok(Element::Conditional {
         blocks,
-        else_block,
+        else_block: else_block.map(|x| x.map_expr(|_| ())),
         end: end_line.0,
     })
 }
@@ -347,8 +297,13 @@ fn wsp(input: &mut Input<'_>) -> PResult<()> {
     winnow::ascii::space0.void().parse_next(input)
 }
 
+/// Create a [`StrContext::Label`].
 fn lbl(s: &'static str) -> StrContext {
     StrContext::Label(s)
+}
+/// Create a [`StrContext::Expected`] with a [`winnow::error::StrContextValue::Description`].
+fn exp(s: &'static str) -> StrContext {
+    StrContext::Expected(winnow::error::StrContextValue::Description(s))
 }
 
 #[cfg(test)]
@@ -365,8 +320,8 @@ mod test {
     use winnow::Parser as _;
 
     use crate::templating::parser::{
-        p_conditional_element, p_multiline_element, p_nextline_element, p_tagged_line,
-        parse_document, Element, Sp, TaggedLine,
+        p_conditional_element, p_multiline_element, p_nextline_element, parse_document, Element,
+        Sp, TaggedLine,
     };
 
     use super::{new_input, p_inline_element, p_tag_line};
@@ -396,14 +351,14 @@ mod test {
         assert_matches!(
             p_nextline_element(&mut input)?,
             Element::NextLine {
-                line,
+                tagged_line,
                 expr,
                 is_if: false,
                 next_line: "foo"
             } =>{
-                 assert_eq!(*line.full_line.content(), "/* {# x #} */\n");
-                 assert_eq!(line.left, "/* ");
-                 assert_eq!(line.right, " */\n");
+                 assert_eq!(*tagged_line.full_line.content(), "/* {# x #} */\n");
+                 assert_eq!(tagged_line.left, "/* ");
+                 assert_eq!(tagged_line.right, " */\n");
                  assert_eq!(*expr.content(), "x ");
             }
         );
@@ -413,11 +368,11 @@ mod test {
     fn test_parse_end() -> TestResult {
         let input = new_input("a{% end %}b");
         assert_matches!(p_tag_line("{%", "end", "%}").parse(input.clone())?,
-            ("a", expr, _, "b") =>{
+            (TaggedLine{left: "a", right: "b", ..}, expr) => {
                  assert_eq!(*expr.content(), "end");
             }
         );
-        assert_matches!(p_tagged_line("{%", "end", "%}").parse(input.clone())?,
+        assert_matches!(p_tag_line("{%", "end", "%}").parse(input.clone())?,
             (TaggedLine { left: "a", right: "b", tag: "{% end %}", full_line }, expr) =>{
                 assert_eq!(*full_line.content(), "a{% end %}b");
                  assert_eq!(*expr.content(), "end");
@@ -432,9 +387,9 @@ mod test {
         assert_matches!(
             p_multiline_element(&mut input)?,
             Element::MultiLine { block, end } =>{
-                 assert_eq!(*block.line.full_line.content(), "/* {% test %} */\n");
-                 assert_eq!(block.line.left, "/* ");
-                 assert_eq!(block.line.right, " */\n");
+                 assert_eq!(*block.tagged_line.full_line.content(), "/* {% test %} */\n");
+                 assert_eq!(block.tagged_line.left, "/* ");
+                 assert_eq!(block.tagged_line.right, " */\n");
                  assert_eq!(*block.expr.content(), "test ");
                  assert_eq!(*end.full_line.content(), "/* {% end %} */");
             }
@@ -457,13 +412,13 @@ mod test {
         assert_matches!(
             p_conditional_element(&mut input)?,
             Element::Conditional { blocks, else_block: Some(els), end } =>{
-                 assert_eq!(*blocks[0].line.full_line.content(), "// {% if foo %}\n");
+                 assert_eq!(*blocks[0].tagged_line.full_line.content(), "// {% if foo %}\n");
                  assert_eq!(*blocks[0].expr.content(), "foo ");
                  assert_matches!(blocks[0].body[0], Element::Plain(Sp{ content: "thing\n", .. }));
                  assert_matches!(blocks[0].body[1], Element::Plain(Sp{ content: "thang\n", .. }));
-                 assert_eq!(*blocks[1].line.full_line.content(), "// {% elif bar %}\n");
-                 assert_eq!(*blocks[2].line.full_line.content(), "// {% elif baz %}\n");
-                 assert_eq!(*els.line.full_line.content(), "// {% else %}\n");
+                 assert_eq!(*blocks[1].tagged_line.full_line.content(), "// {% elif bar %}\n");
+                 assert_eq!(*blocks[2].tagged_line.full_line.content(), "// {% elif baz %}\n");
+                 assert_eq!(*els.tagged_line.full_line.content(), "// {% else %}\n");
                  assert_eq!(*end.full_line.content(), "// {% end %}\n");
             }
         );
@@ -481,7 +436,7 @@ mod test {
         assert_matches!(
             p_conditional_element(&mut input)?,
             Element::Conditional { blocks, else_block: None, .. } =>{
-                 assert_eq!(*blocks[0].line.full_line.content(), "// {% if foo %}\n");
+                 assert_eq!(*blocks[0].tagged_line.full_line.content(), "// {% if foo %}\n");
                  assert_eq!(*blocks[0].expr.content(), "foo ");
                  assert_matches!(blocks[0].body[0], Element::Conditional {..});
             }
@@ -500,14 +455,14 @@ mod test {
         assert_matches!(
             &result[0],
             Element::NextLine {
-                line,
+                tagged_line,
                 expr,
                 is_if: false,
                 next_line: "value = 'foo'"
             } =>{
-                 assert_eq!(*line.full_line.content(), "# {# replace(`'.*'`, `'{data.value}'`) #}\n");
-                 assert_eq!(line.left, "# ");
-                 assert_eq!(line.right, "\n");
+                 assert_eq!(*tagged_line.full_line.content(), "# {# replace(`'.*'`, `'{data.value}'`) #}\n");
+                 assert_eq!(tagged_line.left, "# ");
+                 assert_eq!(tagged_line.right, "\n");
                  assert_eq!(*expr.content(), "replace(`'.*'`, `'{data.value}'`) ");
             }
         );

@@ -11,21 +11,34 @@ use super::{
 /// `Expr` should either be `Sp<&'a str>` or `()`.
 #[derive(Debug, Eq, PartialEq)]
 pub struct Block<'a, Expr = Sp<&'a str>> {
-    pub line: TaggedLine<'a>,
+    /// The full line including the tag
+    pub tagged_line: TaggedLine<'a>,
     pub expr: Expr,
     pub body: Vec<Element<'a>>,
+}
+
+impl<'a, Expr> Block<'a, Expr> {
+    pub fn map_expr<T>(self, f: impl FnOnce(Expr) -> T) -> Block<'a, T> {
+        Block {
+            tagged_line: self.tagged_line,
+            expr: f(self.expr),
+            body: self.body,
+        }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Element<'a> {
     Plain(Sp<&'a str>),
     Inline {
+        /// The full line including the tag
         line: TaggedLine<'a>,
         expr: Sp<&'a str>,
         is_if: bool,
     },
     NextLine {
-        line: TaggedLine<'a>,
+        /// The full line including the tag
+        tagged_line: TaggedLine<'a>,
         expr: Sp<&'a str>,
         next_line: &'a str,
         is_if: bool,
@@ -63,7 +76,7 @@ impl<'a> Element<'a> {
                 )),
             },
             Element::NextLine {
-                line,
+                tagged_line: line,
                 expr,
                 next_line,
                 is_if,
@@ -86,7 +99,7 @@ impl<'a> Element<'a> {
                 let rendered_body = render_elements(render_ctx, eval_ctx, &block.body)?;
                 Ok(format!(
                     "{}{}{}",
-                    block.line.full_line.as_str(),
+                    block.tagged_line.full_line.as_str(),
                     &run_transformation_expr(eval_ctx, &rendered_body, block.expr.as_str())?,
                     end.full_line.as_str(),
                 ))
@@ -107,13 +120,13 @@ impl<'a> Element<'a> {
                     had_true = had_true || expr_true;
 
                     let rendered_body = render_elements(render_ctx, eval_ctx, &block.body)?;
-                    output.push_str(block.line.full_line.as_str());
+                    output.push_str(block.tagged_line.full_line.as_str());
                     output.push_str(&render_ctx.string_toggled(&rendered_body, expr_true));
                 }
                 if let Some(block) = else_block {
                     let expr_true = !had_true;
                     let rendered_body = render_elements(render_ctx, eval_ctx, &block.body)?;
-                    output.push_str(block.line.full_line.as_str());
+                    output.push_str(block.tagged_line.full_line.as_str());
                     output.push_str(&render_ctx.string_toggled(&rendered_body, expr_true));
                     output.push_str(end.full_line.as_str());
                 }
