@@ -37,6 +37,12 @@ struct Args {
 enum Command {
     /// Initialize the yolk directory
     Init,
+    /// Show the current state of your yolk eggs
+    Status,
+    /// Make sure you don't accidentally commit your local egg states
+    ///
+    /// This renames `.git` to `.yolk_git` to ensure that git interaction happens through the yolk CLI
+    Safeguard,
     /// Deploy an egg
     Deploy { name: String },
     /// Evaluate an expression like it would be done in a template
@@ -118,6 +124,19 @@ fn run_command(args: Args) -> Result<()> {
     let yolk = Yolk::new(yolk_paths);
     match &args.command {
         Command::Init => yolk.init_yolk()?,
+        Command::Safeguard => yolk.paths().safeguard_git_dir()?,
+        Command::Status => {
+            yolk.paths().check()?;
+            if yolk.paths().active_yolk_git_dir()? == yolk.paths().yolk_default_git_path() {
+                println!("Yolk git is not Safeguarded. It is recommended to run `yolk safeguard`.");
+            }
+            println!("Git state:");
+            yolk.paths()
+                .start_git_command_builder()?
+                .args(&["status", "--short"])
+                .status()
+                .into_diagnostic()?;
+        }
         Command::Deploy { name: egg } => yolk.deploy_egg(egg)?,
         Command::Add { name: egg, path } => yolk.add_to_egg(egg, path)?,
         Command::List => {
@@ -150,15 +169,9 @@ fn run_command(args: Args) -> Result<()> {
         }
         Command::Git { command } => {
             yolk.with_canonical_state(|| {
-                std::process::Command::new("git")
+                yolk.paths()
+                    .start_git_command_builder()?
                     .args(command)
-                    .args(&[
-                        "--git-dir",
-                        &yolk.paths().yolk_internal_path().to_string_lossy(),
-                        "--work-tree",
-                        &yolk.paths().root_path().to_string_lossy(),
-                    ])
-                    .current_dir(yolk.paths().root_path())
                     .status()
                     .into_diagnostic()?;
                 Ok(())

@@ -25,6 +25,7 @@ impl Yolk {
         self.yolk_paths.create()?;
         Ok(())
     }
+
     pub fn paths(&self) -> &YolkPaths {
         &self.yolk_paths
     }

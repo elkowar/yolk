@@ -15,6 +15,11 @@ const DEFAULT_LUA: &str = indoc::indoc! {r#"
     }
 "#};
 
+const DEFAULT_GITIGNORE: &str = indoc::indoc! {r#"
+    # Ignore the yolk git directory
+    /.yolk_git
+"#};
+
 pub struct YolkPaths {
     /// Path to the yolk directory.
     root_path: PathBuf,
@@ -86,19 +91,66 @@ impl YolkPaths {
         }
         fs_err::create_dir_all(path).into_diagnostic()?;
         fs_err::create_dir_all(self.eggs_dir_path()).into_diagnostic()?;
+        fs_err::write(self.root_path().join(".gitignore"), DEFAULT_GITIGNORE).into_diagnostic()?;
         fs_err::write(self.script_path(), DEFAULT_LUA).into_diagnostic()?;
 
         Ok(())
     }
 
+    /// Safeguard git directory by renaming it to `.yolk_git`
+    pub fn safeguard_git_dir(&self) -> Result<()> {
+        if self.root_path().join(".git").exists() {
+            if self.yolk_safeguarded_git_path().exists() {
+                miette::bail!(
+                    help = "Safeguarded Yolk renames .git to .yolk_git to ensure you don't accidentally commit without yolks processing",
+                    "Yolk directory contains both a .git directory and a .yolk_git directory"
+                );
+            } else {
+                fs_err::rename(
+                    self.root_path().join(".git"),
+                    self.yolk_safeguarded_git_path(),
+                )
+                .into_diagnostic()?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Start an invocation of the `git` command with the `--git-dir` and `--work-tree` set to the yolk git and root path.
+    pub fn start_git_command_builder(&self) -> Result<std::process::Command> {
+        let mut cmd = std::process::Command::new("git");
+        cmd.current_dir(self.root_path()).args(&[
+            "--git-dir",
+            &self.active_yolk_git_dir()?.to_string_lossy(),
+            "--work-tree",
+            &self.root_path().to_string_lossy(),
+        ]);
+        Ok(cmd)
+    }
     pub fn root_path(&self) -> &std::path::Path {
         &self.root_path
     }
     pub fn home_path(&self) -> &std::path::Path {
         &self.home
     }
-    pub fn yolk_internal_path(&self) -> PathBuf {
-        self.root_path.join(".internal")
+    pub fn yolk_default_git_path(&self) -> PathBuf {
+        self.root_path.join(".git")
+    }
+    pub fn yolk_safeguarded_git_path(&self) -> PathBuf {
+        self.root_path.join(".yolk_git")
+    }
+    /// Return the path to the active git directory,
+    /// which is either the [`yolk_default_git_path`] (`.git`) or the [`yolk_safeguarded_git_path`] (`.yolk_git`) if it exists.
+    pub fn active_yolk_git_dir(&self) -> Result<PathBuf> {
+        let default_git_dir = self.yolk_default_git_path();
+        let safeguarded_git_dir = self.yolk_safeguarded_git_path();
+        if safeguarded_git_dir.exists() {
+            Ok(safeguarded_git_dir)
+        } else if default_git_dir.exists() {
+            Ok(default_git_dir)
+        } else {
+            miette::bail!("No git directory initialized")
+        }
     }
     pub fn script_path(&self) -> PathBuf {
         self.root_path.join("yolk.lua")
@@ -109,7 +161,6 @@ impl YolkPaths {
     pub fn egg_path(&self, egg_name: &str) -> PathBuf {
         self.eggs_dir_path().join(egg_name)
     }
-
     pub fn get_egg(&self, name: &str) -> Result<Egg> {
         Egg::open(self.home.clone(), self.egg_path(name))
     }
