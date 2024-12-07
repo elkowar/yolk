@@ -128,8 +128,8 @@ impl<'a> Element<'a> {
                     let rendered_body = render_elements(render_ctx, eval_ctx, &block.body)?;
                     output.push_str(block.tagged_line.full_line.as_str());
                     output.push_str(&render_ctx.string_toggled(&rendered_body, expr_true));
-                    output.push_str(end.full_line.as_str());
                 }
+                output.push_str(end.full_line.as_str());
                 Ok(output)
             }
         }
