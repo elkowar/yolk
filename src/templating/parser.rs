@@ -17,10 +17,16 @@ type Input<'a> = winnow::Located<&'a str>;
 // type Input<'a> = winnow::stream::Recoverable<winnow::Located<&'a str>, ContextError>;
 type PResult<T> = winnow::PResult<T, ContextError>;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Eq, PartialEq)]
 pub struct Sp<T> {
     range: Range<usize>,
     content: T,
+}
+
+impl<T: std::fmt::Debug> std::fmt::Debug for Sp<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{:?}]{:?}", self.range, self.content)
+    }
 }
 
 impl<'a> Sp<&'a str> {
@@ -56,7 +62,6 @@ pub struct TaggedLine<'a> {
     pub full_line: Sp<&'a str>,
 }
 
-/// This just generates a single report, looking at the first error.
 /// This is imperfect...
 /// TODO: make this better
 fn report_from_err(
@@ -124,7 +129,7 @@ fn p_plain_line_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
 // TODO: try replacing this with using and_then for parsing the inner part, which would allow us to avoid having to provide the #} to the p_regular_tag_inner
 fn p_regular_tag_inner<'a>(end: &'a str) -> impl winnow::Parser<Input<'a>, &'a str, ContextError> {
     trace("p_regular_tag_inner", move |i: &mut _| {
-        repeat_till(0.., (not(line_ending), not(end), any), peek(end))
+        repeat_till(1.., (not(line_ending), not(end), any), peek(end))
             .map(|(_, _): ((), _)| ())
             .context(lbl("tag-content"))
             .take()
@@ -134,14 +139,14 @@ fn p_regular_tag_inner<'a>(end: &'a str) -> impl winnow::Parser<Input<'a>, &'a s
 
 /// p_tag := <start> <p_inner> <end>
 fn p_tag<'a, T>(
-    start: &'a str,
+    start: impl winnow::Parser<Input<'a>, &'a str, ContextError>,
     p_inner: impl winnow::Parser<Input<'a>, T, ContextError>,
-    end: &'a str,
+    end: impl winnow::Parser<Input<'a>, &'a str, ContextError>,
 ) -> impl winnow::Parser<Input<'a>, Sp<T>, ContextError> {
     (delimited(
         start,
         delimited(wss, p_inner.with_span(), wss),
-        cut_err(literal(end)),
+        cut_err(end),
     ))
     .context(lbl("tag"))
     .map(|(s, span)| Sp::new(span, s))
@@ -150,9 +155,9 @@ fn p_tag<'a, T>(
 /// p_tag_line := <start> <p_inner> <right>
 /// returns left, result-of-p_inner, tag, right
 fn p_tag_line<'a, T>(
-    start: &'a str,
+    start: impl winnow::Parser<Input<'a>, &'a str, ContextError> + Copy,
     p_inner: impl winnow::Parser<Input<'a>, T, ContextError>,
-    end: &'a str,
+    end: impl winnow::Parser<Input<'a>, &'a str, ContextError>,
 ) -> impl winnow::Parser<Input<'a>, (TaggedLine<'a>, Sp<T>), ContextError> {
     let left_p = repeat_till(0.., (not(line_ending), not(start), any), peek(start))
         .map(|(_, _): ((), _)| ())
@@ -177,7 +182,7 @@ fn p_tag_line<'a, T>(
 
 fn p_nextline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     let p_inner = (
-        opt((literal("if"), wsp)).map(|x| x.is_some()),
+        cut_err(opt((literal("if"), wsp))).map(|x| x.is_some()),
         p_regular_tag_inner("#}"),
     );
     let (tagged_line, expr) = p_tag_line("{#", p_inner, "#}")
@@ -269,12 +274,12 @@ fn p_conditional_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
         "%}",
     ));
     let p_else = p_multiline_block_starting_with(p_tag_line("{%", "else".void(), "%}"));
-    let p_end = terminated(p_tag_line("{%", "end", "%}"), opt(line_ending));
+    let p_end = terminated(p_tag_line("{%", "end", "%}"), opt(line_ending)).complete_err();
     let (if_body, elif_bodies, else_block, end_line): (_, Vec<_>, Option<Block<'a, _>>, _) = (
         p_if.context(lbl("if block")),
-        repeat(0.., p_elif.context(lbl("elif block"))),
-        opt(p_else.context(lbl("else block"))),
-        p_end.context(exp("end tag")),
+        cut_err(repeat(0.., p_elif.context(lbl("elif block")))),
+        cut_err(opt(p_else.context(lbl("else block")))),
+        cut_err(p_end.context(exp("end tag"))),
     )
         .context(lbl("conditional element"))
         .parse_next(input)?;
@@ -468,4 +473,19 @@ mod test {
         );
         Ok(())
     }
+
+    // #[test]
+    // fn test_fuck() -> TestResult {
+    //     let input = "{% if %}\na{% end %}b\na";
+    //     let mut input = new_input(input);
+    //     let result = parse_document(&mut input)?;
+    //     dbg!(result);
+
+    //     // let input = "{% if f %}\n";
+    //     // let mut input = new_input(input);
+    //     // let result = parse_document(&mut input)?;
+    //     // dbg!(result);
+    //     // panic!();
+    //     Ok(())
+    // }
 }
