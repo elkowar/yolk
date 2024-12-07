@@ -42,6 +42,7 @@ pub enum Element<'a> {
 }
 
 impl<'a> Element<'a> {
+    #[allow(unused)]
     pub fn try_from_str(s: &'a str) -> Result<Self> {
         parser::parse_element(s)
     }

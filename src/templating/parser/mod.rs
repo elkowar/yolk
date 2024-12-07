@@ -40,6 +40,7 @@ impl<'a, T> Sp<T> {
         &self.content
     }
 
+    #[allow(unused)]
     fn range(&self) -> Range<usize> {
         self.range.clone()
     }
