@@ -5,7 +5,7 @@ use regex::Regex;
 
 use crate::templating::COMMENT_START;
 
-use super::{Block, Element};
+use super::element::{Block, Element};
 
 const PREFIX_COMMENT_SYMBOLS: [&str; 5] = ["//", "#", "--", ";", "%"];
 const CIRCUMFIX_COMMENT_SYMBOLS: [(&str, &str); 3] = [("/*", "*/"), ("<!--", "-->"), ("{-", "-}")];
@@ -143,7 +143,7 @@ fn create_regex(s: String) -> Result<Regex, regex::Error> {
 mod test {
     use testresult::TestResult;
 
-    use crate::templating::parser::Element;
+    use crate::templating::element::Element;
 
     use super::CommentStyle;
 

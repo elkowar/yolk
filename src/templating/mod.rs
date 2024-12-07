@@ -1,3 +1,4 @@
+pub mod comment_style;
 pub mod document;
 pub mod element;
 mod parser;

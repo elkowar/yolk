@@ -1,9 +1,6 @@
 use crate::eval_ctx::EvalCtx;
 
-use super::{
-    element,
-    parser::{self, comment_style::CommentStyle},
-};
+use super::{comment_style::CommentStyle, element, parser};
 
 use miette::Result;
 

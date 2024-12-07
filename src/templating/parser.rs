@@ -13,8 +13,6 @@ use winnow::{
 
 use super::element::{Block, Element};
 
-pub mod comment_style;
-
 type Input<'a> = winnow::Located<&'a str>;
 // type Input<'a> = winnow::stream::Recoverable<winnow::Located<&'a str>, ContextError>;
 type PResult<T> = winnow::PResult<T, ContextError>;
