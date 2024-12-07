@@ -321,7 +321,7 @@ mod test {
         assert::PathAssert,
         prelude::{FileWriteStr, PathChild, PathCreateDir},
     };
-    use predicates::path::exists;
+    use predicates::{path::exists, prelude::PredicateBooleanExt};
     use testresult::TestResult;
 
     use crate::yolk::Yolk;
@@ -366,6 +366,19 @@ mod test {
         fs_err::remove_file(root.child("content/dir_old/file1"))?;
         assert_eq!(false, egg.is_deployed()?);
 
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_safeguard() -> TestResult {
+        let root = assert_fs::TempDir::new().unwrap();
+        let yolk_paths = YolkPaths::new(root.child("yolk").to_path_buf(), root.to_path_buf());
+        yolk_paths.create()?;
+        let yolk = Yolk::new(yolk_paths);
+        root.child("yolk/.git").create_dir_all()?;
+        yolk.paths().safeguard_git_dir()?;
+        root.child("yolk/.git").assert(exists().not());
+        root.child("yolk/.yolk_git").assert(exists());
         Ok(())
     }
 }
