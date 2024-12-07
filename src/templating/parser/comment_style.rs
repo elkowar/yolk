@@ -5,7 +5,7 @@ use regex::Regex;
 
 use crate::templating::COMMENT_START;
 
-use super::linewise::ParsedLine;
+use super::{Block, Element};
 
 const PREFIX_COMMENT_SYMBOLS: [&str; 5] = ["//", "#", "--", ";", "%"];
 const CIRCUMFIX_COMMENT_SYMBOLS: [(&str, &str); 3] = [("/*", "*/"), ("<!--", "-->"), ("{-", "-}")];
@@ -18,13 +18,19 @@ pub enum CommentStyle {
 
 impl CommentStyle {
     /// Try to infer the CommentStyle from a line
-    pub fn try_infer(line: &ParsedLine<'_>) -> Option<Self> {
-        let (left, right) = match line {
-            ParsedLine::MultiLineTag { line, .. }
-            | ParsedLine::NextLineTag { line, .. }
-            | ParsedLine::InlineTag { line, .. } => (line.left, line.right),
-            ParsedLine::Plain(_) => return None,
+    pub fn try_infer(element: &Element<'_>) -> Option<Self> {
+        let line = match &element {
+            Element::Inline { line, .. }
+            | Element::NextLine { line, .. }
+            | Element::MultiLine {
+                block: Block { line, .. },
+                ..
+            } => &line,
+            Element::Conditional { blocks, .. } => &blocks.first()?.line,
+            Element::Plain(_) => return None,
+            Element::Eof => return None,
         };
+        let (left, right) = (line.left, line.right);
 
         for (prefix, postfix) in &CIRCUMFIX_COMMENT_SYMBOLS {
             if left.trim_end().ends_with(prefix) && right.trim_start().starts_with(postfix) {
@@ -119,7 +125,7 @@ fn create_regex(s: String) -> Result<Regex, regex::Error> {
 mod test {
     use testresult::TestResult;
 
-    use crate::templating::parser::linewise::ParsedLine;
+    use crate::templating::parser::Element;
 
     use super::CommentStyle;
 
@@ -170,11 +176,11 @@ mod test {
     #[test]
     pub fn test_infer_comment_syntax() -> TestResult {
         assert_eq!(
-            CommentStyle::try_infer(&ParsedLine::try_from_str("# {# foo #}")?),
+            CommentStyle::try_infer(&Element::try_from_str("# {# foo #}")?),
             Some(CommentStyle::prefix("#"))
         );
         assert_eq!(
-            CommentStyle::try_infer(&ParsedLine::try_from_str("/* {# foo #} */")?),
+            CommentStyle::try_infer(&Element::try_from_str("/* {# foo #} */")?),
             Some(CommentStyle::circumfix("/*", "*/"))
         );
         Ok(())

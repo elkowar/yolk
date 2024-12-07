@@ -1,13 +1,11 @@
 use crate::eval_ctx::EvalCtx;
-use crate::templating::parser::linewise::ParsedLine;
 
 use super::{
     element,
-    parser::{comment_style::CommentStyle, document_parser::DocumentParser, Rule, YolkParser},
+    parser::{self, comment_style::CommentStyle},
 };
 
 use miette::{LabeledSpan, Result};
-use pest::Parser as _;
 
 #[derive(Debug)]
 pub struct Document<'a> {
@@ -37,24 +35,7 @@ impl<'a> Document<'a> {
     }
 
     pub fn parse_string(s: &'a str) -> Result<Self> {
-        let mut result_doc = YolkParser::parse(Rule::Document, s).map_err(pest_error_to_miette)?;
-        let result_lines = result_doc
-            .next()
-            .ok_or_else(|| miette::miette!("no document in document"))?;
-        let lines = result_lines
-            .into_inner()
-            .into_iter()
-            .map(ParsedLine::from_pair)
-            .collect();
-        let parser = DocumentParser::new(s, lines);
-        let elements = parser.parse()?;
-        // .map_err(|e| {
-        // let labels = match e.labels().and_then(|mut x| x.next()) {
-        //     Some(label) => vec![label],
-        //     None => vec![],
-        // };
-        // miette::miette!(labels = labels, "{e}")
-        // })
+        let elements = parser::parse_document(s)?;
         Ok(Self {
             elements,
             ..Default::default()
@@ -102,13 +83,13 @@ impl RenderContext {
     }
 }
 
-fn pest_error_to_miette(e: pest::error::Error<Rule>) -> miette::Report {
-    let span = LabeledSpan::at(
-        match e.location {
-            pest::error::InputLocation::Pos(x) => x..x,
-            pest::error::InputLocation::Span((x, y)) => x..y,
-        },
-        "here",
-    );
-    miette::miette!(labels = vec![span], "{e}")
-}
+// fn pest_error_to_miette(e: pest::error::Error<Rule>) -> miette::Report {
+//     let span = LabeledSpan::at(
+//         match e.location {
+//             pest::error::InputLocation::Pos(x) => x..x,
+//             pest::error::InputLocation::Span((x, y)) => x..y,
+//         },
+//         "here",
+//     );
+//     miette::miette!(labels = vec![span], "{e}")
+// }
