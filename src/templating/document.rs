@@ -43,9 +43,11 @@ impl<'a> Document<'a> {
         })
     }
 
+    #[allow(unused)]
     pub fn elements(&self) -> &[element::Element<'a>] {
         &self.elements
     }
+    #[allow(unused)]
     pub fn comment_style(&self) -> &CommentStyle {
         &self.comment_style
     }
