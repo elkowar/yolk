@@ -16,6 +16,12 @@ pub enum CommentStyle {
     Circumfix(String, String),
 }
 
+impl Default for CommentStyle {
+    fn default() -> Self {
+        CommentStyle::Prefix("#".to_string())
+    }
+}
+
 impl CommentStyle {
     /// Try to infer the CommentStyle from a line
     pub fn try_infer(element: &Element<'_>) -> Option<Self> {
@@ -42,6 +48,15 @@ impl CommentStyle {
         for prefix in &PREFIX_COMMENT_SYMBOLS {
             if left.trim_end().ends_with(prefix) {
                 return Some(CommentStyle::Prefix(prefix.to_string()));
+            }
+        }
+        None
+    }
+
+    pub fn try_infer_from_elements(elements: &[Element<'_>]) -> Option<Self> {
+        for e in elements {
+            if let Some(style) = Self::try_infer(e) {
+                return Some(style);
             }
         }
         None

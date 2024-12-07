@@ -38,9 +38,10 @@ mod test {
     #[test]
     pub fn test_render_inline_conditional() -> TestResult {
         let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
+        // TODO: nested comment syntax is not supported everywhere, how do we deal with that?
         let doc = Document::parse_string("foo/* {< if false >} */")?;
         assert_eq!(
-            "#<yolk> foo/* {< if false >} */",
+            "/*<yolk> foo/* {< if false >} */*/",
             doc.render(&mut eval_ctx)?
         );
         Ok(())
@@ -51,7 +52,7 @@ mod test {
         let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
         let doc = Document::parse_string("/* {# if false #} */\nfoo\n")?;
         assert_eq!(
-            "/* {# if false #} */\n#<yolk> foo\n",
+            "/* {# if false #} */\n/*<yolk> foo*/\n",
             doc.render(&mut eval_ctx)?
         );
         Ok(())
@@ -73,11 +74,11 @@ mod test {
         assert_eq!(
             indoc::indoc! {r#"
                 /* {% if false %} */
-                #<yolk> foo
+                /*<yolk> foo*/
                 /* {% elif true %} */
                 bar
                 /* {% else %} */
-                #<yolk> bar
+                /*<yolk> bar*/
                 /* {% end %} */
             "#},
             doc.render(&mut eval_ctx)?
