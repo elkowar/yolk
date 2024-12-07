@@ -9,8 +9,8 @@ use miette::Result;
 
 #[derive(Debug)]
 pub struct Document<'a> {
-    pub(crate) comment_style: CommentStyle,
-    pub(crate) elements: Vec<element::Element<'a>>,
+    comment_style: CommentStyle,
+    elements: Vec<element::Element<'a>>,
 }
 
 impl<'a> Default for Document<'a> {
@@ -36,10 +36,18 @@ impl<'a> Document<'a> {
 
     pub fn parse_string(s: &'a str) -> Result<Self> {
         let elements = parser::parse_document(s)?;
+        let comment_style = CommentStyle::try_infer_from_elements(&elements).unwrap_or_default();
         Ok(Self {
             elements,
-            ..Default::default()
+            comment_style,
         })
+    }
+
+    pub fn elements(&self) -> &[element::Element<'a>] {
+        &self.elements
+    }
+    pub fn comment_style(&self) -> &CommentStyle {
+        &self.comment_style
     }
 }
 
