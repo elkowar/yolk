@@ -28,7 +28,6 @@ impl CommentStyle {
             } => &line,
             Element::Conditional { blocks, .. } => &blocks.first()?.line,
             Element::Plain(_) => return None,
-            Element::Eof => return None,
         };
         let (left, right) = (line.left, line.right);
 
@@ -176,11 +175,11 @@ mod test {
     #[test]
     pub fn test_infer_comment_syntax() -> TestResult {
         assert_eq!(
-            CommentStyle::try_infer(&Element::try_from_str("# {# foo #}")?),
+            CommentStyle::try_infer(&Element::try_from_str("# {< foo >}")?),
             Some(CommentStyle::prefix("#"))
         );
         assert_eq!(
-            CommentStyle::try_infer(&Element::try_from_str("/* {# foo #} */")?),
+            CommentStyle::try_infer(&Element::try_from_str("/* {< foo >} */")?),
             Some(CommentStyle::circumfix("/*", "*/"))
         );
         Ok(())

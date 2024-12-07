@@ -1645,7 +1645,6 @@ dependencies = [
  "indoc",
  "miette",
  "mlua",
- "pest",
  "pest_derive",
  "predicates",
  "regex",
