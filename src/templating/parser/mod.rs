@@ -4,6 +4,7 @@ use pest_derive::Parser;
 pub mod comment_style;
 pub mod document_parser;
 pub mod linewise;
+pub mod winnow_p;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct TaggedLine<'a> {
