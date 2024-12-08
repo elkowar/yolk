@@ -1,6 +1,5 @@
 ---
 source: src/templating/parser.rs
-assertion_line: 540
 expression: "render_error(parse_document(\"{%f%}\\n{%else%}\\n{%end%}\").unwrap_err())"
 snapshot_kind: text
 ---
@@ -8,10 +7,10 @@ snapshot_kind: text
 
 Error: 
   × Expected valid element.
-   ╭─[file:1:6]
+   ╭─[file:2:3]
  1 │ {%f%}
-   ·      ┬
-   ·      ╰── here
  2 │ {%else%}
+   ·   ───┬───
+   ·      ╰── here
  3 │ {%end%}
    ╰────

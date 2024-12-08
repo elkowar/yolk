@@ -1,0 +1,27 @@
+---
+source: src/templating/parser.rs
+expression: "p_multiline_element(&mut new_input(\"/* {% test %} */\\nfoo\\n/* {% end %} */\"))?"
+snapshot_kind: text
+---
+MultiLine {
+    block: Block {
+        tagged_line: TaggedLine {
+            left: "/* ",
+            tag: "{% test %}",
+            right: " */\n",
+            full_line: [0..17]"/* {% test %} */\n",
+        },
+        expr: [6..11]"test ",
+        body: [
+            Plain(
+                [17..21]"foo\n",
+            ),
+        ],
+    },
+    end: TaggedLine {
+        left: "/* ",
+        tag: "{% end %}",
+        right: " */",
+        full_line: [21..36]"/* {% end %} */",
+    },
+}

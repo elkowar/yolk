@@ -1,15 +1,14 @@
 ---
 source: src/templating/parser.rs
-assertion_line: 546
 expression: "render_error(parse_document(\"{<if>}\").unwrap_err())"
 snapshot_kind: text
 ---
   × Failed to parse yolk template file
 
 Error: 
-  × An unspecified parse error occurred.
-   ╭─[file:1:6]
+  × Expected expression.
+   ╭─[file:1:4]
  1 │ {<if>}
-   ·      ┬
-   ·      ╰── here
+   ·    ┬
+   ·    ╰── here
    ╰────

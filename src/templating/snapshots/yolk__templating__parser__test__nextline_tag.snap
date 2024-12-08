@@ -1,0 +1,16 @@
+---
+source: src/templating/parser.rs
+expression: "p_nextline_element(&mut new_input(\"/* {# x #} */\\nfoo\"))?"
+snapshot_kind: text
+---
+NextLine {
+    tagged_line: TaggedLine {
+        left: "/* ",
+        tag: "{# x #}",
+        right: " */\n",
+        full_line: [0..14]"/* {# x #} */\n",
+    },
+    expr: [6..8]"x ",
+    next_line: "foo",
+    is_if: false,
+}

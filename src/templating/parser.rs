@@ -93,33 +93,21 @@ pub fn try_parse<'a, P: Parser<Input<'a>, T, YolkParseError>, T>(
 
 fn p_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     trace("peek any", peek(any)).parse_next(input)?;
-    // let p_with_tag = preceded(
-    //     trace("peek preceding text segment", peek(opt(p_text_segment))),
-    //     alt((
-    //         preceded(
-    //             peek("{#"),
-    //             p_nextline_element.context(lbl("nextline element")),
-    //         ),
-    //         preceded(peek("{<"), p_inline_element.context(lbl("inline element"))),
-    //         preceded(
-    //             peek("{%"),
-    //             alt((
-    //                 p_conditional_element.context(lbl("conditional element")),
-    //                 p_multiline_element.context(lbl("multiline element")),
-    //             )),
-    //         ),
-    //     )),
-    // );
-    alt((
+    Ok(alt((
         p_inline_element.context(lbl("inline element")),
         p_nextline_element.context(lbl("nextline element")),
         p_conditional_element.context(lbl("conditional element")),
         p_multiline_element.context(lbl("multiline element")),
-        // p_with_tag,
         p_plain_line_element.context(lbl("plain line")),
         fail.context(lbl("valid element")),
     ))
-    .parse_next(input)
+    // .resume_after(
+    //     repeat_till(1.., (not(line_ending), any), line_ending)
+    //         .map(|((), _)| ())
+    //         .void(),
+    // )
+    .parse_next(input)?)
+    // .unwrap_or_else(|| Element::Plain(Sp::new(0..0, ""))))
 }
 
 fn p_plain_line_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
@@ -153,15 +141,13 @@ fn test_p_text_segment() -> TestResult {
     Ok(())
 }
 
-// TODO: try replacing this with using and_then for parsing the inner part,
-// which would allow us to avoid having to provide the #} to the p_regular_tag_inner
 fn p_regular_tag_inner<'a>(
     end: &'a str,
 ) -> impl winnow::Parser<Input<'a>, &'a str, YolkParseError> {
     trace("p_regular_tag_inner", move |i: &mut _| {
         repeat_till(1.., (not(line_ending), not(end), any), peek(end))
             .map(|(_, _): ((), _)| ())
-            .context(lbl("tag-content"))
+            .context(lbl("expression"))
             .take()
             .parse_next(i)
     })
@@ -247,7 +233,7 @@ fn p_inline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
         p_regular_tag_inner(">}"),
     )
         .context(lbl("tag-inner"));
-    let (tagged_line, expr) = p_tag_line("{<", p_inner, ">}", false).parse_next(input)?;
+    let (tagged_line, expr) = p_tag_line("{<", cut_err(p_inner), ">}", false).parse_next(input)?;
     Ok(Element::Inline {
         line: tagged_line,
         is_if: expr.content().0,
@@ -262,11 +248,17 @@ fn p_multiline_body<'a>(
     repeat_till(0.., p_element, end_tag_line)
         .context(lbl("end of block"))
         .map(|(elements, _)| elements)
+        .resume_after(
+            (repeat_till(0.., any, peek(p_tag_line("{%", "end", "%}", false))))
+                .map(|((), _)| ())
+                .void(),
+        )
+        .map(|x| x.unwrap_or_default())
 }
 
 fn p_multiline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     peek(any).parse_next(input)?;
-    let (tagged_line, expr) = alt((p_tag_line(
+    let (tagged_line, expr) = p_tag_line(
         "{%",
         // p_regular_tag_inner("%}"),
         // TODO: does this actually help?
@@ -276,17 +268,17 @@ fn p_multiline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
         ),
         "%}",
         true,
-    ),))
+    )
     .parse_next(input)?;
-    let elements = cut_err(p_multiline_body("end")).parse_next(input)?;
-    let (end, _end_expr) =
+    let body = cut_err(p_multiline_body("end")).parse_next(input)?;
+    let (end, _) =
         cut_err(p_tag_line("{%", "end", "%}", false).context("end tag")).parse_next(input)?;
 
     Ok(Element::MultiLine {
         block: Block {
             tagged_line,
             expr,
-            body: elements,
+            body,
         },
         end,
     })
@@ -296,8 +288,7 @@ fn p_multiline_block_starting_with<'a, Expr>(
     start_p: impl winnow::Parser<Input<'a>, (TaggedLine<'a>, Expr), YolkParseError>,
     block_p: impl winnow::Parser<Input<'a>, Vec<Element<'a>>, YolkParseError>,
 ) -> impl winnow::Parser<Input<'a>, Block<'a, Expr>, YolkParseError> {
-    //TODO: cut_err here?
-    let p = (start_p, block_p);
+    let p = (start_p, cut_err(block_p));
     let p = p.map(|((tagged_line, expr), body)| Block {
         tagged_line,
         expr,
@@ -335,7 +326,7 @@ fn p_conditional_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
         ))),
     );
     let p_else = p_multiline_block_starting_with(
-        p_tag_line("{%", "else".void(), "%}", true),
+        p_tag_line("{%", "else".void(), "%}", true).context("else tag"),
         p_multiline_body("end"),
     );
     let p_end = terminated(p_tag_line("{%", "end", "%}", false), opt(line_ending));
@@ -404,7 +395,7 @@ impl<T: Parser<I, O, E> + Sized, I: Stream + Location, O, E> ParserExt<I, O, E> 
 mod test {
     use assert_matches::assert_matches;
     use insta::assert_debug_snapshot;
-    use miette::{GraphicalReportHandler, IntoDiagnostic};
+    use miette::GraphicalReportHandler;
     use testresult::TestResult;
     use winnow::Parser as _;
 
@@ -426,72 +417,26 @@ mod test {
 
     #[test]
     fn test_inline_tag() -> TestResult {
-        let input = new_input("foo /* {< test >} */");
-        assert_matches!(
-            p_inline_element.parse(input)?,
-            Element::Inline {
-                line,
-                expr,
-                is_if: false
-            } =>{
-                 assert_eq!(*line.full_line.content(), "foo /* {< test >} */");
-                 assert_eq!(line.left, "foo /* ");
-                 assert_eq!(line.right, " */");
-                 assert_eq!(*expr.content(), "test ");
-            }
-        );
+        insta::assert_debug_snapshot!(p_inline_element.parse(new_input("foo /* {< test >} */"))?);
         Ok(())
     }
 
     #[test]
     fn test_nextline_tag() -> TestResult {
-        let mut input = new_input("/* {# x #} */\nfoo");
-        assert_matches!(
-            p_nextline_element(&mut input)?,
-            Element::NextLine {
-                tagged_line,
-                expr,
-                is_if: false,
-                next_line: "foo"
-            } =>{
-                 assert_eq!(*tagged_line.full_line.content(), "/* {# x #} */\n");
-                 assert_eq!(tagged_line.left, "/* ");
-                 assert_eq!(tagged_line.right, " */\n");
-                 assert_eq!(*expr.content(), "x ");
-            }
-        );
+        insta::assert_debug_snapshot!(p_nextline_element(&mut new_input("/* {# x #} */\nfoo"))?);
         Ok(())
     }
     #[test]
     fn test_parse_end() -> TestResult {
-        let input = new_input("a{% end %}b");
-        assert_matches!(p_tag_line("{%", "end", "%}", false).parse(input.clone())?,
-            (TaggedLine{left: "a", right: "b", ..}, expr) => {
-                 assert_eq!(*expr.content(), "end");
-            }
-        );
-        assert_matches!(p_tag_line("{%", "end", "%}", false).parse(input.clone())?,
-            (TaggedLine { left: "a", right: "b", tag: "{% end %}", full_line }, expr) =>{
-                assert_eq!(*full_line.content(), "a{% end %}b");
-                 assert_eq!(*expr.content(), "end");
-            }
-        );
+        assert_debug_snapshot!(p_tag_line("{%", "end", "%}", false).parse(new_input("a{% end %}b")));
         Ok(())
     }
 
     #[test]
     fn test_multiline_block() -> TestResult {
-        let mut input = new_input("/* {% test %} */\nfoo\n/* {% end %} */");
-        assert_matches!(
-            p_multiline_element(&mut input)?,
-            Element::MultiLine { block, end } =>{
-                 assert_eq!(*block.tagged_line.full_line.content(), "/* {% test %} */\n");
-                 assert_eq!(block.tagged_line.left, "/* ");
-                 assert_eq!(block.tagged_line.right, " */\n");
-                 assert_eq!(*block.expr.content(), "test ");
-                 assert_eq!(*end.full_line.content(), "/* {% end %} */");
-            }
-        );
+        assert_debug_snapshot!(p_multiline_element(&mut new_input(
+            "/* {% test %} */\nfoo\n/* {% end %} */"
+        ))?);
         Ok(())
     }
 
