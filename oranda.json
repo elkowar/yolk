@@ -7,6 +7,14 @@
   },
   "components": {
     "artifacts": {
+      "package_managers": {
+        "preferred": {
+          "crates.io": "cargo install yolk_dots --locked --profile=dist"
+        },
+        "additional": {
+          "binstall": "cargo binstall yolk_dots"
+        }
+      },
       "cargo_dist": true,
       "auto": true
     },

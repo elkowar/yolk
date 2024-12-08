@@ -1,5 +1,5 @@
 [package]
-name = "yolk_dots"
+name = "yolk-dots"
 authors = ["ElKowar <dev@elkowar.dev>"]
 description = "Templated dotfile management without template files"
 version = "0.0.7"
