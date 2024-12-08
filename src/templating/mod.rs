@@ -1,6 +1,7 @@
 pub mod comment_style;
 pub mod document;
 pub mod element;
+pub mod parse_error;
 mod parser;
 
 pub(crate) const COMMENT_START: &str = "<yolk> ";
@@ -106,10 +107,10 @@ mod test {
 
     #[test]
     pub fn test_render_replace_refuse_non_idempodent() -> TestResult {
-        let element = Document::parse_string("{# replace(`'.*'`, `a'a'`) #}\nfoo: 'original'\n")?;
+        let element = Document::parse_string("{# replace(`'.*'`, `a'a'`) #}\nfoo: 'original'")?;
         let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
         assert_eq!(
-            "{# replace(`'.*'`, `a'a'`) #}\nfoo: 'original'\n",
+            "{# replace(`'.*'`, `a'a'`) #}\nfoo: 'original'",
             element.render(&mut eval_ctx)?
         );
         Ok(())

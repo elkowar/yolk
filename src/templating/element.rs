@@ -1,5 +1,5 @@
 use crate::eval_ctx::EvalCtx;
-use miette::Result;
+use miette::{IntoDiagnostic, Result};
 
 use super::{
     document::RenderContext,
@@ -57,7 +57,7 @@ pub enum Element<'a> {
 impl<'a> Element<'a> {
     #[allow(unused)]
     pub fn try_from_str(s: &'a str) -> Result<Self> {
-        parser::parse_element(s)
+        parser::parse_element(s).into_diagnostic()
     }
 
     pub fn render(&self, render_ctx: &RenderContext, eval_ctx: &mut EvalCtx) -> Result<String> {

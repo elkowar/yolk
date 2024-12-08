@@ -1,0 +1,12 @@
+---
+source: src/templating/parser.rs
+expression: "p_text_segment.parse_peek(new_input(\"foo {% bar %} baz\"))?"
+snapshot_kind: text
+---
+(
+    "{% bar %} baz",
+    (
+        "{%",
+        "foo ",
+    ),
+)

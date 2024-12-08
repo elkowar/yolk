@@ -1,0 +1,35 @@
+---
+source: src/templating/parser.rs
+expression: "parse_document(\"{#f#}\")"
+snapshot_kind: text
+---
+Err(
+    YolkParseFailure {
+        input: NamedSource {
+            name: "file",
+            source: "<redacted>",
+            language: None,
+        ,
+        diagnostics: [
+            YolkParseDiagnostic {
+                input: NamedSource {
+                    name: "file",
+                    source: "<redacted>",
+                    language: None,
+                ,
+                span: SourceSpan {
+                    offset: SourceOffset(
+                        4,
+                    ),
+                    length: 1,
+                },
+                label: None,
+                help: None,
+                severity: Error,
+                kind: Context(
+                    "newline",
+                ),
+            },
+        ],
+    },
+)

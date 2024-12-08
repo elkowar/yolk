@@ -1,0 +1,14 @@
+---
+source: src/templating/parser.rs
+expression: "render_error(parse_document(\"{%f%}\").unwrap_err())"
+snapshot_kind: text
+---
+  × Failed to parse yolk template file
+
+Error: 
+  × Expected newline.
+   ╭─[file:1:5]
+ 1 │ {%f%}
+   ·     ┬
+   ·     ╰── here
+   ╰────

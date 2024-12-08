@@ -1,21 +1,27 @@
 use std::ops::Range;
 
+#[cfg(test)]
+use testresult::TestResult;
 use winnow::{
     ascii::{line_ending, till_line_ending},
     combinator::{
         alt, cut_err, delimited, eof, fail, not, opt, peek, preceded, repeat, repeat_till,
         terminated, trace,
     },
-    error::{ContextError, StrContext},
+    error::StrContext,
+    stream::{Location, Recoverable, Stream},
     token::{any, literal},
-    Located, Parser,
+    Located, Parser, RecoverableParser,
 };
 
-use super::element::{Block, Element};
+use super::{
+    element::{Block, Element},
+    parse_error::{YolkParseError, YolkParseFailure},
+};
 
-type Input<'a> = winnow::Located<&'a str>;
-// type Input<'a> = winnow::stream::Recoverable<winnow::Located<&'a str>, ContextError>;
-type PResult<T> = winnow::PResult<T, ContextError>;
+// type Input<'a> = winnow::Located<&'a str>;
+type Input<'a> = Recoverable<Located<&'a str>, YolkParseError>;
+type PResult<T> = winnow::PResult<T, YolkParseError>;
 
 #[derive(Eq, PartialEq)]
 pub struct Sp<T> {
@@ -62,72 +68,96 @@ pub struct TaggedLine<'a> {
     pub full_line: Sp<&'a str>,
 }
 
-/// This is imperfect...
-/// TODO: make this better
-fn report_from_err(
-    err: winnow::error::ParseError<Input<'_>, ContextError>,
-    input: &str,
-) -> miette::Report {
-    let message = err.inner().to_string();
-    let input = input.to_owned();
-    let start = err.offset();
-    // Assume the error span is only for the first `char`.
-    // Semantic errors are free to choose the entire span returned by `Parser::with_span`.
-    let end = (start + 1..)
-        .find(|e| input.is_char_boundary(*e))
-        .unwrap_or(start);
-
-    // lmao this is garbage, especially the help thingy
-    miette::MietteDiagnostic::new(message)
-        .with_labels(vec![miette::LabeledSpan::at(start..end, "here")])
-        .with_help(
-            err.inner()
-                .context()
-                .next()
-                .map(|x| x.to_string())
-                .unwrap_or_default(),
-        )
-        .into()
-}
-
-pub fn parse_document<'a>(s: &'a str) -> miette::Result<Vec<Element<'a>>> {
-    terminated(
-        repeat(0.., p_element),
-        repeat(0.., line_ending).map(|_: ()| ()),
-    )
-    .parse(Located::new(s))
-    .map_err(|e| report_from_err(e, s))
+pub fn parse_document<'a>(s: &'a str) -> Result<Vec<Element<'a>>, YolkParseFailure> {
+    let p = repeat(0.., p_element);
+    try_parse(p, s)
 }
 
 #[allow(unused)]
-pub fn parse_element<'a>(s: &'a str) -> miette::Result<Element<'a>> {
-    terminated(p_element, repeat(0.., line_ending).map(|_: ()| ()))
-        .parse(Located::new(s))
-        .map_err(|e| report_from_err(e, s))
+pub fn parse_element<'a>(s: &'a str) -> Result<Element<'a>, YolkParseFailure> {
+    let p = terminated(p_element, repeat(0.., line_ending).map(|_: ()| ()));
+    try_parse(p, s)
+}
+
+pub fn try_parse<'a, P: Parser<Input<'a>, T, YolkParseError>, T>(
+    mut parser: P,
+    input: &'a str,
+) -> Result<T, YolkParseFailure> {
+    let (_, maybe_val, errs) = parser.recoverable_parse(Located::new(input));
+    if let (Some(v), true) = (maybe_val, errs.is_empty()) {
+        Ok(v)
+    } else {
+        Err(YolkParseFailure::from_errs(errs, input))
+    }
 }
 
 fn p_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
+    trace("peek any", peek(any)).parse_next(input)?;
+    // let p_with_tag = preceded(
+    //     trace("peek preceding text segment", peek(opt(p_text_segment))),
+    //     alt((
+    //         preceded(
+    //             peek("{#"),
+    //             p_nextline_element.context(lbl("nextline element")),
+    //         ),
+    //         preceded(peek("{<"), p_inline_element.context(lbl("inline element"))),
+    //         preceded(
+    //             peek("{%"),
+    //             alt((
+    //                 p_conditional_element.context(lbl("conditional element")),
+    //                 p_multiline_element.context(lbl("multiline element")),
+    //             )),
+    //         ),
+    //     )),
+    // );
     alt((
+        p_inline_element.context(lbl("inline element")),
+        p_nextline_element.context(lbl("nextline element")),
         p_conditional_element.context(lbl("conditional element")),
         p_multiline_element.context(lbl("multiline element")),
-        p_nextline_element.context(lbl("nextline element")),
-        p_inline_element.context(lbl("inline element")),
+        // p_with_tag,
         p_plain_line_element.context(lbl("plain line")),
-        fail.context(exp("valid element")),
+        fail.context(lbl("valid element")),
     ))
     .parse_next(input)
 }
 
 fn p_plain_line_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
-    let ((((), _), line), span) = repeat_till(1.., any, alt((line_ending, eof)))
-        .with_taken()
-        .with_span()
-        .parse_next(input)?;
-    Ok(Element::Plain(Sp::new(span, line)))
+    peek(any).parse_next(input)?;
+    alt((
+        line_ending.take_span(),
+        (p_text_segment, alt((line_ending, eof))).take_span(),
+    ))
+    .map(Element::Plain)
+    .parse_next(input)
 }
 
-// TODO: try replacing this with using and_then for parsing the inner part, which would allow us to avoid having to provide the #} to the p_regular_tag_inner
-fn p_regular_tag_inner<'a>(end: &'a str) -> impl winnow::Parser<Input<'a>, &'a str, ContextError> {
+/// Returns (terminator, entire text segment before terminator)
+fn p_text_segment<'a>(input: &mut Input<'a>) -> PResult<(&'a str, &'a str)> {
+    repeat_till(
+        1..,
+        (not(p_any_tag_start), not(line_ending), any),
+        peek(alt((p_any_tag_start, line_ending, eof))),
+    )
+    .map(|((), terminator)| terminator)
+    .with_taken()
+    .parse_next(input)
+}
+
+#[cfg(test)]
+#[test]
+fn test_p_text_segment() -> TestResult {
+    insta::assert_debug_snapshot!(p_text_segment.parse_peek(new_input("foo {% bar %} baz"))?);
+    insta::assert_debug_snapshot!(p_text_segment.parse_peek(new_input("foo"))?);
+    insta::assert_debug_snapshot!(p_text_segment.parse_peek(new_input("{< bar >}")));
+    Ok(())
+}
+
+// TODO: try replacing this with using and_then for parsing the inner part,
+// which would allow us to avoid having to provide the #} to the p_regular_tag_inner
+fn p_regular_tag_inner<'a>(
+    end: &'a str,
+) -> impl winnow::Parser<Input<'a>, &'a str, YolkParseError> {
     trace("p_regular_tag_inner", move |i: &mut _| {
         repeat_till(1.., (not(line_ending), not(end), any), peek(end))
             .map(|(_, _): ((), _)| ())
@@ -139,10 +169,10 @@ fn p_regular_tag_inner<'a>(end: &'a str) -> impl winnow::Parser<Input<'a>, &'a s
 
 /// p_tag := <start> <p_inner> <end>
 fn p_tag<'a, T>(
-    start: impl winnow::Parser<Input<'a>, &'a str, ContextError>,
-    p_inner: impl winnow::Parser<Input<'a>, T, ContextError>,
-    end: impl winnow::Parser<Input<'a>, &'a str, ContextError>,
-) -> impl winnow::Parser<Input<'a>, Sp<T>, ContextError> {
+    start: impl winnow::Parser<Input<'a>, &'a str, YolkParseError>,
+    p_inner: impl winnow::Parser<Input<'a>, T, YolkParseError>,
+    end: impl winnow::Parser<Input<'a>, &'a str, YolkParseError>,
+) -> impl winnow::Parser<Input<'a>, Sp<T>, YolkParseError> {
     (delimited(
         start,
         delimited(wss, p_inner.with_span(), wss),
@@ -152,45 +182,56 @@ fn p_tag<'a, T>(
     .map(|(s, span)| Sp::new(span, s))
 }
 
-/// p_tag_line := <start> <p_inner> <right>
+fn p_any_tag_start<'a>(input: &mut Input<'a>) -> PResult<&'a str> {
+    alt((literal("{%"), literal("{#"), literal("{<"))).parse_next(input)
+}
+
+/// p_tag_line := <start> <p_inner> <right> (\n)?
 /// returns left, result-of-p_inner, tag, right
 fn p_tag_line<'a, T>(
-    start: impl winnow::Parser<Input<'a>, &'a str, ContextError> + Copy,
-    p_inner: impl winnow::Parser<Input<'a>, T, ContextError>,
-    end: impl winnow::Parser<Input<'a>, &'a str, ContextError>,
-) -> impl winnow::Parser<Input<'a>, (TaggedLine<'a>, Sp<T>), ContextError> {
-    let left_p = repeat_till(0.., (not(line_ending), not(start), any), peek(start))
-        .map(|(_, _): ((), _)| ())
-        .context(lbl("left of tag"))
-        .take();
+    start: impl winnow::Parser<Input<'a>, &'a str, YolkParseError> + Copy,
+    p_inner: impl winnow::Parser<Input<'a>, T, YolkParseError>,
+    end: impl winnow::Parser<Input<'a>, &'a str, YolkParseError>,
+    require_newline: bool,
+) -> impl winnow::Parser<Input<'a>, (TaggedLine<'a>, Sp<T>), YolkParseError> {
+    let left_p = repeat_till(
+        0..,
+        (not(line_ending), not(p_any_tag_start), any),
+        peek(start),
+    )
+    .map(|((), _)| ())
+    .take();
     let tag_p = p_tag(start, p_inner, end).with_taken();
-    let right_p = (till_line_ending, opt(line_ending)).take();
-    (left_p, tag_p, right_p).with_span().with_taken().map(
-        |(((left, (inner_res, tag), right), full_line_span), full_line)| {
+    let line_end: Box<dyn Parser<_, _, _>> = match require_newline {
+        true => Box::new(line_ending.map(Some)),
+        false => Box::new(opt(line_ending)),
+    };
+    let right_p = cut_err((till_line_ending, line_end.context(lbl("newline"))).take());
+    (left_p, tag_p, right_p)
+        .with_spanned()
+        .map(|((left, (inner_res, tag), right), full_line)| {
             (
                 TaggedLine {
                     left,
                     tag,
                     right,
-                    full_line: Sp::new(full_line_span, full_line),
+                    full_line,
                 },
                 inner_res,
             )
-        },
-    )
+        })
 }
 
 fn p_nextline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
+    peek(any).parse_next(input)?;
     let p_inner = (
-        cut_err(opt((literal("if"), wsp))).map(|x| x.is_some()),
+        opt((literal("if"), wsp)).map(|x| x.is_some()),
         p_regular_tag_inner("#}"),
     );
-    let (tagged_line, expr) = p_tag_line("{#", p_inner, "#}")
-        .context(StrContext::Expected("line with a next-line tag".into()))
+    let (tagged_line, expr) = p_tag_line("{#", p_inner, "#}", true)
+        .context("line with a next-line tag")
         .parse_next(input)?;
-    let next_line = till_line_ending
-        .context(StrContext::Expected("Another line".into()))
-        .parse_next(input)?;
+    let next_line = till_line_ending.context("Another line").parse_next(input)?;
     Ok(Element::NextLine {
         tagged_line,
         is_if: expr.content().0,
@@ -200,12 +241,13 @@ fn p_nextline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
 }
 
 fn p_inline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
+    peek(any).parse_next(input)?;
     let p_inner = (
         opt((literal("if"), wsp)).map(|x| x.is_some()),
         p_regular_tag_inner(">}"),
     )
         .context(lbl("tag-inner"));
-    let (tagged_line, expr) = p_tag_line("{<", p_inner, ">}").parse_next(input)?;
+    let (tagged_line, expr) = p_tag_line("{<", p_inner, ">}", false).parse_next(input)?;
     Ok(Element::Inline {
         line: tagged_line,
         is_if: expr.content().0,
@@ -213,32 +255,32 @@ fn p_inline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     })
 }
 
-fn p_multiline_body<'a>(input: &mut Input<'a>) -> PResult<Vec<Element<'a>>> {
-    trace(
-        "p_multiline_body",
-        repeat_till(
-            0..,
-            p_element,
-            peek(p_tag_line(
-                "{%",
-                alt((
-                    "end",
-                    "else",
-                    preceded(("elif", wsp), p_regular_tag_inner("%}")),
-                )),
-                "%}",
-            )),
-        ),
-    )
-    .parse_next(input)
-    .map(|(elements, _)| elements)
+fn p_multiline_body<'a>(
+    p_end_tag_inner: impl winnow::Parser<Input<'a>, &'a str, YolkParseError>,
+) -> impl Parser<Input<'a>, Vec<Element<'a>>, YolkParseError> {
+    let end_tag_line = peek(p_tag_line("{%", p_end_tag_inner, "%}", false)).context("end of block");
+    repeat_till(0.., p_element, end_tag_line)
+        .context(lbl("end of block"))
+        .map(|(elements, _)| elements)
 }
 
 fn p_multiline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
-    let (tagged_line, expr) =
-        p_tag_line("{%", p_regular_tag_inner("%}"), "%}").parse_next(input)?;
-    let elements = p_multiline_body.parse_next(input)?;
-    let (end, _end_expr) = p_tag_line("{%", "end", "%}").parse_next(input)?;
+    peek(any).parse_next(input)?;
+    let (tagged_line, expr) = alt((p_tag_line(
+        "{%",
+        // p_regular_tag_inner("%}"),
+        // TODO: does this actually help?
+        preceded(
+            not(alt(("if", "elif", "else", "end"))),
+            p_regular_tag_inner("%}"),
+        ),
+        "%}",
+        true,
+    ),))
+    .parse_next(input)?;
+    let elements = cut_err(p_multiline_body("end")).parse_next(input)?;
+    let (end, _end_expr) =
+        cut_err(p_tag_line("{%", "end", "%}", false).context("end tag")).parse_next(input)?;
 
     Ok(Element::MultiLine {
         block: Block {
@@ -251,9 +293,11 @@ fn p_multiline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
 }
 
 fn p_multiline_block_starting_with<'a, Expr>(
-    start_p: impl winnow::Parser<Input<'a>, (TaggedLine<'a>, Expr), ContextError>,
-) -> impl winnow::Parser<Input<'a>, Block<'a, Expr>, ContextError> {
-    let p = (start_p, p_multiline_body);
+    start_p: impl winnow::Parser<Input<'a>, (TaggedLine<'a>, Expr), YolkParseError>,
+    block_p: impl winnow::Parser<Input<'a>, Vec<Element<'a>>, YolkParseError>,
+) -> impl winnow::Parser<Input<'a>, Block<'a, Expr>, YolkParseError> {
+    //TODO: cut_err here?
+    let p = (start_p, block_p);
     let p = p.map(|((tagged_line, expr), body)| Block {
         tagged_line,
         expr,
@@ -263,25 +307,44 @@ fn p_multiline_block_starting_with<'a, Expr>(
 }
 
 fn p_conditional_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
-    let p_if = p_multiline_block_starting_with::<Sp<&'a str>>(p_tag_line(
-        "{%",
-        preceded(("if", wsp), p_regular_tag_inner("%}")),
-        "%}",
-    ));
-    let p_elif = p_multiline_block_starting_with::<Sp<&'a str>>(p_tag_line(
-        "{%",
-        preceded(("elif", wsp), p_regular_tag_inner("%}")),
-        "%}",
-    ));
-    let p_else = p_multiline_block_starting_with(p_tag_line("{%", "else".void(), "%}"));
-    let p_end = terminated(p_tag_line("{%", "end", "%}"), opt(line_ending)).complete_err();
+    peek(any).parse_next(input)?;
+    let p_if = p_multiline_block_starting_with::<Sp<&'a str>>(
+        p_tag_line(
+            "{%",
+            preceded(("if", wsp), p_regular_tag_inner("%}")),
+            "%}",
+            true,
+        ),
+        p_multiline_body(alt((
+            "end",
+            "else",
+            preceded(("elif", wsp), p_regular_tag_inner("%}")),
+        ))),
+    );
+    let p_elif = p_multiline_block_starting_with::<Sp<&'a str>>(
+        p_tag_line(
+            "{%",
+            preceded(("elif", wsp), p_regular_tag_inner("%}")),
+            "%}",
+            true,
+        ),
+        p_multiline_body(alt((
+            "end",
+            "else",
+            preceded(("elif", wsp), p_regular_tag_inner("%}")),
+        ))),
+    );
+    let p_else = p_multiline_block_starting_with(
+        p_tag_line("{%", "else".void(), "%}", true),
+        p_multiline_body("end"),
+    );
+    let p_end = terminated(p_tag_line("{%", "end", "%}", false), opt(line_ending));
     let (if_body, elif_bodies, else_block, end_line): (_, Vec<_>, Option<Block<'a, _>>, _) = (
         p_if.context(lbl("if block")),
         cut_err(repeat(0.., p_elif.context(lbl("elif block")))),
         cut_err(opt(p_else.context(lbl("else block")))),
-        cut_err(p_end.context(exp("end tag"))),
+        cut_err(p_end.context(lbl("end tag"))),
     )
-        .context(lbl("conditional element"))
         .parse_next(input)?;
 
     let mut blocks = Vec::new();
@@ -302,25 +365,46 @@ fn wsp(input: &mut Input<'_>) -> PResult<()> {
     winnow::ascii::space0.void().parse_next(input)
 }
 
-/// Create a [`StrContext::Label`].
-fn lbl(s: &'static str) -> StrContext {
-    StrContext::Label(s)
+/// Create a context string
+fn lbl(s: &'static str) -> &'static str {
+    s
+    // StrContext::Label(s)
 }
 /// Create a [`StrContext::Expected`] with a [`winnow::error::StrContextValue::Description`].
+#[allow(unused)]
 fn exp(s: &'static str) -> StrContext {
     StrContext::Expected(winnow::error::StrContextValue::Description(s))
 }
 
 #[cfg(test)]
 fn new_input(s: &str) -> Input<'_> {
-    use winnow::Located;
-    Located::new(s)
-    // Recoverable::new(Located::new(s))
+    use winnow::{stream::Recoverable, Located};
+    // Located::new(s)
+    Recoverable::new(Located::new(s))
 }
+
+#[allow(unused)]
+pub trait ParserExt<I: Stream + Location, O, E>: winnow::Parser<I, O, E> + Sized {
+    fn with_spanned(self) -> impl Parser<I, (O, Sp<I::Slice>), E> {
+        self.with_span()
+            .with_taken()
+            .map(|((o, span), text)| (o, Sp::new(span, text)))
+    }
+    fn spanned(self) -> impl Parser<I, Sp<O>, E> {
+        self.with_span().map(|(o, span)| (Sp::new(span, o)))
+    }
+    fn take_span(self) -> impl Parser<I, Sp<I::Slice>, E> {
+        self.take().with_span().map(|(o, span)| (Sp::new(span, o)))
+    }
+}
+
+impl<T: Parser<I, O, E> + Sized, I: Stream + Location, O, E> ParserExt<I, O, E> for T {}
 
 #[cfg(test)]
 mod test {
     use assert_matches::assert_matches;
+    use insta::assert_debug_snapshot;
+    use miette::{GraphicalReportHandler, IntoDiagnostic};
     use testresult::TestResult;
     use winnow::Parser as _;
 
@@ -330,6 +414,15 @@ mod test {
     };
 
     use super::{new_input, p_inline_element, p_tag_line};
+
+    fn render_error(e: impl miette::Diagnostic) -> String {
+        let mut out = String::new();
+        GraphicalReportHandler::new()
+            .with_theme(miette::GraphicalTheme::unicode_nocolor())
+            .render_report(&mut out, &e)
+            .unwrap();
+        out
+    }
 
     #[test]
     fn test_inline_tag() -> TestResult {
@@ -372,12 +465,12 @@ mod test {
     #[test]
     fn test_parse_end() -> TestResult {
         let input = new_input("a{% end %}b");
-        assert_matches!(p_tag_line("{%", "end", "%}").parse(input.clone())?,
+        assert_matches!(p_tag_line("{%", "end", "%}", false).parse(input.clone())?,
             (TaggedLine{left: "a", right: "b", ..}, expr) => {
                  assert_eq!(*expr.content(), "end");
             }
         );
-        assert_matches!(p_tag_line("{%", "end", "%}").parse(input.clone())?,
+        assert_matches!(p_tag_line("{%", "end", "%}", false).parse(input.clone())?,
             (TaggedLine { left: "a", right: "b", tag: "{% end %}", full_line }, expr) =>{
                 assert_eq!(*full_line.content(), "a{% end %}b");
                  assert_eq!(*expr.content(), "end");
@@ -403,89 +496,53 @@ mod test {
     }
 
     #[test]
-    fn test_conditional() -> TestResult {
-        let mut input = new_input(indoc::indoc! {r#"
-            // {% if foo %}
-            thing
-            thang
-            // {% elif bar %}
-            // {% elif baz %}
+    fn test_conditional() {
+        assert_debug_snapshot!(p_conditional_element(&mut new_input(indoc::indoc! {r#"
+            // {% if a %}
+            a
+            b
+            // {% elif b %}
+            // {% elif c %}
             // {% else %}
-            stuff
+            c
             // {% end %}
-        "#});
-        assert_matches!(
-            p_conditional_element(&mut input)?,
-            Element::Conditional { blocks, else_block: Some(els), end } =>{
-                 assert_eq!(*blocks[0].tagged_line.full_line.content(), "// {% if foo %}\n");
-                 assert_eq!(*blocks[0].expr.content(), "foo ");
-                 assert_matches!(blocks[0].body[0], Element::Plain(Sp{ content: "thing\n", .. }));
-                 assert_matches!(blocks[0].body[1], Element::Plain(Sp{ content: "thang\n", .. }));
-                 assert_eq!(*blocks[1].tagged_line.full_line.content(), "// {% elif bar %}\n");
-                 assert_eq!(*blocks[2].tagged_line.full_line.content(), "// {% elif baz %}\n");
-                 assert_eq!(*els.tagged_line.full_line.content(), "// {% else %}\n");
-                 assert_eq!(*end.full_line.content(), "// {% end %}\n");
-            }
-        );
-        Ok(())
+        "#})));
     }
 
     #[test]
-    fn test_nested_conditional() -> TestResult {
-        let mut input = new_input(indoc::indoc! {r#"
+    fn test_nested_conditional() {
+        assert_debug_snapshot!(p_conditional_element(&mut new_input(indoc::indoc! {r#"
             // {% if foo %}
             // {% if foo %}
             // {% end %}
             // {% end %}
-        "#});
-        assert_matches!(
-            p_conditional_element(&mut input)?,
-            Element::Conditional { blocks, else_block: None, .. } =>{
-                 assert_eq!(*blocks[0].tagged_line.full_line.content(), "// {% if foo %}\n");
-                 assert_eq!(*blocks[0].expr.content(), "foo ");
-                 assert_matches!(blocks[0].body[0], Element::Conditional {..});
-            }
-        );
-        Ok(())
+        "#})));
     }
 
     #[test]
-    fn test_nextline_tag_document() -> TestResult {
-        let input = indoc::indoc! {r#"
+    fn test_nextline_tag_document() {
+        insta::assert_debug_snapshot!(parse_document(&mut new_input(indoc::indoc! {r#"
             # {# replace(`'.*'`, `'{data.value}'`) #}
             value = 'foo'
-        "#};
-        let mut input = new_input(input);
-        let result = parse_document(&mut input)?;
-        assert_matches!(
-            &result[0],
-            Element::NextLine {
-                tagged_line,
-                expr,
-                is_if: false,
-                next_line: "value = 'foo'"
-            } =>{
-                 assert_eq!(*tagged_line.full_line.content(), "# {# replace(`'.*'`, `'{data.value}'`) #}\n");
-                 assert_eq!(tagged_line.left, "# ");
-                 assert_eq!(tagged_line.right, "\n");
-                 assert_eq!(*expr.content(), "replace(`'.*'`, `'{data.value}'`) ");
-            }
-        );
-        Ok(())
+        "#})));
     }
 
-    // #[test]
-    // fn test_fuck() -> TestResult {
-    //     let input = "{% if %}\na{% end %}b\na";
-    //     let mut input = new_input(input);
-    //     let result = parse_document(&mut input)?;
-    //     dbg!(result);
-
-    //     // let input = "{% if f %}\n";
-    //     // let mut input = new_input(input);
-    //     // let result = parse_document(&mut input)?;
-    //     // dbg!(result);
-    //     // panic!();
-    //     Ok(())
-    // }
+    #[test]
+    fn test_error_incomplete_nextline() {
+        insta::assert_snapshot!(render_error(parse_document("{#f#}").unwrap_err()));
+    }
+    #[test]
+    fn test_error_incomplete_multiline() {
+        insta::assert_snapshot!(render_error(parse_document("{%f%}").unwrap_err()));
+    }
+    #[test]
+    fn test_error_multiline_with_else() {
+        insta::assert_snapshot!(render_error(
+            parse_document("{%f%}\n{%else%}\n{%end%}").unwrap_err()
+        ));
+    }
+    #[test]
+    fn test_error_if_without_expression() {
+        insta::assert_snapshot!(render_error(parse_document("{<if>}").unwrap_err()));
+    }
 }
