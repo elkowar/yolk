@@ -391,15 +391,13 @@ impl<T: Parser<I, O, E> + Sized, I: Stream + Location, O, E> ParserExt<I, O, E> 
 
 #[cfg(test)]
 mod test {
-    use assert_matches::assert_matches;
     use insta::assert_debug_snapshot;
     use miette::GraphicalReportHandler;
     use testresult::TestResult;
     use winnow::Parser as _;
 
     use crate::templating::parser::{
-        p_conditional_element, p_multiline_element, p_nextline_element, parse_document, Element,
-        Sp, TaggedLine,
+        p_conditional_element, p_multiline_element, p_nextline_element, parse_document,
     };
 
     use super::{new_input, p_inline_element, p_tag_line};

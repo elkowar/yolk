@@ -1,0 +1,6 @@
+---
+source: src/templating/mod.rs
+expression: "foo /* {< string.upper(YOLK_TEXT) >} */"
+snapshot_kind: text
+---
+FOO /* {< string.upper(YOLK_TEXT) >} */
