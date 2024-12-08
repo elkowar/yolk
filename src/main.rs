@@ -131,11 +131,13 @@ fn run_command(args: Args) -> Result<()> {
                 println!("Yolk git is not Safeguarded. It is recommended to run `yolk safeguard`.");
             }
             println!("Git state:");
-            yolk.paths()
-                .start_git_command_builder()?
-                .args(["status", "--short"])
-                .status()
-                .into_diagnostic()?;
+            yolk.with_canonical_state(|| {
+                yolk.paths()
+                    .start_git_command_builder()?
+                    .args(["status", "--short"])
+                    .status()
+                    .into_diagnostic()
+            })?;
         }
         Command::Deploy { name: egg } => yolk.deploy_egg(egg)?,
         Command::Add { name: egg, path } => yolk.add_to_egg(egg, path)?,
