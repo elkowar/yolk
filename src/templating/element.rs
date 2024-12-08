@@ -63,6 +63,7 @@ impl<'a> Element<'a> {
         parser::parse_element(s).into_diagnostic()
     }
 
+    #[allow(unused)]
     pub fn span(&self) -> Range<usize> {
         match self {
             Element::Plain(s) => s.range(),
@@ -169,15 +170,24 @@ impl<'a> Element<'a> {
     }
 }
 
-fn render_elements(
+pub fn render_elements(
     render_ctx: &RenderContext,
     eval_ctx: &mut EvalCtx,
     elements: &[Element<'_>],
 ) -> Result<String, TemplateError> {
-    elements
-        .iter()
-        .map(|x| x.render(render_ctx, eval_ctx))
-        .collect()
+    let mut errs = Vec::new();
+    let mut output = String::new();
+    for element in elements {
+        match element.render(render_ctx, eval_ctx) {
+            Ok(rendered) => output.push_str(&rendered),
+            Err(e) => errs.push(e),
+        }
+    }
+    if errs.is_empty() {
+        Ok(output)
+    } else {
+        Err(TemplateError::Multiple(errs))
+    }
 }
 
 fn run_transformation_expr(

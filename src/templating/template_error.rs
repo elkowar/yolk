@@ -1,6 +1,6 @@
 use miette::{Diagnostic, LabeledSpan, SourceSpan};
 
-use crate::script::lua_error::{LuaError, LuaSourceError};
+use crate::script::lua_error::LuaError;
 
 use super::parse_error::YolkParseFailure;
 
@@ -10,27 +10,22 @@ pub enum TemplateError {
     ParseError(#[from] YolkParseFailure),
     #[error("{lua_error}")]
     LuaEvalError {
-        #[source]
         lua_error: LuaError,
         error_span: Option<SourceSpan>,
     },
-    #[error("{source}")]
-    InElement {
-        #[source]
-        source: Box<TemplateError>,
-        element_span: SourceSpan,
-    },
+    #[error("Failed to evaluate template")]
+    Multiple(Vec<TemplateError>),
 }
 
 impl TemplateError {
     pub fn from_lua_error(lua_error: LuaError, lua_expr_span: impl Into<SourceSpan>) -> Self {
         match lua_error {
-            LuaError::SourceError(lua_error) => {
+            LuaError::SourceError { ref span, .. } => {
                 let lua_expr_span = lua_expr_span.into();
-                let lua_start = lua_expr_span.offset() + lua_error.span.start;
-                let lua_end = lua_expr_span.offset() + lua_error.span.end;
+                let lua_start = lua_expr_span.offset() + span.start;
+                let lua_end = lua_expr_span.offset() + span.end;
                 Self::LuaEvalError {
-                    lua_error: LuaError::SourceError(lua_error),
+                    lua_error,
                     error_span: Some((lua_start..lua_end).into()),
                 }
             }
@@ -56,20 +51,19 @@ impl TemplateError {
                 error_span: Some(span),
                 ..
             } => {
-                vec![LabeledSpan::at(*span, "here")]
+                vec![LabeledSpan::new_primary_with_span(
+                    Some("here".to_string()),
+                    *span,
+                )]
             }
             TemplateError::LuaEvalError {
                 error_span: None, ..
             } => {
                 vec![]
             }
-            TemplateError::InElement {
-                element_span,
-                source,
-            } => vec![LabeledSpan::at(*element_span, "in this element")]
-                .into_iter()
-                .chain(source.labels_vec())
-                .collect(),
+            TemplateError::Multiple(_) => {
+                vec![]
+            }
         }
     }
 }
@@ -92,7 +86,9 @@ impl Diagnostic for TemplateError {
     }
 
     fn source_code(&self) -> Option<&dyn miette::SourceCode> {
-        None
+        match self {
+            _ => None,
+        }
     }
 
     fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {
@@ -100,16 +96,15 @@ impl Diagnostic for TemplateError {
     }
 
     fn related<'a>(&'a self) -> Option<Box<dyn Iterator<Item = &'a dyn Diagnostic> + 'a>> {
-        None
+        match self {
+            TemplateError::Multiple(errors) => {
+                Some(Box::new(errors.iter().map(|x| x as &dyn Diagnostic)))
+            }
+            _ => None,
+        }
     }
 
     fn diagnostic_source(&self) -> Option<&dyn Diagnostic> {
-        match self {
-            TemplateError::ParseError(yolk_parse_failure) => {
-                Some(yolk_parse_failure as &dyn Diagnostic)
-            }
-            TemplateError::LuaEvalError { lua_error, .. } => Some(lua_error as &dyn Diagnostic),
-            TemplateError::InElement { source, .. } => Some(source.as_ref() as &dyn Diagnostic),
-        }
+        None
     }
 }

@@ -203,7 +203,7 @@ fn run_command(args: Args) -> Result<()> {
                 false => EvalMode::Local,
             };
             let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(mode)?;
-            let result = yolk.eval_template(&mut eval_ctx, "inline", &text)?;
+            let result = yolk.eval_template(&mut eval_ctx, "unnamed", &text)?;
             println!("{}", result);
         }
     }

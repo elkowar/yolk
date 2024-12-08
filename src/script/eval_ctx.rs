@@ -10,7 +10,6 @@ use mlua::Value;
 use crate::yolk::EvalMode;
 
 use super::lua_error::LuaError;
-use super::lua_error::LuaSourceError;
 use super::stdlib;
 
 pub const YOLK_TEXT_NAME: &str = "YOLK_TEXT";
@@ -42,14 +41,14 @@ impl EvalCtx {
             .load(content)
             .set_name(name)
             .eval()
-            .map_err(|e| LuaSourceError::from_mlua_with_source(name, content, e).into())
+            .map_err(|e| LuaError::from_mlua_with_source(content, e))
     }
     pub fn exec_lua(&self, name: &str, content: &str) -> Result<(), LuaError> {
         self.lua()
             .load(content)
             .set_name(name)
             .exec()
-            .map_err(|e| LuaSourceError::from_mlua_with_source(name, content, e).into())
+            .map_err(|e| LuaError::from_mlua_with_source(content, e))
     }
 
     pub fn eval_text_transformation(&self, text: &str, expr: &str) -> Result<String, LuaError> {

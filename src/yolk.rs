@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use fs_err::PathExt as _;
-use miette::{Context, IntoDiagnostic, NamedSource, Result};
+use miette::{Context, IntoDiagnostic, Result};
 use mlua::Value;
 
 use crate::{
@@ -178,12 +178,11 @@ impl Yolk {
         file_path: &str,
         content: &str,
     ) -> Result<String> {
-        let mut eval = move || {
-            let doc = Document::parse_string(content).context("Failed to parse document")?;
-            tracing::debug!("Rendering template");
-            doc.render(eval_ctx).context("Failed to render document")
-        };
-        eval().map_err(|e| e.with_source_code(NamedSource::new(file_path, content.to_string())))
+        let doc =
+            Document::parse_string_named(file_path, content).context("Failed to parse document")?;
+        tracing::debug!("Rendering template");
+        doc.render(eval_ctx)
+            .with_context(|| format!("Failed to render document `{file_path}`"))
     }
 
     /// Sync a single template file in place on the filesystem.

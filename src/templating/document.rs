@@ -1,8 +1,12 @@
-use crate::{eval_ctx::EvalCtx, script::lua_error::LuaSourceError};
+use crate::eval_ctx::EvalCtx;
 
-use super::{comment_style::CommentStyle, element, parser};
+use super::{
+    comment_style::CommentStyle,
+    element::{self, render_elements},
+    parser,
+};
 
-use miette::{IntoDiagnostic as _, NamedSource, Result};
+use miette::{NamedSource, Result};
 
 #[derive(Debug)]
 pub struct Document<'a> {
@@ -25,28 +29,21 @@ impl<'a> Default for Document<'a> {
 
 impl<'a> Document<'a> {
     pub fn render(&self, eval_ctx: &mut EvalCtx) -> Result<String> {
-        let mut output = String::new();
         let ctx = RenderContext {
             comment_style: self.comment_style.clone(),
         };
-        for element in &self.elements {
-            output.push_str(
-                &element
-                    .render(&ctx, eval_ctx)
-                    .into_diagnostic()
-                    .map_err(|e| {
-                        e.with_source_code(NamedSource::new(
-                            self.source_name
-                                .clone()
-                                .unwrap_or_else(|| "unnamed".to_string()),
-                            self.source.to_string(),
-                        ))
-                    })?,
-            );
-        }
+        let output = render_elements(&ctx, eval_ctx, &self.elements).map_err(|e| {
+            miette::Report::from(e).with_source_code(NamedSource::new(
+                self.source_name
+                    .clone()
+                    .unwrap_or_else(|| "unnamed".to_string()),
+                self.source.to_string(),
+            ))
+        })?;
         Ok(output)
     }
 
+    #[cfg(test)]
     pub fn parse_string(s: &'a str) -> Result<Self> {
         let elements = parser::parse_document(s)?;
         let comment_style = CommentStyle::try_infer_from_elements(&elements).unwrap_or_default();
@@ -57,6 +54,7 @@ impl<'a> Document<'a> {
             source_name: None,
         })
     }
+
     pub fn parse_string_named(name: &str, s: &'a str) -> Result<Self> {
         let elements = parser::parse_document(s)?;
         let comment_style = CommentStyle::try_infer_from_elements(&elements).unwrap_or_default();
