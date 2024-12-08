@@ -70,7 +70,8 @@ impl Yolk {
                 );
             }
         } else {
-            util::create_symlink(path, in_home)?;
+            util::create_symlink(&path, &in_home)?;
+            println!("Symlinked {} to {}", path.display(), in_home.display());
         }
 
         Ok(())

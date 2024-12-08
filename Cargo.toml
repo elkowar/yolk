@@ -33,6 +33,7 @@ mlua = { version = "0.10.1", features = [
     "anyhow",
     "send",
 ] }
+owo-colors = { version = "4.1.0", features = ["supports-colors"] }
 pest_derive = { version = "2.7.14", features = ["grammar-extras"] }
 predicates = "3.1.2"
 regex = "1.11.1"

@@ -2,6 +2,7 @@ use std::{io::Read as _, path::PathBuf, str::FromStr};
 
 use clap::{Parser, Subcommand};
 use miette::{IntoDiagnostic, Result};
+use owo_colors::OwoColorize as _;
 use script::eval_ctx;
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 use yolk::{EvalMode, Yolk};
@@ -142,16 +143,20 @@ fn run_command(args: Args) -> Result<()> {
         Command::Deploy { name: egg } => yolk.deploy_egg(egg)?,
         Command::Add { name: egg, path } => yolk.add_to_egg(egg, path)?,
         Command::List => {
-            for egg in yolk.list_eggs()? {
-                let egg = egg?;
+            let mut eggs = yolk.list_eggs()?.collect::<Result<Vec<_>>>()?;
+            eggs.sort_by_key(|egg| egg.name().to_string());
+            for egg in eggs {
+                let deployed = egg.is_deployed()?;
                 println!(
-                    "{} [{}]",
-                    egg.name(),
-                    if egg.is_deployed()? {
-                        "active"
-                    } else {
-                        "inactive"
-                    }
+                    "{}",
+                    format!("{} {}", if deployed { "✓" } else { "✗" }, egg.name(),)
+                        .if_supports_color(owo_colors::Stream::Stdout, |text| {
+                            text.color(if deployed {
+                                owo_colors::AnsiColors::Green
+                            } else {
+                                owo_colors::AnsiColors::Default
+                            })
+                        })
                 );
             }
         }
