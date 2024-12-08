@@ -101,10 +101,9 @@ pub fn setup_tag_functions(eval_ctx: &EvalCtx) -> miette::Result<()> {
             let original_value = original_value.as_str();
             let reversed = pattern.replace(&after_replace, original_value);
             if reversed != text {
-                tracing::warn!(
+                miette::bail!(
                     "Refusing to run non-reversible replacement: {text} -> {after_replace}",
                 );
-                return Ok(text.to_string());
             }
         };
         Ok(after_replace.to_string())

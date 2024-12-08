@@ -40,17 +40,19 @@ impl EvalCtx {
         Ok(ctx)
     }
 
-    pub fn eval_lua<T: FromLuaMulti>(&self, name: &str, content: &str) -> Result<T> {
-        self.lua().load(content).set_name(name).eval().map_err(|e| {
-            Report::from(LuaError::from_mlua_with_source(content, e))
-                .with_source_code(content.to_string())
-        })
+    pub fn eval_lua<T: FromLuaMulti>(&self, name: &str, content: &str) -> Result<T, LuaError> {
+        self.lua()
+            .load(content)
+            .set_name(name)
+            .eval()
+            .map_err(|e| LuaError::from_mlua_with_source(name, content, e))
     }
-    pub fn exec_lua(&self, name: &str, content: &str) -> Result<()> {
-        self.lua().load(content).set_name(name).exec().map_err(|e| {
-            Report::from(LuaError::from_mlua_with_source(content, e))
-                .with_source_code(content.to_string())
-        })
+    pub fn exec_lua(&self, name: &str, content: &str) -> Result<(), LuaError> {
+        self.lua()
+            .load(content)
+            .set_name(name)
+            .exec()
+            .map_err(|e| LuaError::from_mlua_with_source(name, content, e))
     }
 
     pub fn eval_text_transformation(&self, text: &str, expr: &str) -> Result<String> {

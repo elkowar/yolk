@@ -8,6 +8,8 @@ use miette::Result;
 pub struct Document<'a> {
     comment_style: CommentStyle,
     elements: Vec<element::Element<'a>>,
+    source: &'a str,
+    source_name: Option<String>,
 }
 
 impl<'a> Default for Document<'a> {
@@ -15,6 +17,8 @@ impl<'a> Default for Document<'a> {
         Self {
             comment_style: CommentStyle::Prefix("#".to_string()),
             elements: Vec::new(),
+            source_name: None,
+            source: "",
         }
     }
 }
@@ -37,6 +41,18 @@ impl<'a> Document<'a> {
         Ok(Self {
             elements,
             comment_style,
+            source: s,
+            source_name: None,
+        })
+    }
+    pub fn parse_string_named(name: &str, s: &'a str) -> Result<Self> {
+        let elements = parser::parse_document(s)?;
+        let comment_style = CommentStyle::try_infer_from_elements(&elements).unwrap_or_default();
+        Ok(Self {
+            elements,
+            comment_style,
+            source: s,
+            source_name: Some(name.to_string()),
         })
     }
 

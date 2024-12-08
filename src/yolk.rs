@@ -110,6 +110,9 @@ impl Yolk {
     }
 
     pub fn sync_to_mode(&self, mode: EvalMode) -> Result<()> {
+        // TODO: Instead of changing the files in place, evaluate creating a copy of the file structure using hard-links where possible,
+        // and just copying the templated files. That way, we would avoid having to modify the templated files in place,
+        // while still minimizing unnecessary writes or disk usage.
         let mut eval_ctx = self
             .prepare_eval_ctx_for_templates(mode)
             .context("Failed to prepare eval_ctx")?;
@@ -159,6 +162,7 @@ impl Yolk {
         let eval_ctx = self
             .prepare_eval_ctx_for_templates(mode)
             .context("Failed to prepare eval_ctx")?;
+        tracing::debug!("Evaluating lua expression: {}", expr);
         eval_ctx
             .eval_lua::<Value>("expr", expr)?
             .to_string()
@@ -176,6 +180,7 @@ impl Yolk {
     ) -> Result<String> {
         let mut eval = move || {
             let doc = Document::parse_string(content).context("Failed to parse document")?;
+            tracing::debug!("Rendering template");
             doc.render(eval_ctx).context("Failed to render document")
         };
         eval().map_err(|e| e.with_source_code(NamedSource::new(file_path, content.to_string())))

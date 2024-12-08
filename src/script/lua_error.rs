@@ -1,6 +1,6 @@
 use std::{ops::Range, sync::LazyLock};
 
-use miette::Diagnostic;
+use miette::{Diagnostic, NamedSource};
 use regex::Regex;
 
 static LUA_ERROR_REGEX: LazyLock<Regex> =
@@ -9,14 +9,16 @@ static LUA_ERROR_REGEX: LazyLock<Regex> =
 #[derive(Debug, thiserror::Error, Diagnostic)]
 #[error("Error in lua code: {}", .message)]
 pub struct LuaError {
-    message: String,
+    pub message: String,
     #[label("here")]
-    span: Range<usize>,
+    pub span: Range<usize>,
     origin: mlua::Error,
+    #[source_code]
+    pub source_code: Option<NamedSource<String>>,
 }
 
 impl LuaError {
-    pub fn from_mlua_with_source(source_code: &str, err: mlua::Error) -> Self {
+    pub fn from_mlua_with_source(name: &str, source_code: &str, err: mlua::Error) -> Self {
         let mut msg = err.to_string();
         let mut span = 0..0;
         if let Some(caps) = LUA_ERROR_REGEX.captures(&msg) {
@@ -45,6 +47,7 @@ impl LuaError {
             message: msg,
             span,
             origin: err,
+            source_code: Some(NamedSource::new(name, source_code.to_string())),
         }
     }
 }

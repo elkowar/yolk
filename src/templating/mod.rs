@@ -3,6 +3,7 @@ pub mod document;
 pub mod element;
 pub mod parse_error;
 mod parser;
+pub mod template_error;
 
 pub(crate) const COMMENT_START: &str = "<yolk> ";
 
