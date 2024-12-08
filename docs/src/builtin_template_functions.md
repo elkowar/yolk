@@ -13,8 +13,6 @@ Inside these tags, you can call any of Yolks template tag functions (Or, in fact
 
 ### `replace(pattern, replacement)`
 
-
-
 > Replaces all occurrences of a Regex `pattern` with `replacement` in the text.
 >
 > (shorthand: `r(pattern, replacement)`).

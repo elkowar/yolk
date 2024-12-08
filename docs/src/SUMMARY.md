@@ -8,3 +8,4 @@
   - [Conditionals](./conditional_templates.md)
   - [Built-in Template functions](./builtin_template_functions.md)
   - [Custom Template Functions](./custom_template_functions.md)
+  - [Utility functions](./utility_functions.md)

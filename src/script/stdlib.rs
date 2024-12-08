@@ -38,6 +38,8 @@ pub fn setup_stdlib(eval_mode: EvalMode, eval_ctx: &EvalCtx) -> Result<(), LuaEr
                 .to_string())
         },
     )?;
+    // TODO: Add regex capture group functions
+    // TODO: Add to_json and from_json functions
     Ok(())
 }
 
