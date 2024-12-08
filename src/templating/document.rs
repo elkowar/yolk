@@ -1,8 +1,8 @@
-use crate::eval_ctx::EvalCtx;
+use crate::{eval_ctx::EvalCtx, script::lua_error::LuaSourceError};
 
 use super::{comment_style::CommentStyle, element, parser};
 
-use miette::Result;
+use miette::{IntoDiagnostic as _, NamedSource, Result};
 
 #[derive(Debug)]
 pub struct Document<'a> {
@@ -30,7 +30,19 @@ impl<'a> Document<'a> {
             comment_style: self.comment_style.clone(),
         };
         for element in &self.elements {
-            output.push_str(&element.render(&ctx, eval_ctx)?);
+            output.push_str(
+                &element
+                    .render(&ctx, eval_ctx)
+                    .into_diagnostic()
+                    .map_err(|e| {
+                        e.with_source_code(NamedSource::new(
+                            self.source_name
+                                .clone()
+                                .unwrap_or_else(|| "unnamed".to_string()),
+                            self.source.to_string(),
+                        ))
+                    })?,
+            );
         }
         Ok(output)
     }

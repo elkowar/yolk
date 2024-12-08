@@ -1,7 +1,3 @@
-use miette::IntoDiagnostic;
-
-use miette::Report;
-use miette::Result;
 use mlua::ExternalResult as _;
 use mlua::FromLua;
 use mlua::FromLuaMulti;
@@ -14,6 +10,7 @@ use mlua::Value;
 use crate::yolk::EvalMode;
 
 use super::lua_error::LuaError;
+use super::lua_error::LuaSourceError;
 use super::stdlib;
 
 pub const YOLK_TEXT_NAME: &str = "YOLK_TEXT";
@@ -33,7 +30,7 @@ impl EvalCtx {
         Self { lua: Lua::new() }
     }
 
-    pub fn new_in_mode(mode: EvalMode) -> Result<Self> {
+    pub fn new_in_mode(mode: EvalMode) -> miette::Result<Self> {
         let ctx = Self::new_empty();
         stdlib::setup_tag_functions(&ctx)?;
         stdlib::setup_stdlib(mode, &ctx)?;
@@ -45,17 +42,17 @@ impl EvalCtx {
             .load(content)
             .set_name(name)
             .eval()
-            .map_err(|e| LuaError::from_mlua_with_source(name, content, e))
+            .map_err(|e| LuaSourceError::from_mlua_with_source(name, content, e).into())
     }
     pub fn exec_lua(&self, name: &str, content: &str) -> Result<(), LuaError> {
         self.lua()
             .load(content)
             .set_name(name)
             .exec()
-            .map_err(|e| LuaError::from_mlua_with_source(name, content, e))
+            .map_err(|e| LuaSourceError::from_mlua_with_source(name, content, e).into())
     }
 
-    pub fn eval_text_transformation(&self, text: &str, expr: &str) -> Result<String> {
+    pub fn eval_text_transformation(&self, text: &str, expr: &str) -> Result<String, LuaError> {
         let old_text = self.get_global::<Value>(YOLK_TEXT_NAME)?;
         self.set_global(YOLK_TEXT_NAME, text)?;
         let result = self.eval_lua("template tag", expr)?;
@@ -63,24 +60,23 @@ impl EvalCtx {
         Ok(result)
     }
 
-    pub fn set_global<T: IntoLua>(&self, name: impl IntoLua, value: T) -> Result<()> {
-        self.lua.globals().set(name, value).into_diagnostic()
+    pub fn set_global<T: IntoLua>(&self, name: impl IntoLua, value: T) -> Result<(), LuaError> {
+        Ok(self.lua.globals().set(name, value)?)
     }
-    pub fn get_global<T: FromLua>(&self, name: impl IntoLua) -> Result<T> {
-        self.lua.globals().get::<T>(name).into_diagnostic()
+    pub fn get_global<T: FromLua>(&self, name: impl IntoLua) -> Result<T, LuaError> {
+        Ok(self.lua.globals().get::<T>(name)?)
     }
 
-    pub fn register_fn<F, A, R>(&self, name: &str, func: F) -> Result<()>
+    pub fn register_fn<F, A, R>(&self, name: &str, func: F) -> Result<(), LuaError>
     where
-        F: Fn(&Lua, A) -> Result<R> + MaybeSend + 'static + Send + Sync,
+        F: Fn(&Lua, A) -> Result<R, LuaError> + MaybeSend + 'static + Send + Sync,
         A: FromLuaMulti,
         R: IntoLuaMulti,
     {
         self.set_global(
             name,
             self.lua
-                .create_function(move |lua, x| func(lua, x).into_lua_err())
-                .into_diagnostic()?,
+                .create_function(move |lua, x| func(lua, x).into_lua_err())?,
         )
     }
 

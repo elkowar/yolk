@@ -110,10 +110,11 @@ mod test {
     pub fn test_render_replace_refuse_non_idempodent() -> TestResult {
         let element = Document::parse_string("{# replace(`'.*'`, `a'a'`) #}\nfoo: 'original'")?;
         let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
-        assert_eq!(
-            "{# replace(`'.*'`, `a'a'`) #}\nfoo: 'original'",
-            element.render(&mut eval_ctx)?
-        );
+        assert!(element.render(&mut eval_ctx).is_err());
+        // assert_eq!(
+        //     "{# replace(`'.*'`, `a'a'`) #}\nfoo: 'original'",
+        //     element.render(&mut eval_ctx)?
+        // );
         Ok(())
     }
 

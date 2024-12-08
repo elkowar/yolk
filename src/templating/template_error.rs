@@ -1,79 +1,102 @@
-use std::fmt::Display;
+use miette::{Diagnostic, LabeledSpan, SourceSpan};
 
-use miette::{Diagnostic, NamedSource, SourceSpan};
-
-use crate::script::lua_error::LuaError;
+use crate::script::lua_error::{LuaError, LuaSourceError};
 
 use super::parse_error::YolkParseFailure;
 
-#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[derive(Debug, thiserror::Error)]
 pub enum TemplateError {
     #[error(transparent)]
-    ParseError(
-        #[diagnostic_source]
-        #[from]
-        YolkParseFailure,
-    ),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    LuaEvalError(#[from] LuaEvalError),
-}
-
-#[derive(Debug, thiserror::Error)]
-#[error("{lua_error}")]
-pub struct LuaEvalError {
-    #[source]
-    lua_error: LuaError,
-    template_source: NamedSource<String>,
-    lua_expr_span: SourceSpan,
-    template_element_span: SourceSpan,
-}
-
-impl LuaEvalError {
-    pub fn from_lua_error(
+    ParseError(#[from] YolkParseFailure),
+    #[error("{lua_error}")]
+    LuaEvalError {
+        #[source]
         lua_error: LuaError,
-        source: NamedSource<String>,
-        lua_expr_span: SourceSpan,
-        template_element_span: SourceSpan,
-    ) -> Self {
-        Self {
-            lua_error,
-            template_source: source,
-            lua_expr_span,
-            template_element_span,
+        error_span: Option<SourceSpan>,
+    },
+    #[error("{source}")]
+    InElement {
+        #[source]
+        source: Box<TemplateError>,
+        element_span: SourceSpan,
+    },
+}
+
+impl TemplateError {
+    pub fn from_lua_error(lua_error: LuaError, lua_expr_span: impl Into<SourceSpan>) -> Self {
+        match lua_error {
+            LuaError::SourceError(lua_error) => {
+                let lua_expr_span = lua_expr_span.into();
+                let lua_start = lua_expr_span.offset() + lua_error.span.start;
+                let lua_end = lua_expr_span.offset() + lua_error.span.end;
+                Self::LuaEvalError {
+                    lua_error: LuaError::SourceError(lua_error),
+                    error_span: Some((lua_start..lua_end).into()),
+                }
+            }
+            lua_error => Self::LuaEvalError {
+                lua_error,
+                error_span: None,
+            },
         }
     }
 }
 
-impl Diagnostic for LuaEvalError {
-    fn code<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
+impl TemplateError {
+    pub fn labels_vec(&self) -> Vec<LabeledSpan> {
+        match self {
+            TemplateError::ParseError(err) => {
+                if let Some(labels) = err.labels() {
+                    labels.collect()
+                } else {
+                    vec![]
+                }
+            }
+            TemplateError::LuaEvalError {
+                error_span: Some(span),
+                ..
+            } => {
+                vec![LabeledSpan::at(*span, "here")]
+            }
+            TemplateError::LuaEvalError {
+                error_span: None, ..
+            } => {
+                vec![]
+            }
+            TemplateError::InElement {
+                element_span,
+                source,
+            } => vec![LabeledSpan::at(*element_span, "in this element")]
+                .into_iter()
+                .chain(source.labels_vec())
+                .collect(),
+        }
+    }
+}
+
+impl Diagnostic for TemplateError {
+    fn code<'a>(&'a self) -> Option<Box<dyn std::fmt::Display + 'a>> {
         None
     }
 
     fn severity(&self) -> Option<miette::Severity> {
-        Some(miette::Severity::Error)
-    }
-
-    fn help<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
         None
     }
 
-    fn url<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
+    fn help<'a>(&'a self) -> Option<Box<dyn std::fmt::Display + 'a>> {
+        None
+    }
+
+    fn url<'a>(&'a self) -> Option<Box<dyn std::fmt::Display + 'a>> {
         None
     }
 
     fn source_code(&self) -> Option<&dyn miette::SourceCode> {
-        Some(&self.template_source)
+        None
     }
 
     fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {
-        let lua_start = self.lua_expr_span.offset() + self.lua_error.span.start;
-        let lua_end = self.lua_expr_span.offset() + self.lua_error.span.end;
-        let labels = vec![
-            miette::LabeledSpan::at(lua_start..lua_end, "here"),
-            miette::LabeledSpan::at(self.template_element_span, "in this template element"),
-        ];
-        Some(Box::new(labels.into_iter()))
+        Some(Box::new(self.labels_vec().into_iter()))
     }
 
     fn related<'a>(&'a self) -> Option<Box<dyn Iterator<Item = &'a dyn Diagnostic> + 'a>> {
@@ -81,6 +104,12 @@ impl Diagnostic for LuaEvalError {
     }
 
     fn diagnostic_source(&self) -> Option<&dyn Diagnostic> {
-        None
+        match self {
+            TemplateError::ParseError(yolk_parse_failure) => {
+                Some(yolk_parse_failure as &dyn Diagnostic)
+            }
+            TemplateError::LuaEvalError { lua_error, .. } => Some(lua_error as &dyn Diagnostic),
+            TemplateError::InElement { source, .. } => Some(source.as_ref() as &dyn Diagnostic),
+        }
     }
 }

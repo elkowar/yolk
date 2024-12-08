@@ -13,7 +13,7 @@ Ok(
                 full_line: [0..42]"# {# replace(`'.*'`, `'{data.value}'`) #}\n",
             },
             expr: [5..39]"replace(`'.*'`, `'{data.value}'`) ",
-            next_line: "value = 'foo'",
+            next_line: [42..55]"value = 'foo'",
             is_if: false,
         },
         Plain(

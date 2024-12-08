@@ -7,8 +7,19 @@ static LUA_ERROR_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^.*: \[.*?\]:(\d+): (.*)$").unwrap());
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
+pub enum LuaError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    SourceError(#[from] LuaSourceError),
+    #[error(transparent)]
+    MluaError(#[from] mlua::Error),
+    #[error("{}", .0)]
+    Other(miette::Report),
+}
+
+#[derive(Debug, thiserror::Error, Diagnostic)]
 #[error("Error in lua code: {}", .message)]
-pub struct LuaError {
+pub struct LuaSourceError {
     pub message: String,
     #[label("here")]
     pub span: Range<usize>,
@@ -17,7 +28,7 @@ pub struct LuaError {
     pub source_code: Option<NamedSource<String>>,
 }
 
-impl LuaError {
+impl LuaSourceError {
     pub fn from_mlua_with_source(name: &str, source_code: &str, err: mlua::Error) -> Self {
         let mut msg = err.to_string();
         let mut span = 0..0;

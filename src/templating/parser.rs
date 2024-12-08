@@ -42,20 +42,20 @@ impl<'a> Sp<&'a str> {
 }
 
 impl<T> Sp<T> {
-    fn new(range: Range<usize>, content: T) -> Self {
+    pub fn new(range: Range<usize>, content: T) -> Self {
         Self { range, content }
     }
 
-    fn content(&self) -> &T {
+    pub fn content(&self) -> &T {
         &self.content
     }
 
     #[allow(unused)]
-    fn range(&self) -> Range<usize> {
+    pub fn range(&self) -> Range<usize> {
         self.range.clone()
     }
 
-    fn map<U, F: FnOnce(T) -> U>(self, f: F) -> Sp<U> {
+    pub fn map<U, F: FnOnce(T) -> U>(self, f: F) -> Sp<U> {
         Sp::new(self.range, f(self.content))
     }
 }
@@ -215,7 +215,10 @@ fn p_nextline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     let (tagged_line, expr) = p_tag_line("{#", p_inner, "#}", true)
         .context("line with a next-line tag")
         .parse_next(input)?;
-    let next_line = till_line_ending.context("Another line").parse_next(input)?;
+    let next_line = till_line_ending
+        .context("Another line")
+        .spanned()
+        .parse_next(input)?;
     Ok(Element::NextLine {
         tagged_line,
         is_if: expr.content().0,

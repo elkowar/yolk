@@ -5,7 +5,7 @@ use miette::Context as _;
 use mlua::Value;
 use regex::Regex;
 
-use crate::yolk::EvalMode;
+use crate::{script::lua_error::LuaError, yolk::EvalMode};
 
 use super::eval_ctx::{EvalCtx, YOLK_TEXT_NAME};
 
@@ -94,25 +94,22 @@ pub fn setup_environment_stuff(eval_mode: EvalMode, eval_ctx: &EvalCtx) -> Resul
 pub fn setup_tag_functions(eval_ctx: &EvalCtx) -> miette::Result<()> {
     /// Simple regex replacement that will refuse to run a non-reversible replacement.
     /// If the replacement value is non-reversible, will return the original text and log a warning.
-    fn tag_text_replace(text: &str, pattern: &str, replacement: &str) -> Result<String> {
+    fn tag_text_replace(text: &str, pattern: &str, replacement: &str) -> Result<String, LuaError> {
         let pattern = create_regex(pattern)?;
         let after_replace = pattern.replace(text, replacement);
         if let Some(original_value) = pattern.find(text) {
             let original_value = original_value.as_str();
             let reversed = pattern.replace(&after_replace, original_value);
             if reversed != text {
-                miette::bail!(
+                return Err(LuaError::Other(miette::miette!(
                     "Refusing to run non-reversible replacement: {text} -> {after_replace}",
-                );
+                )));
             }
         };
         Ok(after_replace.to_string())
     }
     eval_ctx.register_fn("replace", |lua, (regex, replacement): (String, String)| {
-        let text = lua
-            .globals()
-            .get::<String>(YOLK_TEXT_NAME)
-            .into_diagnostic()?;
+        let text = lua.globals().get::<String>(YOLK_TEXT_NAME)?;
         tag_text_replace(&text, &regex, &replacement)
     })?;
     eval_ctx.set_global("r", eval_ctx.get_global::<mlua::Function>("replace")?)?;
@@ -120,10 +117,7 @@ pub fn setup_tag_functions(eval_ctx: &EvalCtx) -> miette::Result<()> {
     eval_ctx.register_fn(
         "replace_in",
         |lua, (between, replacement): (String, String)| {
-            let text = lua
-                .globals()
-                .get::<String>(YOLK_TEXT_NAME)
-                .into_diagnostic()?;
+            let text = lua.globals().get::<String>(YOLK_TEXT_NAME)?;
             let regex = format!("{between}[^{between}]*{between}");
             tag_text_replace(&text, &regex, &format!("{between}{replacement}{between}"))
         },
@@ -131,10 +125,7 @@ pub fn setup_tag_functions(eval_ctx: &EvalCtx) -> miette::Result<()> {
     eval_ctx.register_fn(
         "replace_in",
         |lua, (between, replacement): (String, String)| {
-            let text = lua
-                .globals()
-                .get::<String>(YOLK_TEXT_NAME)
-                .into_diagnostic()?;
+            let text = lua.globals().get::<String>(YOLK_TEXT_NAME)?;
             let regex = format!("{between}[^{between}]*{between}");
             tag_text_replace(&text, &regex, &format!("{between}{replacement}{between}"))
         },
@@ -142,10 +133,7 @@ pub fn setup_tag_functions(eval_ctx: &EvalCtx) -> miette::Result<()> {
     eval_ctx.set_global("ri", eval_ctx.get_global::<mlua::Function>("replace_in")?)?;
 
     eval_ctx.register_fn("replace_color", |lua, replacement: String| {
-        let text = lua
-            .globals()
-            .get::<String>(YOLK_TEXT_NAME)
-            .into_diagnostic()?;
+        let text = lua.globals().get::<String>(YOLK_TEXT_NAME)?;
         tag_text_replace(
             &text,
             r"#[\da-fA-F]{6}([\da-fA-F]{2})?",
@@ -160,10 +148,11 @@ pub fn setup_tag_functions(eval_ctx: &EvalCtx) -> miette::Result<()> {
     Ok(())
 }
 
-fn create_regex(s: &str) -> Result<Regex> {
+fn create_regex(s: &str) -> Result<Regex, LuaError> {
     Regex::new(s)
         .into_diagnostic()
         .wrap_err_with(|| format!("Invalid regex: {s}"))
+        .map_err(|e| LuaError::Other(e))
 }
 
 #[cfg(test)]
@@ -192,9 +181,10 @@ mod test {
             "foo:'xxx'",
             eval_ctx.eval_lua::<String>("test", "replace(`'.*'`, `'xxx'`)")?
         );
-        assert_eq!(
-            "foo:'aaa'",
-            eval_ctx.eval_lua::<String>("test", "replace(`'.*'`, `xxx`)")?,
+        assert!(
+            eval_ctx
+                .eval_lua::<String>("test", "replace(`'.*'`, `xxx`)")
+                .is_err(),
             "replace performed non-reversible replacement",
         );
         Ok(())
@@ -208,9 +198,10 @@ mod test {
             "foo:'xxx'",
             eval_ctx.eval_lua::<String>("test", "replace_in(`'`, `xxx`)")?
         );
-        assert_eq!(
-            "foo:'aaa'",
-            eval_ctx.eval_lua::<String>("test", "replace_in(`'`, `x'xx`)")?,
+        assert!(
+            eval_ctx
+                .eval_lua::<String>("test", "replace_in(`'`, `x'xx`)")
+                .is_err(),
             "replace performed non-reversible replacement",
         );
         Ok(())
@@ -229,14 +220,16 @@ mod test {
             "foo: #00ff0000",
             eval_ctx.eval_lua::<String>("test", "replace_color(`#00ff0000`)")?,
         );
-        assert_eq!(
-            "foo: #ff0000",
-            eval_ctx.eval_lua::<String>("test", "replace_color(`00ff00`)")?,
+        assert!(
+            eval_ctx
+                .eval_lua::<String>("test", "replace_color(`00ff00`)")
+                .is_err(),
             "replace_color performed non-reversible replacement",
         );
-        assert_eq!(
-            "foo: #ff0000",
-            eval_ctx.eval_lua::<String>("test", "replace_color(`bad color`)")?,
+        assert!(
+            eval_ctx
+                .eval_lua::<String>("test", "replace_color(`bad color`)")
+                .is_err(),
             "replace_color performed non-reversible replacement",
         );
         Ok(())
