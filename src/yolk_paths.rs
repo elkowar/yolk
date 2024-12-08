@@ -360,11 +360,11 @@ mod test {
         test_egg_dir.child("content/dir3/file1").write_str("")?;
         test_egg_dir.child("content/dir4/dir1").create_dir_all()?;
 
-        assert_eq!(false, egg.is_deployed()?);
+        assert!(!(egg.is_deployed()?));
         yolk.deploy_egg("test_egg")?;
-        assert_eq!(true, egg.is_deployed()?);
+        assert!(egg.is_deployed()?);
         fs_err::remove_file(root.child("content/dir_old/file1"))?;
-        assert_eq!(false, egg.is_deployed()?);
+        assert!(!(egg.is_deployed()?));
 
         Ok(())
     }

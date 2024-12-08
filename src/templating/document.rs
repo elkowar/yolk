@@ -115,14 +115,3 @@ impl RenderContext {
             .join("\n")
     }
 }
-
-// fn pest_error_to_miette(e: pest::error::Error<Rule>) -> miette::Report {
-//     let span = LabeledSpan::at(
-//         match e.location {
-//             pest::error::InputLocation::Pos(x) => x..x,
-//             pest::error::InputLocation::Span((x, y)) => x..y,
-//         },
-//         "here",
-//     );
-//     miette::miette!(labels = vec![span], "{e}")
-// }

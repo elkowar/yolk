@@ -86,9 +86,7 @@ impl Diagnostic for TemplateError {
     }
 
     fn source_code(&self) -> Option<&dyn miette::SourceCode> {
-        match self {
-            _ => None,
-        }
+        None
     }
 
     fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {

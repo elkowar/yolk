@@ -152,7 +152,7 @@ fn create_regex(s: &str) -> Result<Regex, LuaError> {
     Regex::new(s)
         .into_diagnostic()
         .wrap_err_with(|| format!("Invalid regex: {s}"))
-        .map_err(|e| LuaError::Other(e))
+        .map_err(LuaError::Other)
 }
 
 #[cfg(test)]
