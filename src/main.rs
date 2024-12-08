@@ -133,7 +133,7 @@ fn run_command(args: Args) -> Result<()> {
             println!("Git state:");
             yolk.paths()
                 .start_git_command_builder()?
-                .args(&["status", "--short"])
+                .args(["status", "--short"])
                 .status()
                 .into_diagnostic()?;
         }

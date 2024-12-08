@@ -35,7 +35,7 @@ impl CommentStyle {
                     tagged_line: line, ..
                 },
                 ..
-            } => &line,
+            } => line,
             Element::Conditional { blocks, .. } => &blocks.first()?.tagged_line,
             Element::Plain(_) => return None,
         };

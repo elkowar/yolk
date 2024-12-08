@@ -159,7 +159,7 @@ impl Yolk {
             .prepare_eval_ctx_for_templates(mode)
             .context("Failed to prepare eval_ctx")?;
         eval_ctx
-            .eval_lua::<Value>("expr", &expr)?
+            .eval_lua::<Value>("expr", expr)?
             .to_string()
             .into_diagnostic()
     }

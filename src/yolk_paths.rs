@@ -119,7 +119,7 @@ impl YolkPaths {
     /// Start an invocation of the `git` command with the `--git-dir` and `--work-tree` set to the yolk git and root path.
     pub fn start_git_command_builder(&self) -> Result<std::process::Command> {
         let mut cmd = std::process::Command::new("git");
-        cmd.current_dir(self.root_path()).args(&[
+        cmd.current_dir(self.root_path()).args([
             "--git-dir",
             &self.active_yolk_git_dir()?.to_string_lossy(),
             "--work-tree",
@@ -296,11 +296,11 @@ fn check_is_deployed_recursive(
     let target_root = target_root.as_ref();
     let egg_root = egg_root.as_ref();
     let current = current.as_ref();
-    let target_file = target_root.join(current.strip_prefix(&egg_root).into_diagnostic()?);
+    let target_file = target_root.join(current.strip_prefix(egg_root).into_diagnostic()?);
     if target_file.is_symlink() && target_file.canonical()? == current {
-        return Ok(true);
+        Ok(true)
     } else if target_file.is_file() {
-        return Ok(false);
+        Ok(false)
     } else if target_file.is_dir() {
         for entry in fs_err::read_dir(current).into_diagnostic()? {
             let entry = entry.into_diagnostic()?;
@@ -308,9 +308,9 @@ fn check_is_deployed_recursive(
                 return Ok(false);
             }
         }
-        return Ok(true);
+        Ok(true)
     } else {
-        return Ok(false);
+        Ok(false)
     }
 }
 

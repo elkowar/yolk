@@ -41,7 +41,7 @@ impl<'a> Sp<&'a str> {
     }
 }
 
-impl<'a, T> Sp<T> {
+impl<T> Sp<T> {
     fn new(range: Range<usize>, content: T) -> Self {
         Self { range, content }
     }
@@ -68,13 +68,13 @@ pub struct TaggedLine<'a> {
     pub full_line: Sp<&'a str>,
 }
 
-pub fn parse_document<'a>(s: &'a str) -> Result<Vec<Element<'a>>, YolkParseFailure> {
+pub fn parse_document(s: &str) -> Result<Vec<Element<'_>>, YolkParseFailure> {
     let p = repeat(0.., p_element);
     try_parse(p, s)
 }
 
 #[allow(unused)]
-pub fn parse_element<'a>(s: &'a str) -> Result<Element<'a>, YolkParseFailure> {
+pub fn parse_element(s: &str) -> Result<Element<'_>, YolkParseFailure> {
     let p = terminated(p_element, repeat(0.., line_ending).map(|_: ()| ()));
     try_parse(p, s)
 }
@@ -93,7 +93,7 @@ pub fn try_parse<'a, P: Parser<Input<'a>, T, YolkParseError>, T>(
 
 fn p_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     trace("peek any", peek(any)).parse_next(input)?;
-    Ok(alt((
+    alt((
         p_inline_element.context(lbl("inline element")),
         p_nextline_element.context(lbl("nextline element")),
         p_conditional_element.context(lbl("conditional element")),
@@ -101,12 +101,12 @@ fn p_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
         p_plain_line_element.context(lbl("plain line")),
         fail.context(lbl("valid element")),
     ))
+    .parse_next(input)
     // .resume_after(
     //     repeat_till(1.., (not(line_ending), any), line_ending)
     //         .map(|((), _)| ())
     //         .void(),
     // )
-    .parse_next(input)?)
     // .unwrap_or_else(|| Element::Plain(Sp::new(0..0, ""))))
 }
 
@@ -141,9 +141,7 @@ fn test_p_text_segment() -> TestResult {
     Ok(())
 }
 
-fn p_regular_tag_inner<'a>(
-    end: &'a str,
-) -> impl winnow::Parser<Input<'a>, &'a str, YolkParseError> {
+fn p_regular_tag_inner(end: &str) -> impl winnow::Parser<Input<'_>, &'_ str, YolkParseError> {
     trace("p_regular_tag_inner", move |i: &mut _| {
         repeat_till(1.., (not(line_ending), not(end), any), peek(end))
             .map(|(_, _): ((), _)| ())
@@ -340,7 +338,7 @@ fn p_conditional_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
 
     let mut blocks = Vec::new();
     blocks.push(if_body);
-    blocks.extend(elif_bodies.into_iter());
+    blocks.extend(elif_bodies);
     Ok(Element::Conditional {
         blocks,
         else_block: else_block.map(|x| x.map_expr(|_| ())),
