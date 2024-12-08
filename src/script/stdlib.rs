@@ -1,7 +1,6 @@
 use miette::{IntoDiagnostic, Result};
 use std::path::PathBuf;
 
-use miette::Context as _;
 use mlua::Value;
 use regex::Regex;
 
@@ -9,7 +8,7 @@ use crate::{script::lua_error::LuaError, yolk::EvalMode};
 
 use super::eval_ctx::{EvalCtx, YOLK_TEXT_NAME};
 
-pub fn setup_stdlib(eval_mode: EvalMode, eval_ctx: &EvalCtx) -> Result<()> {
+pub fn setup_stdlib(eval_mode: EvalMode, eval_ctx: &EvalCtx) -> Result<(), LuaError> {
     setup_environment_stuff(eval_mode, eval_ctx)?;
     let globals = eval_ctx.lua().globals();
 
@@ -18,13 +17,11 @@ pub fn setup_stdlib(eval_mode: EvalMode, eval_ctx: &EvalCtx) -> Result<()> {
         .lua()
         .load(inspect)
         .set_name("inspect.lua")
-        .into_function()
-        .into_diagnostic()?;
+        .into_function()?;
     let inspect = eval_ctx
         .lua()
-        .load_from_function::<Value>("inspect", inspect)
-        .into_diagnostic()?;
-    globals.set("inspect", inspect).into_diagnostic()?;
+        .load_from_function::<Value>("inspect", inspect)?;
+    globals.set("inspect", inspect)?;
 
     eval_ctx.register_fn(
         "regex_match",
@@ -57,7 +54,7 @@ macro_rules! if_canonical_return {
     };
 }
 
-pub fn setup_environment_stuff(eval_mode: EvalMode, eval_ctx: &EvalCtx) -> Result<()> {
+pub fn setup_environment_stuff(eval_mode: EvalMode, eval_ctx: &EvalCtx) -> Result<(), LuaError> {
     eval_ctx.register_fn("command_available", move |_, name: String| {
         if_canonical_return!(eval_mode);
         Ok(match which::which_all_global(name) {
@@ -91,7 +88,7 @@ pub fn setup_environment_stuff(eval_mode: EvalMode, eval_ctx: &EvalCtx) -> Resul
     Ok(())
 }
 
-pub fn setup_tag_functions(eval_ctx: &EvalCtx) -> miette::Result<()> {
+pub fn setup_tag_functions(eval_ctx: &EvalCtx) -> Result<(), LuaError> {
     /// Simple regex replacement that will refuse to run a non-reversible replacement.
     /// If the replacement value is non-reversible, will return the original text and log a warning.
     fn tag_text_replace(text: &str, pattern: &str, replacement: &str) -> Result<String, LuaError> {
@@ -149,10 +146,7 @@ pub fn setup_tag_functions(eval_ctx: &EvalCtx) -> miette::Result<()> {
 }
 
 fn create_regex(s: &str) -> Result<Regex, LuaError> {
-    Regex::new(s)
-        .into_diagnostic()
-        .wrap_err_with(|| format!("Invalid regex: {s}"))
-        .map_err(LuaError::Other)
+    Regex::new(s).into_diagnostic().map_err(LuaError::Other)
 }
 
 #[cfg(test)]

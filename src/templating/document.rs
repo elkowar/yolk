@@ -45,18 +45,13 @@ impl<'a> Document<'a> {
 
     #[cfg(test)]
     pub fn parse_string(s: &'a str) -> Result<Self> {
-        let elements = parser::parse_document(s)?;
-        let comment_style = CommentStyle::try_infer_from_elements(&elements).unwrap_or_default();
-        Ok(Self {
-            elements,
-            comment_style,
-            source: s,
-            source_name: None,
-        })
+        Self::parse_string_named("unnamed", s)
     }
 
     pub fn parse_string_named(name: &str, s: &'a str) -> Result<Self> {
-        let elements = parser::parse_document(s)?;
+        let elements = parser::parse_document(s).map_err(|e| {
+            miette::Report::from(e).with_source_code(NamedSource::new(name, s.to_string()))
+        })?;
         let comment_style = CommentStyle::try_infer_from_elements(&elements).unwrap_or_default();
         Ok(Self {
             elements,
