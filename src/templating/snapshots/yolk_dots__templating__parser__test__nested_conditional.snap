@@ -1,0 +1,50 @@
+---
+source: src/templating/parser.rs
+expression: "p_conditional_element(&mut new_input(indoc::indoc! {\n                    r#\"\n            // {% if foo %}\n            // {% if foo %}\n            // {% end %}\n            // {% end %}\n        \"#\n                }))"
+snapshot_kind: text
+---
+Ok(
+    Conditional {
+        blocks: [
+            Block {
+                tagged_line: TaggedLine {
+                    left: "// ",
+                    tag: "{% if foo %}",
+                    right: "\n",
+                    full_line: [0..16]"// {% if foo %}\n",
+                },
+                expr: [6..13]"foo ",
+                body: [
+                    Conditional {
+                        blocks: [
+                            Block {
+                                tagged_line: TaggedLine {
+                                    left: "// ",
+                                    tag: "{% if foo %}",
+                                    right: "\n",
+                                    full_line: [16..32]"// {% if foo %}\n",
+                                },
+                                expr: [22..29]"foo ",
+                                body: [],
+                            },
+                        ],
+                        else_block: None,
+                        end: TaggedLine {
+                            left: "// ",
+                            tag: "{% end %}",
+                            right: "\n",
+                            full_line: [32..45]"// {% end %}\n",
+                        },
+                    },
+                ],
+            },
+        ],
+        else_block: None,
+        end: TaggedLine {
+            left: "// ",
+            tag: "{% end %}",
+            right: "\n",
+            full_line: [45..58]"// {% end %}\n",
+        },
+    },
+)

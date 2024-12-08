@@ -1,0 +1,70 @@
+---
+source: src/templating/parser.rs
+expression: "p_conditional_element(&mut new_input(indoc::indoc! {\n                    r#\"\n            // {% if a %}\n            a\n            b\n            // {% elif b %}\n            // {% elif c %}\n            // {% else %}\n            c\n            // {% end %}\n        \"#\n                }))"
+snapshot_kind: text
+---
+Ok(
+    Conditional {
+        blocks: [
+            Block {
+                tagged_line: TaggedLine {
+                    left: "// ",
+                    tag: "{% if a %}",
+                    right: "\n",
+                    full_line: [0..14]"// {% if a %}\n",
+                },
+                expr: [6..11]"a ",
+                body: [
+                    Plain(
+                        [14..16]"a\n",
+                    ),
+                    Plain(
+                        [16..18]"b\n",
+                    ),
+                ],
+            },
+            Block {
+                tagged_line: TaggedLine {
+                    left: "// ",
+                    tag: "{% elif b %}",
+                    right: "\n",
+                    full_line: [18..34]"// {% elif b %}\n",
+                },
+                expr: [24..31]"b ",
+                body: [],
+            },
+            Block {
+                tagged_line: TaggedLine {
+                    left: "// ",
+                    tag: "{% elif c %}",
+                    right: "\n",
+                    full_line: [34..50]"// {% elif c %}\n",
+                },
+                expr: [40..47]"c ",
+                body: [],
+            },
+        ],
+        else_block: Some(
+            Block {
+                tagged_line: TaggedLine {
+                    left: "// ",
+                    tag: "{% else %}",
+                    right: "\n",
+                    full_line: [50..64]"// {% else %}\n",
+                },
+                expr: (),
+                body: [
+                    Plain(
+                        [64..66]"c\n",
+                    ),
+                ],
+            },
+        ),
+        end: TaggedLine {
+            left: "// ",
+            tag: "{% end %}",
+            right: "\n",
+            full_line: [66..79]"// {% end %}\n",
+        },
+    },
+)

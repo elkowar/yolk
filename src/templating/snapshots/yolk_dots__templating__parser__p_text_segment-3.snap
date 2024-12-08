@@ -1,0 +1,16 @@
+---
+source: src/templating/parser.rs
+expression: "p_text_segment.parse_peek(new_input(\"{< bar >}\"))"
+snapshot_kind: text
+---
+Err(
+    Backtrack(
+        YolkParseError {
+            context: None,
+            span: None,
+            label: None,
+            help: None,
+            kind: None,
+        },
+    ),
+)

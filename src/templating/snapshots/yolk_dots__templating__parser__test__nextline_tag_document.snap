@@ -1,0 +1,23 @@
+---
+source: src/templating/parser.rs
+expression: "parse_document(&mut new_input(indoc::indoc! {\n                    r#\"\n            # {# replace(`'.*'`, `'{data.value}'`) #}\n            value = 'foo'\n        \"#\n                }))"
+snapshot_kind: text
+---
+Ok(
+    [
+        NextLine {
+            tagged_line: TaggedLine {
+                left: "# ",
+                tag: "{# replace(`'.*'`, `'{data.value}'`) #}",
+                right: "\n",
+                full_line: [0..42]"# {# replace(`'.*'`, `'{data.value}'`) #}\n",
+            },
+            expr: [5..39]"replace(`'.*'`, `'{data.value}'`) ",
+            next_line: [42..55]"value = 'foo'",
+            is_if: false,
+        },
+        Plain(
+            [55..56]"\n",
+        ),
+    ],
+)

@@ -1,0 +1,16 @@
+---
+source: src/templating/parser.rs
+expression: "p_tag_line(\"{%\", \"end\", \"%}\", false).parse(new_input(\"a{% end %}b\"))"
+snapshot_kind: text
+---
+Ok(
+    (
+        TaggedLine {
+            left: "a",
+            tag: "{% end %}",
+            right: "b",
+            full_line: [0..11]"a{% end %}b",
+        },
+        [4..7]"end",
+    ),
+)

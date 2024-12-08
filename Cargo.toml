@@ -1,11 +1,12 @@
 [package]
-name = "yolk"
+name = "yolk_dots"
 authors = ["ElKowar <dev@elkowar.dev>"]
 description = "Templated dotfile management without template files"
-version = "0.0.6"
+version = "0.0.7"
 edition = "2021"
 repository = "https://github.com/elkowar/yolk"
 homepage = "https://elkowar.github.io/yolk"
+license = "MIT OR Apache-2.0"
 
 [package.metadata.wix]
 upgrade-guid = "04CA81A1-EF78-4B08-8D76-74A8DB52A323"
