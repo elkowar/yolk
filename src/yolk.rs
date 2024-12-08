@@ -115,7 +115,7 @@ impl Yolk {
         // while still minimizing unnecessary writes or disk usage.
         let mut eval_ctx = self
             .prepare_eval_ctx_for_templates(mode)
-            .context("Failed to prepare eval_ctx")?;
+            .context("Failed to prepare evaluation context")?;
         for egg in self.list_eggs()? {
             let egg = egg?;
             let tmpl_paths = egg.template_paths()?;
@@ -161,7 +161,7 @@ impl Yolk {
     pub fn eval_template_lua(&self, mode: EvalMode, expr: &str) -> Result<String> {
         let eval_ctx = self
             .prepare_eval_ctx_for_templates(mode)
-            .context("Failed to prepare eval_ctx")?;
+            .context("Failed to prepare evaluation context")?;
         tracing::debug!("Evaluating lua expression: {}", expr);
         eval_ctx
             .eval_lua::<Value>("expr", expr)?
@@ -178,8 +178,8 @@ impl Yolk {
         file_path: &str,
         content: &str,
     ) -> Result<String> {
-        let doc =
-            Document::parse_string_named(file_path, content).context("Failed to parse document")?;
+        let doc = Document::parse_string_named(file_path, content)
+            .context("Failed to parse document `{file_path}`")?;
         tracing::debug!("Rendering template");
         doc.render(eval_ctx)
             .with_context(|| format!("Failed to render document `{file_path}`"))
