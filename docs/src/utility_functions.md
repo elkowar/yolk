@@ -37,3 +37,7 @@ Yolk provides a set of utility functions that can be used in your [yolk.lua](./y
 ### `string read_file(path)`
 
 > read the contents of the given file
+
+### `string[] read_dir(path)`
+
+> list children of a directory

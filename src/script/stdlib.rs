@@ -87,6 +87,20 @@ pub fn setup_environment_stuff(eval_mode: EvalMode, eval_ctx: &EvalCtx) -> Resul
         if_canonical_return!(eval_mode);
         Ok(fs_err::read_to_string(p).unwrap_or_default())
     })?;
+    eval_ctx.register_fn("read_dir", move |_, p: String| -> Result<Vec<String>, _> {
+        if_canonical_return!(eval_mode);
+        Ok(fs_err::read_dir(p)
+            .into_diagnostic()
+            .map_err(|e| LuaError::Other(e))?
+            .map(|x| {
+                Ok(x.into_diagnostic()
+                    .map_err(LuaError::Other)?
+                    .path()
+                    .to_string_lossy()
+                    .to_string())
+            })
+            .collect::<Result<_, LuaError>>()?)
+    })?;
     Ok(())
 }
 
