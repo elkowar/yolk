@@ -1,3 +1,4 @@
+use cached::proc_macro::cached;
 use miette::{IntoDiagnostic, Result};
 use std::path::PathBuf;
 
@@ -122,11 +123,12 @@ pub fn setup_tag_functions(eval_ctx: &EvalCtx) -> Result<(), LuaError> {
         };
         Ok(after_replace.to_string())
     }
+
     eval_ctx.register_fn("replace", |lua, (regex, replacement): (String, String)| {
         let text = lua.globals().get::<String>(YOLK_TEXT_NAME)?;
         tag_text_replace(&text, &regex, &replacement)
     })?;
-    eval_ctx.set_global("r", eval_ctx.get_global::<mlua::Function>("replace")?)?;
+    eval_ctx.set_global("r", eval_ctx.get_global::<mlua::Function>("replace_re")?)?;
 
     eval_ctx.register_fn(
         "replace_in",
@@ -136,15 +138,19 @@ pub fn setup_tag_functions(eval_ctx: &EvalCtx) -> Result<(), LuaError> {
             tag_text_replace(&text, &regex, &format!("{between}{replacement}{between}"))
         },
     )?;
+    eval_ctx.set_global("rin", eval_ctx.get_global::<mlua::Function>("replace_in")?)?;
     eval_ctx.register_fn(
-        "replace_in",
-        |lua, (between, replacement): (String, String)| {
+        "replace_between",
+        |lua, (left, right, replacement): (String, String, String)| {
             let text = lua.globals().get::<String>(YOLK_TEXT_NAME)?;
-            let regex = format!("{between}[^{between}]*{between}");
-            tag_text_replace(&text, &regex, &format!("{between}{replacement}{between}"))
+            let regex = format!("{left}[^{right}]*{right}");
+            tag_text_replace(&text, &regex, &format!("{left}{replacement}{right}"))
         },
     )?;
-    eval_ctx.set_global("ri", eval_ctx.get_global::<mlua::Function>("replace_in")?)?;
+    eval_ctx.set_global(
+        "rbet",
+        eval_ctx.get_global::<mlua::Function>("replace_between")?,
+    )?;
 
     eval_ctx.register_fn("replace_color", |lua, replacement: String| {
         let text = lua.globals().get::<String>(YOLK_TEXT_NAME)?;
@@ -168,11 +174,55 @@ pub fn setup_tag_functions(eval_ctx: &EvalCtx) -> Result<(), LuaError> {
         eval_ctx.get_global::<mlua::Function>("replace_number")?,
     )?;
 
+    eval_ctx.register_fn("replace_quoted", |lua, replacement: String| {
+        let text = lua.globals().get::<String>(YOLK_TEXT_NAME)?;
+        let mut result = tag_text_replace(&text, r#"".*""#, &format!("\"{replacement}\""))?;
+        if result == text {
+            result = tag_text_replace(&text, r#"`.*`"#, &format!("`{replacement}`"))?;
+        }
+        if result == text {
+            result = tag_text_replace(&text, r#"'.*'"#, &format!("'{replacement}'"))?;
+        }
+        Ok(result)
+    })?;
+    eval_ctx.set_global(
+        "rq",
+        eval_ctx.get_global::<mlua::Function>("replace_quoted")?,
+    )?;
+
+    eval_ctx.register_fn("replace_value", |lua, replacement: String| {
+        let text = lua.globals().get::<String>(YOLK_TEXT_NAME)?;
+        let regex = create_regex(r"([=:])( *)([^\s]+)").unwrap();
+
+        if let Some(caps) = regex.captures(&text) {
+            let full_match = caps.get(0).unwrap();
+            let equals = caps.get(1).unwrap();
+            let space = caps.get(2).unwrap();
+            let new_value = regex.replace(
+                &text,
+                format!("{}{}{}", equals.as_str(), space.as_str(), replacement),
+            );
+            if regex.replace(&new_value, full_match.as_str()) == text {
+                Ok(new_value.to_string())
+            } else {
+                Err(LuaError::Other(miette::miette!(
+                    "Refusing to run non-reversible replacement: {text} -> {new_value}",
+                )))
+            }
+        } else {
+            Ok(text)
+        }
+    })?;
+    eval_ctx.set_global(
+        "rv",
+        eval_ctx.get_global::<mlua::Function>("replace_value")?,
+    )?;
     Ok(())
 }
 
+#[cached(key = "String", convert = r#"{s.to_string()}"#, result)]
 fn create_regex(s: &str) -> Result<Regex, LuaError> {
-    Regex::new(s).into_diagnostic().map_err(LuaError::Other)
+    Regex::new(&s).into_diagnostic().map_err(LuaError::Other)
 }
 
 #[cfg(test)]

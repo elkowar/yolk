@@ -11,16 +11,16 @@ Inside these tags, you can call any of Yolks template tag functions (Or, in fact
 
 ## Built-in Template Functions
 
-### `replace(pattern, replacement)`
+### `replace_re(pattern, replacement)`
 
 > Replaces all occurrences of a Regex `pattern` with `replacement` in the text.
 >
-> (shorthand: `r(pattern, replacement)`).
+> (shorthand: `rr(pattern, replacement)`).
 >
 > #### Example
 >
 > ```handlebars
-> ui_font = "Arial" # {< replace(`".*"`, `"{data.font.ui}"`) >}
+> ui_font = "Arial" # {< replace_re(`".*"`, `"{data.font.ui}"`) >}
 > ```
 >
 > Note that the replacement value needs to contain the quotes, as those are also matched agains in the regex pattern.
@@ -28,7 +28,7 @@ Inside these tags, you can call any of Yolks template tag functions (Or, in fact
 
 ### `replace_in(delimiter, replacement)`
 
-> (shorthand: `ri(delimiter, replacement)`).
+> (shorthand: `rin(delimiter, replacement)`).
 >
 > Replaces the text between two delimiters with the `replacement`.
 >
@@ -36,6 +36,21 @@ Inside these tags, you can call any of Yolks template tag functions (Or, in fact
 >
 > ```handlebars
 > ui_font = "Arial" # {< replace_in(`"`, data.font.ui) >}
+> ```
+>
+> Note: we don't need to include the quotes in the replacement here.
+
+
+### `replace_between(left, right, replacement)`
+
+> (shorthand: `rbet(left, right, replacement)`).
+>
+> Replaces the text between two delimiters with the `replacement`.
+>
+> #### Example
+>
+> ```handlebars
+> ui_font = (Arial) # {< replace_between(`(`, `)`, data.font.ui) >}
 > ```
 >
 > Note: we don't need to include the quotes in the replacement here.
@@ -64,4 +79,30 @@ Inside these tags, you can call any of Yolks template tag functions (Or, in fact
 >
 > ```handlebars
 > cursor_size = 32 # {< replace_number(data.cursor_size) >}
+> ```
+
+
+### `replace_quoted(value)`
+
+> (shorthand: `rq(value)`).
+>
+> Replaces a value between quotes with another value
+>
+> #### Example
+>
+> ```handlebars
+> ui_font = "Arial" # {< replace_quoted(data.font.ui) >}
+> ```
+
+
+### `replace_value(value)`
+
+> (shorthand: `rv(value)`).
+>
+> Replaces a value (without spaces) after a `:` or a `=` with another value
+>
+> #### Example
+>
+> ```handlebars
+> ui_font = Arial # {< replace_value(data.font.ui) >}
 > ```
