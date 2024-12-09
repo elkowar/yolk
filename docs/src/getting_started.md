@@ -46,9 +46,12 @@ This ensures that git sees the canonical (stable) representation of your files, 
 
 ```bash
 $ yolk git init
+$ yolk safeguard
 $ yolk git add --all
 $ yolk git commit -m "Setup alacritty"
 ```
+
+To understand what `yolk safeguard` does, see [safeguarding git](./git_concepts.md#safeguarding-git).
 
 You can now set up your git reomte and use git as usual -- just remember to always use `yolk git`, especially when you're committing your files.
 

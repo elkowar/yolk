@@ -1,6 +1,7 @@
 # Summary
 
 - [Getting started](./getting_started.md)
+  - [Git concepts](./git_concepts.md)
 - [Eggs](./eggs.md)
 - [Templates](./templates.md)
   - [Luau](./luau.md)
