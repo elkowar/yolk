@@ -1,7 +1,6 @@
 ---
 source: src/templating/parser.rs
-expression: "p_conditional_element(&mut new_input(indoc::indoc! {\n                    r#\"\n            // {% if a %}\n            a\n            b\n            // {% elif b %}\n            // {% elif c %}\n            // {% else %}\n            c\n            // {% end %}\n        \"#\n                }))"
-snapshot_kind: text
+expression: "p_conditional_element(&mut\nnew_input(indoc::indoc!\n{\n    r#\"\n            // {% if a %}\n            a\n            b\n            // {% elif b %}\n            // {% elif c %}\n            // {% else %}\n            c\n            // {% end %}\n        \"#\n}))"
 ---
 Ok(
     Conditional {
@@ -16,10 +15,7 @@ Ok(
                 expr: [6..11]"a ",
                 body: [
                     Plain(
-                        [14..16]"a\n",
-                    ),
-                    Plain(
-                        [16..18]"b\n",
+                        [14..18]"a\nb\n",
                     ),
                 ],
             },

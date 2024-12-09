@@ -5,10 +5,7 @@ expression: "parse_document(&mut new_input(\"a\\n\\n{%a%}\\n{%end%}\\n\\na\"))"
 Ok(
     [
         Plain(
-            [0..2]"a\n",
-        ),
-        Plain(
-            [2..3]"\n",
+            [0..3]"a\n\n",
         ),
         MultiLine {
             block: Block {
@@ -29,10 +26,7 @@ Ok(
             },
         },
         Plain(
-            [17..18]"\n",
-        ),
-        Plain(
-            [18..19]"a",
+            [17..19]"\na",
         ),
     ],
 )

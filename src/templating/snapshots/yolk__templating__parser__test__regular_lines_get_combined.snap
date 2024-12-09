@@ -1,0 +1,39 @@
+---
+source: src/templating/parser.rs
+expression: "parse_document(indoc::indoc!\n{\n    r#\"\n            foo\n            bar\n            // {% if a %}\n            foo\n            bar\n            baz\n            // {% end %}\n            foo\n            bar\n        \"#\n})"
+---
+Ok(
+    [
+        Plain(
+            [0..8]"foo\nbar\n",
+        ),
+        Conditional {
+            blocks: [
+                Block {
+                    tagged_line: TaggedLine {
+                        left: "// ",
+                        tag: "{% if a %}",
+                        right: "\n",
+                        full_line: [8..22]"// {% if a %}\n",
+                    },
+                    expr: [14..19]"a ",
+                    body: [
+                        Plain(
+                            [22..34]"foo\nbar\nbaz\n",
+                        ),
+                    ],
+                },
+            ],
+            else_block: None,
+            end: TaggedLine {
+                left: "// ",
+                tag: "{% end %}",
+                right: "\n",
+                full_line: [34..47]"// {% end %}\n",
+            },
+        },
+        Plain(
+            [47..55]"foo\nbar\n",
+        ),
+    ],
+)

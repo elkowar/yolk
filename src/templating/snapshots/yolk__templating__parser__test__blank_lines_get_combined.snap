@@ -1,0 +1,11 @@
+---
+source: src/templating/parser.rs
+expression: "parse_document(\"\\n\\n\\n\\n\")"
+---
+Ok(
+    [
+        Plain(
+            [0..4]"\n\n\n\n",
+        ),
+    ],
+)

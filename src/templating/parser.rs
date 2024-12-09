@@ -1,7 +1,5 @@
 use std::ops::Range;
 
-#[cfg(test)]
-use testresult::TestResult;
 use winnow::{
     ascii::{line_ending, till_line_ending},
     combinator::{
@@ -108,16 +106,21 @@ fn p_plain_line_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     let line_content_p = repeat_till(
         1..,
         (not(alt((p_any_tag_start, line_ending))), any),
-        peek(alt((p_any_tag_start, line_ending, eof))),
+        peek(alt((line_ending, eof))),
     )
     .map(|((), terminator)| terminator)
     .with_taken();
 
     peek(any).parse_next(input)?;
-    alt((
-        line_ending.take_span(),
-        (line_content_p, alt((line_ending, eof))).take_span(),
-    ))
+    repeat(
+        1..,
+        alt((
+            line_ending,
+            (line_content_p, alt((line_ending, eof))).take(),
+        )),
+    )
+    .map(|()| ())
+    .take_span()
     .map(Element::Plain)
     .parse_next(input)
 }
@@ -432,6 +435,26 @@ mod test {
             c
             // {% end %}
         "#})));
+    }
+
+    #[test]
+    fn test_blank_lines_get_combined() {
+        assert_debug_snapshot!(parse_document("\n\n\n\n"));
+    }
+
+    #[test]
+    fn test_regular_lines_get_combined() {
+        assert_debug_snapshot!(parse_document(indoc::indoc! {r#"
+            foo
+            bar
+            // {% if a %}
+            foo
+            bar
+            baz
+            // {% end %}
+            foo
+            bar
+        "#}));
     }
 
     #[test]
