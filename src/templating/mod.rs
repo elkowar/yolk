@@ -142,4 +142,30 @@ mod test {
         );
         Ok(())
     }
+    #[test]
+    pub fn test_preserve_blank_lines_around_conditional_tag() -> TestResult {
+        let doc = Document::parse_string(indoc::indoc! {"
+            foo
+
+            {% if true %}
+            foo
+            {% end %}
+
+            foo
+        "})?;
+        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
+        assert_eq!(
+            indoc::indoc! {"
+                foo
+
+                {% if true %}
+                foo
+                {% end %}
+
+                foo
+            "},
+            doc.render(&mut eval_ctx)?
+        );
+        Ok(())
+    }
 }

@@ -1,0 +1,41 @@
+---
+source: src/templating/parser.rs
+expression: "parse_document(&mut new_input(\"a\\n\\n{%if a%}\\n{%end%}\\n\\na\"))"
+---
+Ok(
+    [
+        Plain(
+            [0..2]"a\n",
+        ),
+        Plain(
+            [2..3]"\n",
+        ),
+        Conditional {
+            blocks: [
+                Block {
+                    tagged_line: TaggedLine {
+                        left: "",
+                        tag: "{%if a%}",
+                        right: "\n",
+                        full_line: [3..12]"{%if a%}\n",
+                    },
+                    expr: [5..9]"a",
+                    body: [],
+                },
+            ],
+            else_block: None,
+            end: TaggedLine {
+                left: "",
+                tag: "{%end%}",
+                right: "\n",
+                full_line: [12..20]"{%end%}\n",
+            },
+        },
+        Plain(
+            [20..21]"\n",
+        ),
+        Plain(
+            [21..22]"a",
+        ),
+    ],
+)

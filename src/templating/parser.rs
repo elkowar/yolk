@@ -330,7 +330,7 @@ fn p_conditional_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
         p_tag_line("{%", "else".void(), "%}", true).context("else tag"),
         p_multiline_body("end"),
     );
-    let p_end = terminated(p_tag_line("{%", "end", "%}", false), opt(line_ending));
+    let p_end = p_tag_line("{%", "end", "%}", false);
     let (if_body, elif_bodies, else_block, end_line): (_, Vec<_>, Option<Block<'a, _>>, _) = (
         p_if.context(lbl("if block")),
         cut_err(repeat(0.., p_elif.context(lbl("elif block")))),
@@ -416,13 +416,13 @@ mod test {
 
     #[test]
     fn test_inline_tag() -> TestResult {
-        insta::assert_debug_snapshot!(p_inline_element.parse(new_input("foo /* {< test >} */"))?);
+        assert_debug_snapshot!(p_inline_element.parse(new_input("foo /* {< test >} */"))?);
         Ok(())
     }
 
     #[test]
     fn test_nextline_tag() -> TestResult {
-        insta::assert_debug_snapshot!(p_nextline_element(&mut new_input("/* {# x #} */\nfoo"))?);
+        assert_debug_snapshot!(p_nextline_element(&mut new_input("/* {# x #} */\nfoo"))?);
         Ok(())
     }
     #[test]
@@ -465,10 +465,18 @@ mod test {
 
     #[test]
     fn test_nextline_tag_document() {
-        insta::assert_debug_snapshot!(parse_document(&mut new_input(indoc::indoc! {r#"
+        assert_debug_snapshot!(parse_document(&mut new_input(indoc::indoc! {r#"
             # {# replace(`'.*'`, `'{data.value}'`) #}
             value = 'foo'
         "#})));
+    }
+
+    #[test]
+    fn test_blanklines_around_tag() {
+        assert_debug_snapshot!(parse_document(&mut new_input("a\n\n{%a%}\n{%end%}\n\na")));
+        assert_debug_snapshot!(parse_document(&mut new_input(
+            "a\n\n{%if a%}\n{%end%}\n\na"
+        )));
     }
 
     #[test]

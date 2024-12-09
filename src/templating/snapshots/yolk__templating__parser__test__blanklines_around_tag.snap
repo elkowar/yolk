@@ -1,0 +1,38 @@
+---
+source: src/templating/parser.rs
+expression: "parse_document(&mut new_input(\"a\\n\\n{%a%}\\n{%end%}\\n\\na\"))"
+---
+Ok(
+    [
+        Plain(
+            [0..2]"a\n",
+        ),
+        Plain(
+            [2..3]"\n",
+        ),
+        MultiLine {
+            block: Block {
+                tagged_line: TaggedLine {
+                    left: "",
+                    tag: "{%a%}",
+                    right: "\n",
+                    full_line: [3..9]"{%a%}\n",
+                },
+                expr: [5..6]"a",
+                body: [],
+            },
+            end: TaggedLine {
+                left: "",
+                tag: "{%end%}",
+                right: "\n",
+                full_line: [9..17]"{%end%}\n",
+            },
+        },
+        Plain(
+            [17..18]"\n",
+        ),
+        Plain(
+            [18..19]"a",
+        ),
+    ],
+)
