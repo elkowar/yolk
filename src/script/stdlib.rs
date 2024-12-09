@@ -2,7 +2,7 @@ use cached::proc_macro::cached;
 use miette::{Context as _, IntoDiagnostic, Result};
 use std::path::PathBuf;
 
-use mlua::Value;
+use mlua::{LuaSerdeExt as _, Value};
 use regex::Regex;
 
 use crate::{script::lua_error::LuaError, yolk::EvalMode};
@@ -78,7 +78,15 @@ pub fn setup_stdlib(eval_mode: EvalMode, eval_ctx: &EvalCtx) -> Result<(), LuaEr
         },
     )?;
 
-    // TODO: Add to_json and from_json functions
+    eval_ctx.register_fn("from_json", |lua, json: String| {
+        let value: serde_json::Value = serde_json::from_str(&json).map_err(LuaError::new_other)?;
+        Ok(lua.to_value(&value))
+    })?;
+    eval_ctx.register_fn("to_json", |lua, value: Value| {
+        let json_value: serde_json::Value = lua.from_value(value).map_err(LuaError::new_other)?;
+        Ok(serde_json::to_string(&json_value).unwrap())
+    })?;
+
     // TODO: Add deepcopy
     Ok(())
 }
@@ -296,6 +304,19 @@ mod test {
         assert_eq!(
             None,
             run_lua::<Option<Vec<String>>>("regex_captures(`<(.*)X(.)>`, `asdf`)")?
+        );
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_to_json() -> TestResult {
+        assert_eq!(
+            r#"{"a":2,"b":[1,2,3]}"#,
+            run_lua::<String>("to_json({a = 2, b = {1, 2, 3}})")?,
+        );
+        assert_eq!(
+            r#"{ 1, 2 }"#,
+            run_lua::<String>(r#"inspect.inspect(from_json('[1, 2]'))"#)?,
         );
         Ok(())
     }

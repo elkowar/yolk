@@ -24,6 +24,18 @@ pub enum LuaError {
 }
 
 impl LuaError {
+    pub fn new_other<E>(err: E) -> Self
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        Self::Other(miette::miette!(err))
+    }
+    pub fn other<E>(err: E) -> Self
+    where
+        E: Diagnostic + Send + Sync + 'static,
+    {
+        Self::Other(miette::Report::from(err))
+    }
     pub fn from_mlua_with_source(source_code: &str, err: mlua::Error) -> Self {
         let traceback_regex = Regex::new(r#"\n\t\[string \".*\"]:\d+: in \?\n"#).unwrap();
         let mut msg = traceback_regex.replace(&err.to_string(), "").to_string();

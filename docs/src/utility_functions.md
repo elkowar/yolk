@@ -24,6 +24,14 @@ Yolk provides a set of utility functions that can be used in your [yolk.lua](./y
 
 > Check if a given table contains a given key
 
+### `value from_json(json_string)`
+
+> parse a json string
+
+### `string to_json(value)`
+
+> serialize a value into a json string
+
 ## Environment and Filesystem
 
 ### `bool command_available(string)`

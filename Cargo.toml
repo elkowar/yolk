@@ -36,12 +36,14 @@ mlua = { version = "0.10.1", features = [
     # "lua52",
     # "vendored",
     "error-send",
-    "anyhow",
     "send",
+    "serialize",
 ] }
 owo-colors = { version = "4.1.0", features = ["supports-colors"] }
 predicates = "3.1.2"
 regex = "1.11.1"
+serde = { version = "1.0.215", features = ["derive"] }
+serde_json = "1.0.133"
 testresult = "0.4.1"
 thiserror = "2.0.3"
 tracing = "0.1.40"

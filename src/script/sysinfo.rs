@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 
-use mlua::IntoLua;
+use mlua::{IntoLua, LuaSerdeExt};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SystemInfo {
     hostname: Option<String>,
     username: String,
@@ -14,22 +15,7 @@ pub struct SystemInfo {
     paths: SystemInfoPaths,
 }
 
-impl IntoLua for SystemInfo {
-    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
-        let table = lua.create_table()?;
-        table.set("hostname", self.hostname)?;
-        table.set("username", self.username)?;
-        table.set("paths", self.paths)?;
-        table.set("distro", self.distro)?;
-        table.set("device_name", self.device_name)?;
-        table.set("arch", self.arch)?;
-        table.set("desktop_env", self.desktop_env)?;
-        table.set("platform", self.platform)?;
-        Ok(mlua::Value::Table(table))
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SystemInfoPaths {
     cache_dir: Option<PathBuf>,
     config_dir: Option<PathBuf>,
@@ -37,14 +23,15 @@ pub struct SystemInfoPaths {
     yolk_dir: PathBuf,
 }
 
+impl IntoLua for SystemInfo {
+    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
+        lua.to_value(&self)
+    }
+}
+
 impl IntoLua for SystemInfoPaths {
     fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
-        let table = lua.create_table()?;
-        table.set("cache_dir", self.cache_dir)?;
-        table.set("config_dir", self.config_dir)?;
-        table.set("home_dir", self.home_dir)?;
-        table.set("yolk_dir", self.yolk_dir)?;
-        Ok(mlua::Value::Table(table))
+        lua.to_value(&self)
     }
 }
 
@@ -52,7 +39,6 @@ impl SystemInfo {
     pub fn generate() -> Self {
         #[cfg(test)]
         return Self::canonical();
-        // lmao make this not garbage
         #[cfg(not(test))]
         Self {
             hostname: whoami::fallible::hostname().ok(),
