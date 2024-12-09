@@ -1,0 +1,28 @@
+[workspace]
+allow_dirty = true # allow updating repositories with uncommitted changes
+# changelog_config = "config/git-cliff.toml"       # use a custom git-cliff configuration
+changelog_update = true            # disable changelog updates
+dependencies_update = true         # update dependencies with `cargo update`
+git_release_enable = false         # disable GitHub/Gitea releases
+pr_branch_prefix = "release-plz-"  # PR branch prefix
+pr_name = "Release v{{ version }}" # template for the PR name
+pr_labels = ["release"]            # add the `release` label to the release Pull Request
+publish_allow_dirty = true         # add `--allow-dirty` to `cargo publish`
+semver_check = false               # disable API breaking changes checks
+publish_timeout = "10m"            # set a timeout for `cargo publish`
+release_commits = "^feat:"         # prepare release only if at least one commit matches a regex
+publish = true
+
+[changelog]
+protect_breaking_commits = true
+commit_parsers = [
+    { message = "^feat", group = "added" },
+    { message = "^changed", group = "changed" },
+    { message = "^deprecated", group = "deprecated" },
+    { message = "^fix", group = "fixed" },
+    { message = "^security", group = "security" },
+    { message = "^.*", group = "other" },
+]
+link_parsers = [
+    { pattern = "#(\\d+)", href = "https://github.com/elkowar/yolk/issues/$1" },
+]
