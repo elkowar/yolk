@@ -469,18 +469,16 @@ mod test {
 
     #[test]
     fn test_nextline_tag_document() {
-        assert_debug_snapshot!(parse_document(&mut new_input(indoc::indoc! {r#"
+        assert_debug_snapshot!(parse_document(indoc::indoc! {r#"
             # {# replace_re(`'.*'`, `'{data.value}'`) #}
             value = 'foo'
-        "#})));
+        "#}));
     }
 
     #[test]
     fn test_blanklines_around_tag() {
-        assert_debug_snapshot!(parse_document(&mut new_input("a\n\n{%a%}\n{%end%}\n\na")));
-        assert_debug_snapshot!(parse_document(&mut new_input(
-            "a\n\n{%if a%}\n{%end%}\n\na"
-        )));
+        assert_debug_snapshot!(parse_document("a\n\n{%a%}\n{%end%}\n\na"));
+        assert_debug_snapshot!(parse_document("a\n\n{%if a%}\n{%end%}\n\na"));
     }
 
     #[test]

@@ -42,7 +42,6 @@ pub fn setup_stdlib(eval_mode: EvalMode, eval_ctx: &EvalCtx) -> Result<(), LuaEr
     eval_ctx.register_fn("regex_captures", |_lua, (pattern, s): (String, String)| {
         Ok(create_regex(&pattern)?.captures(s.as_str()).map(|caps| {
             (0..caps.len())
-                .into_iter()
                 .map(|x| caps.get(x).unwrap().as_str().to_string())
                 .collect::<Vec<_>>()
         }))
@@ -138,9 +137,9 @@ pub fn setup_environment_stuff(eval_mode: EvalMode, eval_ctx: &EvalCtx) -> Resul
     })?;
     eval_ctx.register_fn("read_dir", move |_, p: String| -> Result<Vec<String>, _> {
         if_canonical_return!(eval_mode);
-        Ok(fs_err::read_dir(p)
+        fs_err::read_dir(p)
             .into_diagnostic()
-            .map_err(|e| LuaError::Other(e))?
+            .map_err(LuaError::Other)?
             .map(|x| {
                 Ok(x.into_diagnostic()
                     .map_err(LuaError::Other)?
@@ -148,7 +147,7 @@ pub fn setup_environment_stuff(eval_mode: EvalMode, eval_ctx: &EvalCtx) -> Resul
                     .to_string_lossy()
                     .to_string())
             })
-            .collect::<Result<_, LuaError>>()?)
+            .collect::<Result<_, LuaError>>()
     })?;
     Ok(())
 }
@@ -272,7 +271,7 @@ pub fn setup_tag_functions(eval_ctx: &EvalCtx) -> Result<(), LuaError> {
 
 #[cached(key = "String", convert = r#"{s.to_string()}"#, result)]
 fn create_regex(s: &str) -> Result<Regex, LuaError> {
-    Regex::new(&s).into_diagnostic().map_err(LuaError::Other)
+    Regex::new(s).into_diagnostic().map_err(LuaError::Other)
 }
 
 #[cfg(test)]
@@ -293,7 +292,7 @@ mod test {
         let eval_ctx = EvalCtx::new_empty();
         super::setup_tag_functions(&eval_ctx)?;
         eval_ctx.set_global("YOLK_TEXT", text)?;
-        Ok(eval_ctx.eval_template_lua::<String>("test", lua)?)
+        eval_ctx.eval_template_lua::<String>("test", lua)
     }
 
     #[test]

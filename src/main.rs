@@ -220,7 +220,7 @@ fn run_command(args: Args) -> Result<()> {
             };
 
             if let Some(parent) = path.parent() {
-                let _ = std::env::set_current_dir(&parent);
+                let _ = std::env::set_current_dir(parent);
             }
             edit::edit_file(path).into_diagnostic()?;
         }
