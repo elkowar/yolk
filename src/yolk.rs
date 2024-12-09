@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use fs_err::PathExt as _;
-use miette::{Context, IntoDiagnostic, Result};
+use miette::{Context, IntoDiagnostic, NamedSource, Result};
 use mlua::Value;
 
 use crate::{
@@ -153,7 +153,12 @@ impl Yolk {
         globals
             .set("LOCAL", mode == EvalMode::Local)
             .into_diagnostic()?;
-        eval_ctx.exec_lua("yolk.lua", &yolk_file)?;
+        eval_ctx.exec_lua("yolk.lua", &yolk_file).map_err(|e| {
+            miette::Report::from(e).with_source_code(NamedSource::new(
+                self.yolk_paths.script_path().to_string_lossy(),
+                yolk_file,
+            ))
+        })?;
         Ok(eval_ctx)
     }
 

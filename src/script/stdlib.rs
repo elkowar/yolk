@@ -40,6 +40,7 @@ pub fn setup_stdlib(eval_mode: EvalMode, eval_ctx: &EvalCtx) -> Result<(), LuaEr
     )?;
     // TODO: Add regex capture group functions
     // TODO: Add to_json and from_json functions
+    // TODO: add table_contains and list_contains functions
     Ok(())
 }
 
