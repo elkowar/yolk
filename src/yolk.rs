@@ -7,7 +7,7 @@ use mlua::Value;
 use crate::{
     eval_ctx::EvalCtx,
     script::sysinfo::SystemInfo,
-    templating::document::Document,
+    templating::{document::Document, template_error::TemplateError},
     util::{self, PathExt as _},
     yolk_paths::{Egg, YolkPaths},
 };
@@ -127,6 +127,7 @@ impl Yolk {
                             templated_file.display(),
                         );
                     }
+                    tracing::info!("Synced templated file {}", templated_file.display());
                 } else {
                     println!(
                         "Warning: {} was specified as templated file, but doesn't exist",
@@ -169,7 +170,9 @@ impl Yolk {
             .context("Failed to prepare evaluation context")?;
         tracing::debug!("Evaluating lua expression: {}", expr);
         eval_ctx
-            .eval_lua::<Value>("expr", expr)?
+            .eval_lua::<Value>("expr", expr)
+            .map_err(|e| TemplateError::from_lua_error(e, 0..expr.len()))
+            .map_err(|e| miette::Report::from(e).with_source_code(expr.to_string()))?
             .to_string()
             .into_diagnostic()
     }
