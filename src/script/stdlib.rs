@@ -232,7 +232,17 @@ fn create_regex(s: &str) -> Result<Regex, LuaError> {
 mod test {
     use testresult::TestResult;
 
-    use crate::{script::eval_ctx::EvalCtx, yolk::EvalMode};
+    use crate::{
+        script::{eval_ctx::EvalCtx, lua_error::LuaError},
+        yolk::EvalMode,
+    };
+
+    pub fn run_tag_lua(text: &str, lua: &str) -> Result<String, LuaError> {
+        let eval_ctx = EvalCtx::new_empty();
+        super::setup_tag_functions(&eval_ctx)?;
+        eval_ctx.set_global("YOLK_TEXT", text)?;
+        Ok(eval_ctx.eval_lua::<String>("test", lua)?)
+    }
 
     #[test]
     pub fn test_inspect() -> TestResult {
@@ -247,34 +257,24 @@ mod test {
 
     #[test]
     pub fn test_replace() -> TestResult {
-        let eval_ctx = EvalCtx::new_empty();
-        super::setup_tag_functions(&eval_ctx)?;
-        eval_ctx.set_global("YOLK_TEXT", "foo:'aaa'")?;
         assert_eq!(
             "foo:'xxx'",
-            eval_ctx.eval_lua::<String>("test", "replace_re(`'.*'`, `'xxx'`)")?
+            run_tag_lua("foo:'aaa'", "replace_re(`'.*'`, `'xxx'`)")?
         );
         assert!(
-            eval_ctx
-                .eval_lua::<String>("test", "replace_re(`'.*'`, `xxx`)")
-                .is_err(),
+            run_tag_lua("foo:'aaa'", "replace_re(`'.*'`, `xxx`)").is_err(),
             "replace performed non-reversible replacement",
         );
         Ok(())
     }
     #[test]
     pub fn test_replace_in() -> TestResult {
-        let eval_ctx = EvalCtx::new_empty();
-        super::setup_tag_functions(&eval_ctx)?;
-        eval_ctx.set_global("YOLK_TEXT", "foo:'aaa'")?;
         assert_eq!(
             "foo:'xxx'",
-            eval_ctx.eval_lua::<String>("test", "replace_in(`'`, `xxx`)")?
+            run_tag_lua("foo:'aaa'", "replace_in(`'`, `xxx`)")?
         );
         assert!(
-            eval_ctx
-                .eval_lua::<String>("test", "replace_in(`'`, `x'xx`)")
-                .is_err(),
+            run_tag_lua("foo:'aaa'", "replace_in(`'`, `x'xx`)").is_err(),
             "replace performed non-reversible replacement",
         );
         Ok(())
@@ -282,28 +282,68 @@ mod test {
 
     #[test]
     pub fn test_replace_color() -> TestResult {
-        let eval_ctx = EvalCtx::new_empty();
-        super::setup_tag_functions(&eval_ctx)?;
-        eval_ctx.set_global("YOLK_TEXT", "foo: #ff0000")?;
         assert_eq!(
             "foo: #00ff00",
-            eval_ctx.eval_lua::<String>("test", "replace_color(`#00ff00`)")?,
+            run_tag_lua("foo: #ff0000", "replace_color(`#00ff00`)")?,
         );
         assert_eq!(
             "foo: #00ff0000",
-            eval_ctx.eval_lua::<String>("test", "replace_color(`#00ff0000`)")?,
+            run_tag_lua("foo: #ff0000", "replace_color(`#00ff0000`)")?,
         );
         assert!(
-            eval_ctx
-                .eval_lua::<String>("test", "replace_color(`00ff00`)")
-                .is_err(),
+            run_tag_lua("foo: #ff0000", "replace_color(`00ff00`)").is_err(),
             "replace_color performed non-reversible replacement",
         );
         assert!(
-            eval_ctx
-                .eval_lua::<String>("test", "replace_color(`bad color`)")
-                .is_err(),
+            run_tag_lua("foo: #ff0000", "replace_color(`bad color`)").is_err(),
             "replace_color performed non-reversible replacement",
+        );
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_replace_quoted() -> TestResult {
+        assert_eq!(
+            "foo: 'new'",
+            run_tag_lua("foo: 'old'", "replace_quoted(`new`)")?,
+        );
+        assert_eq!(
+            "foo: \"new\"",
+            run_tag_lua("foo: \"old\"", "replace_quoted(`new`)")?,
+        );
+        assert_eq!(
+            "foo: `new`",
+            run_tag_lua("foo: `old`", "replace_quoted(`new`)")?,
+        );
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_replace_value() -> TestResult {
+        assert_eq!(
+            "foo: xxx # baz",
+            run_tag_lua("foo: bar # baz", "replace_value(`xxx`)")?,
+        );
+        assert!(
+            run_tag_lua("foo: bar # baz", "replace_value(`x xx`)").is_err(),
+            "replace_value performed non-reversible replacement",
+        );
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_replace_number() -> TestResult {
+        assert_eq!(
+            "foo 999 bar",
+            run_tag_lua("foo 123 bar", "replace_number(999)")?,
+        );
+        assert_eq!(
+            "foo 99.9 bar",
+            run_tag_lua("foo 1.23 bar", "replace_number(99.9)")?,
+        );
+        assert!(
+            run_tag_lua("foo 99.9 bar", "replace_number(`hi`)").is_err(),
+            "replace_value performed non-reversible replacement",
         );
         Ok(())
     }
