@@ -124,11 +124,14 @@ pub fn setup_tag_functions(eval_ctx: &EvalCtx) -> Result<(), LuaError> {
         Ok(after_replace.to_string())
     }
 
-    eval_ctx.register_fn("replace", |lua, (regex, replacement): (String, String)| {
-        let text = lua.globals().get::<String>(YOLK_TEXT_NAME)?;
-        tag_text_replace(&text, &regex, &replacement)
-    })?;
-    eval_ctx.set_global("r", eval_ctx.get_global::<mlua::Function>("replace_re")?)?;
+    eval_ctx.register_fn(
+        "replace_re",
+        |lua, (regex, replacement): (String, String)| {
+            let text = lua.globals().get::<String>(YOLK_TEXT_NAME)?;
+            tag_text_replace(&text, &regex, &replacement)
+        },
+    )?;
+    eval_ctx.set_global("rr", eval_ctx.get_global::<mlua::Function>("replace_re")?)?;
 
     eval_ctx.register_fn(
         "replace_in",
