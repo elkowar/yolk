@@ -8,7 +8,7 @@ and have access to a couple special variables that allow you to reference your c
 
 ## Preparation
 To make yolk evaluate your file as a template, you need to explicitly tell yolk about it.
-To do this, run `yolk mktmpl <egg-name> <filepath>` on the file you want to turn into a template.
+To do this, run `yolk make-template <egg-name> <filepath>` on the file you want to turn into a template.
 Note that it needs to already be managed as part of an egg for this to work.
 
 ## Conditional

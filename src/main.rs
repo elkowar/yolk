@@ -62,6 +62,7 @@ enum Command {
         path: PathBuf,
     },
     /// Re-evaluate all local templates to ensure that they are in a consistent state
+    #[clap(alias = "s")]
     Sync {
         /// Sync to canonical state. This should only be necessary for debugging purposes.
         #[arg(long)]
@@ -74,7 +75,7 @@ enum Command {
         command: Vec<String>,
     },
     /// Make the given file template capable, by adding it to the yolk_templates file
-    #[clap(name = "mktmpl")]
+    #[clap(alias = "mktmpl")]
     MakeTemplate {
         /// The files you want to turn into templates
         #[arg(required = true)]
