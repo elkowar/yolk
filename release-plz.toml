@@ -2,7 +2,7 @@
 allow_dirty = true # allow updating repositories with uncommitted changes
 # changelog_config = "config/git-cliff.toml"       # use a custom git-cliff configuration
 changelog_update = true            # disable changelog updates
-dependencies_update = true         # update dependencies with `cargo update`
+dependencies_update = false        # update dependencies with `cargo update`
 git_release_enable = false         # disable GitHub/Gitea releases
 pr_branch_prefix = "release-plz-"  # PR branch prefix
 pr_name = "Release v{{ version }}" # template for the PR name
