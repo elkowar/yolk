@@ -2,6 +2,7 @@ use std::{io::Read as _, path::PathBuf, str::FromStr};
 
 use clap::{Parser, Subcommand};
 use miette::{IntoDiagnostic, Result};
+use notify::Watcher as _;
 use owo_colors::OwoColorize as _;
 use script::eval_ctx;
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
@@ -89,6 +90,10 @@ enum Command {
         /// If not provided, the program will read from stdin
         path: Option<PathBuf>,
     },
+    /// Watch changes to templated files and automatically re-evaluate them.
+    ///
+    /// Note that this does not pick up new templated files, so after running `yolk make-template` you'll need to re-run this.
+    Watch,
 
     /// List all the eggs in your yolk directory
     List,
@@ -205,6 +210,24 @@ fn run_command(args: Args) -> Result<()> {
             let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(mode)?;
             let result = yolk.eval_template(&mut eval_ctx, "unnamed", &text)?;
             println!("{}", result);
+        }
+        Command::Watch => {
+            let (tx, rx) = std::sync::mpsc::channel::<Result<notify::Event, notify::Error>>();
+            let mut watcher = notify::recommended_watcher(tx).into_diagnostic()?;
+            for egg in yolk.list_eggs()? {
+                for path in egg?.template_paths()? {
+                    watcher
+                        .watch(&path, notify::RecursiveMode::NonRecursive)
+                        .into_diagnostic()?;
+                }
+            }
+
+            for res in rx {
+                match res {
+                    Ok(event) => println!("event: {:?}", event),
+                    Err(e) => println!("watch error: {:?}", e),
+                }
+            }
         }
     }
     Ok(())
