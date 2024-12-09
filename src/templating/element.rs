@@ -94,7 +94,7 @@ impl<'a> Element<'a> {
             Element::Inline { line, expr, is_if } => match is_if {
                 true => {
                     let eval_result = eval_ctx
-                        .eval_lua::<bool>("template", expr.as_str())
+                        .eval_template_lua::<bool>("template", expr.as_str())
                         .map_err(|e| TemplateError::from_lua_error(e, expr.range()))?;
                     Ok(render_ctx.string_toggled(line.full_line.as_str(), eval_result))
                 }
@@ -117,7 +117,7 @@ impl<'a> Element<'a> {
                     &render_ctx.string_toggled(
                         next_line.as_str(),
                         eval_ctx
-                            .eval_lua::<bool>("template", expr.as_str())
+                            .eval_template_lua::<bool>("template", expr.as_str())
                             .map_err(|e| TemplateError::from_lua_error(e, expr.range()))?
                     )
                 )),
@@ -149,7 +149,7 @@ impl<'a> Element<'a> {
                     // If there isn't, we're on the else block, which should be true iff we haven't had a true block yet.
                     let expr_true = !had_true
                         && eval_ctx
-                            .eval_lua::<bool>("template", block.expr.as_str())
+                            .eval_template_lua::<bool>("template", block.expr.as_str())
                             .map_err(|e| TemplateError::from_lua_error(e, block.expr.range()))?;
                     had_true = had_true || expr_true;
 

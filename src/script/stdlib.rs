@@ -77,7 +77,9 @@ pub fn setup_stdlib(eval_mode: EvalMode, eval_ctx: &EvalCtx) -> Result<(), LuaEr
             Ok(false)
         },
     )?;
+
     // TODO: Add to_json and from_json functions
+    // TODO: Add deepcopy
     Ok(())
 }
 
@@ -276,13 +278,13 @@ mod test {
 
     pub fn run_lua<T: FromLuaMulti>(lua: &str) -> miette::Result<T> {
         let eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
-        Ok(eval_ctx.eval_lua::<T>("test", lua)?)
+        Ok(eval_ctx.eval_template_lua::<T>("test", lua)?)
     }
     pub fn run_tag_lua(text: &str, lua: &str) -> Result<String, LuaError> {
         let eval_ctx = EvalCtx::new_empty();
         super::setup_tag_functions(&eval_ctx)?;
         eval_ctx.set_global("YOLK_TEXT", text)?;
-        Ok(eval_ctx.eval_lua::<String>("test", lua)?)
+        Ok(eval_ctx.eval_template_lua::<String>("test", lua)?)
     }
 
     #[test]
@@ -304,7 +306,7 @@ mod test {
         super::setup_stdlib(EvalMode::Local, &eval_ctx)?;
         assert_eq!(
             "{ 1, 2 }",
-            eval_ctx.eval_lua::<String>("test", "inspect({1, 2})")?
+            eval_ctx.eval_template_lua::<String>("test", "inspect({1, 2})")?
         );
         Ok(())
     }

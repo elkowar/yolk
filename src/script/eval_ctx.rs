@@ -36,14 +36,35 @@ impl EvalCtx {
         Ok(ctx)
     }
 
-    pub fn eval_lua<T: FromLuaMulti>(&self, name: &str, content: &str) -> Result<T, LuaError> {
+    /// Like [`Self::exec_lua`], but with sandboxing enabled[^sandbox].
+    ///
+    /// [^sandbox]: See: [`Lua::sandbox`]
+    pub fn eval_template_lua<T: FromLuaMulti>(
+        &self,
+        name: &str,
+        content: &str,
+    ) -> Result<T, LuaError> {
+        self.lua().sandbox(true)?;
         self.lua()
             .load(content)
             .set_name(name)
             .eval()
             .map_err(|e| LuaError::from_mlua_with_source(content, e))
     }
+
+    /// Evaluate a lua expression.
+    pub fn eval_lua<T: FromLuaMulti>(&self, name: &str, content: &str) -> Result<T, LuaError> {
+        self.lua().sandbox(false)?;
+        self.lua()
+            .load(content)
+            .set_name(name)
+            .eval()
+            .map_err(|e| LuaError::from_mlua_with_source(content, e))
+    }
+
+    /// Execute a bit of lua code.
     pub fn exec_lua(&self, name: &str, content: &str) -> Result<(), LuaError> {
+        self.lua().sandbox(false)?;
         self.lua()
             .load(content)
             .set_name(name)
@@ -54,7 +75,7 @@ impl EvalCtx {
     pub fn eval_text_transformation(&self, text: &str, expr: &str) -> Result<String, LuaError> {
         let old_text = self.get_global::<Value>(YOLK_TEXT_NAME)?;
         self.set_global(YOLK_TEXT_NAME, text)?;
-        let result = self.eval_lua("template tag", expr)?;
+        let result = self.eval_template_lua("template tag", expr)?;
         self.set_global(YOLK_TEXT_NAME, old_text)?;
         Ok(result)
     }

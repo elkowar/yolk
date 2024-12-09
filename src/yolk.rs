@@ -170,7 +170,7 @@ impl Yolk {
             .context("Failed to prepare evaluation context")?;
         tracing::debug!("Evaluating lua expression: {}", expr);
         eval_ctx
-            .eval_lua::<Value>("expr", expr)
+            .eval_template_lua::<Value>("expr", expr)
             .map_err(|e| TemplateError::from_lua_error(e, 0..expr.len()))
             .map_err(|e| miette::Report::from(e).with_source_code(expr.to_string()))?
             .to_string()
