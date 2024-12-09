@@ -12,6 +12,18 @@ Yolk provides a set of utility functions that can be used in your [yolk.lua](./y
 
 > Replace all occurrences of a regex pattern in a string with a replacement.
 
+### `string[] regex_captures(pattern, string)`
+
+> Return capture group values from a regex match.
+
+### `bool contains_value(table, value)`
+
+> Check if a given table contains a given value
+
+### `bool contains_key(table, value)`
+
+> Check if a given table contains a given key
+
 ## Environment and Filesystem
 
 ### `bool command_available(string)`
