@@ -357,7 +357,7 @@ mod test {
         let home = assert_fs::TempDir::new()?;
         // deliberately non-sense state -- both parts need to change at one point, depending on canonical vs local
         let foo_toml_initial = indoc::indoc! {r#"
-            # {# replace(`'.*'`, `'{data.value}'`) #}
+            # {# replace_re(`'.*'`, `'{data.value}'`) #}
             value = 'foo'
         "#};
         home.child("config/foo.toml").write_str(foo_toml_initial)?;
@@ -373,13 +373,13 @@ mod test {
         home.child("config/foo.toml").assert(foo_toml_initial);
         yolk.sync_to_mode(EvalMode::Local)?;
         home.child("config/foo.toml").assert(indoc::indoc! {r#"
-            # {# replace(`'.*'`, `'{data.value}'`) #}
+            # {# replace_re(`'.*'`, `'{data.value}'`) #}
             value = 'local'
         "#});
         yolk.with_canonical_state(|| {
             home.child("yolk/eggs/foo/config/foo.toml")
                 .assert(indoc::indoc! {r#"
-                    # {# replace(`'.*'`, `'{data.value}'`) #}
+                    # {# replace_re(`'.*'`, `'{data.value}'`) #}
                     value = 'canonical'
                 "#});
             Ok(())
@@ -391,13 +391,13 @@ mod test {
         "#})?;
         yolk.sync_to_mode(EvalMode::Local)?;
         home.child("config/foo.toml").assert(indoc::indoc! {r#"
-            # {# replace(`'.*'`, `'{data.value}'`) #}
+            # {# replace_re(`'.*'`, `'{data.value}'`) #}
             value = 'new local'
         "#});
         yolk.with_canonical_state(|| {
             home.child("yolk/eggs/foo/config/foo.toml")
                 .assert(indoc::indoc! {r#"
-                # {# replace(`'.*'`, `'{data.value}'`) #}
+                # {# replace_re(`'.*'`, `'{data.value}'`) #}
                 value = 'new canonical'
             "#});
             Ok(())
@@ -409,7 +409,7 @@ mod test {
     fn test_add_to_templated_files() -> TestResult {
         let home = assert_fs::TempDir::new()?;
         home.child("config/foo.toml")
-            .write_str("# {# replace(`'.*'`, `bar`) #}\nvalue = 'foo'")?;
+            .write_str("# {# replace_re(`'.*'`, `bar`) #}\nvalue = 'foo'")?;
         let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
         yolk.init_yolk()?;
         yolk.add_to_egg("foo", home.child("config/foo.toml"))?;
@@ -426,7 +426,7 @@ mod test {
     fn test_add_template_inexistant_egg() -> TestResult {
         let home = assert_fs::TempDir::new()?;
         home.child("config/foo.toml")
-            .write_str("# {% replace /'.*'/ `bar` %}\nvalue = 'foo'")?;
+            .write_str("# {% replace_re(`'.*'`, `'bar'`) %}\nvalue = 'foo'")?;
         let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
         yolk.init_yolk()?;
         assert!(yolk

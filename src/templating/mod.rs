@@ -90,15 +90,15 @@ mod test {
     }
 
     #[test]
-    pub fn test_render_replacex() -> TestResult {
+    pub fn test_render_replace() -> TestResult {
         let doc = Document::parse_string(indoc::indoc! {"
-            {# replace(`'.*'`, `'new'`) #}
+            {# replace_re(`'.*'`, `'new'`) #}
             foo: 'original'
         "})?;
         let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
         assert_eq!(
             indoc::indoc! {"
-                {# replace(`'.*'`, `'new'`) #}
+                {# replace_re(`'.*'`, `'new'`) #}
                 foo: 'new'
             "},
             dbg!(doc).render(&mut eval_ctx)?

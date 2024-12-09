@@ -124,11 +124,14 @@ pub fn setup_tag_functions(eval_ctx: &EvalCtx) -> Result<(), LuaError> {
         Ok(after_replace.to_string())
     }
 
-    eval_ctx.register_fn("replace", |lua, (regex, replacement): (String, String)| {
-        let text = lua.globals().get::<String>(YOLK_TEXT_NAME)?;
-        tag_text_replace(&text, &regex, &replacement)
-    })?;
-    eval_ctx.set_global("r", eval_ctx.get_global::<mlua::Function>("replace_re")?)?;
+    eval_ctx.register_fn(
+        "replace_re",
+        |lua, (regex, replacement): (String, String)| {
+            let text = lua.globals().get::<String>(YOLK_TEXT_NAME)?;
+            tag_text_replace(&text, &regex, &replacement)
+        },
+    )?;
+    eval_ctx.set_global("rr", eval_ctx.get_global::<mlua::Function>("replace_re")?)?;
 
     eval_ctx.register_fn(
         "replace_in",
@@ -249,11 +252,11 @@ mod test {
         eval_ctx.set_global("YOLK_TEXT", "foo:'aaa'")?;
         assert_eq!(
             "foo:'xxx'",
-            eval_ctx.eval_lua::<String>("test", "replace(`'.*'`, `'xxx'`)")?
+            eval_ctx.eval_lua::<String>("test", "replace_re(`'.*'`, `'xxx'`)")?
         );
         assert!(
             eval_ctx
-                .eval_lua::<String>("test", "replace(`'.*'`, `xxx`)")
+                .eval_lua::<String>("test", "replace_re(`'.*'`, `xxx`)")
                 .is_err(),
             "replace performed non-reversible replacement",
         );
