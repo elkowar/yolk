@@ -52,3 +52,16 @@ Inside these tags, you can call any of Yolks template tag functions (Or, in fact
 > ```handlebars
 > background_color = "#282828" # {< replace_color(data.colors.bg) >}
 > ```
+
+
+### `replace_number(new_number)`
+
+> (shorthand: `rnum(new_number)`).
+>
+> Replaces a number with another number.
+>
+> #### Example
+>
+> ```handlebars
+> cursor_size = 32 # {< replace_number(data.cursor_size) >}
+> ```

@@ -158,6 +158,15 @@ pub fn setup_tag_functions(eval_ctx: &EvalCtx) -> Result<(), LuaError> {
         eval_ctx.get_global::<mlua::Function>("replace_color")?,
     )?;
 
+    eval_ctx.register_fn("replace_number", |lua, replacement: String| {
+        let text = lua.globals().get::<String>(YOLK_TEXT_NAME)?;
+        tag_text_replace(&text, r"-?\d+(?:\.\d+)?", &replacement.to_string())
+    })?;
+    eval_ctx.set_global(
+        "rnum",
+        eval_ctx.get_global::<mlua::Function>("replace_number")?,
+    )?;
+
     Ok(())
 }
 
