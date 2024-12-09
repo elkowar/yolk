@@ -88,6 +88,7 @@ pub fn setup_stdlib(eval_mode: EvalMode, eval_ctx: &EvalCtx) -> Result<(), LuaEr
     })?;
 
     // TODO: Add deepcopy
+    // TODO: Potentially just add https://lunarmodules.github.io/Penlight/ or a similar utility library
     Ok(())
 }
 

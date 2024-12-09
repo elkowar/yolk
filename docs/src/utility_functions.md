@@ -61,3 +61,20 @@ Yolk provides a set of utility functions that can be used in your [yolk.lua](./y
 ### `string[] read_dir(path)`
 
 > list children of a directory
+
+## Inspect.lua
+
+For convenience when debugging yolk includes the [inspect.lua](https://github.com/kikito/inspect.lua) library.
+
+### Example
+
+```lua
+local inspect = require 'inspect'
+print(inspect({a = 1, b = 2}))
+```
+
+Or:
+
+```bash
+$ yolk eval 'inspect.inspect(SYSTEM)'
+```
