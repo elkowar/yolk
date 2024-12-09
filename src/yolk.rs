@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use fs_err::PathExt as _;
 use miette::{Context, IntoDiagnostic, NamedSource, Result};
@@ -220,9 +220,10 @@ impl Yolk {
     }
 
     /// Add a set of paths into the yolk_templates file of their corresponding eggs
-    pub fn add_to_templated_files(&self, paths: &[PathBuf]) -> Result<()> {
+    pub fn add_to_templated_files(&self, paths: &[impl AsRef<Path>]) -> Result<()> {
         let eggs_dir = self.yolk_paths.eggs_dir_path().canonical()?;
         for path in paths {
+            let path = path.as_ref();
             let path = path.canonical()?;
             let in_eggs = path
                 .strip_prefix(&eggs_dir)

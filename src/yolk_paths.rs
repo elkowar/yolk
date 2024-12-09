@@ -262,7 +262,7 @@ impl Egg {
         Ok(tmpl_paths)
     }
 
-    pub fn add_to_template_paths(&self, paths: &[PathBuf]) -> Result<()> {
+    pub fn add_to_template_paths(&self, paths: &[impl AsRef<Path>]) -> Result<()> {
         let yolk_templates_path = self.templates_path();
         if !yolk_templates_path.is_file() {
             fs_err::File::create(&yolk_templates_path).into_diagnostic()?;
@@ -270,6 +270,7 @@ impl Egg {
         let yolk_templates = fs_err::read_to_string(&yolk_templates_path).into_diagnostic()?;
         let mut yolk_templates: Vec<_> = yolk_templates.lines().map(|x| x.to_string()).collect();
         for path in paths {
+            let path = path.as_ref();
             if !path.exists() {
                 eprintln!("Warning: {} does not exist, skipping.", path.display());
                 continue;
@@ -354,6 +355,8 @@ fn check_is_deployed_recursive(
 #[cfg(test)]
 mod test {
 
+    use std::path::PathBuf;
+
     use assert_fs::{
         assert::PathAssert,
         prelude::{FileWriteStr, PathChild, PathCreateDir},
@@ -361,7 +364,7 @@ mod test {
     use predicates::{path::exists, prelude::PredicateBooleanExt};
     use testresult::TestResult;
 
-    use crate::yolk::Yolk;
+    use crate::{util::PathExt, yolk::Yolk};
 
     use super::YolkPaths;
 
@@ -416,6 +419,26 @@ mod test {
         yolk.paths().safeguard_git_dir()?;
         root.child("yolk/.git").assert(exists().not());
         root.child("yolk/.yolk_git").assert(exists());
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_get_templated_files() -> TestResult {
+        let root = assert_fs::TempDir::new().unwrap();
+        let yolk_paths = YolkPaths::new(root.child("yolk").to_path_buf(), root.to_path_buf());
+        yolk_paths.create()?;
+        let yolk = Yolk::new(yolk_paths);
+        root.child("foo/file").write_str("foo")?;
+        yolk.add_to_egg("foo", root.child("foo"))?;
+        yolk.add_to_templated_files(&[root.child("foo/file")])?;
+        let egg = yolk.paths().get_egg("foo")?;
+        assert_eq!(
+            vec![root.child("foo/file").to_path_buf().canonical()?],
+            egg.template_paths()?
+        );
+        fs_err::remove_file(root.child("foo/file"))?;
+        assert_eq!(Vec::<PathBuf>::new(), egg.template_paths()?);
+
         Ok(())
     }
 }
