@@ -466,7 +466,7 @@ mod test {
     #[test]
     fn test_nextline_tag_document() {
         assert_debug_snapshot!(parse_document(&mut new_input(indoc::indoc! {r#"
-            # {# replace(`'.*'`, `'{data.value}'`) #}
+            # {# replace_re(`'.*'`, `'{data.value}'`) #}
             value = 'foo'
         "#})));
     }

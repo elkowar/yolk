@@ -32,24 +32,23 @@ displays = ["eDP-1"]
 
 ## Value replacement
 In many cases, you'll want to make specific values, such as colors or paths, be set through one central source, rather than specifying them in every config file.
-Yolk allows you to do this (and more) by using the `replace` directive.
-This directive takes a regex pattern and a Lua expression, and replaces the matched pattern with the result of the expression.
+Yolk allows you to do this (and more) by using various templtae functions.
+For example, the `replace_quoted` directive takes any value and replaces whatever is in quotes with the result of the expression.
 ```toml
-# {# replace(`".*"`, `"{colors.background}"`) #}
+# {# replace_quoted(colors.background) #}
 background_color = "#000000"
-# {# replace(`".*"`, `"{colors.foreground}"`) #}
+# {# replace_quoted(colors.foreground) #}
 foreground_color = "#ffffff"
 ```
 After running `yolk sync`, yolk will replace the regex patterns with the corresponding result of the Lua expression.
 For example, depending on how you configured your `colors` in your `yolk.lua`, this could turn into:
 ```toml
-# {# replace(`".*"`, `"{colors.background}"`) #}
+# {# replace_quoted(colors.background) #}
 background_color = "#282828"
-# {# replace(`".*"`, `"{colors.foreground}"`) #}
+# {# replace_quoted(colors.foreground) #}
 foreground_color = "#ebdbb2"
 ```
-Note that the expression here still needs to contain the quotes, to continue returning valid toml.
-Yolk will refuse to evaluate `replace` directives that are non-reversible (i.e. if you replaced `".*"` with `foo`, as `foo` will no longer match that regex pattern).
+Yolk will refuse to evaluate directives that are non-reversible (i.e. if you `replace_re`d `".*"` with `foo`, as `foo` will no longer match that regex pattern).
 
 ## Different types of tags
 Yolk supports three different types of tags:
@@ -59,12 +58,12 @@ Yolk supports three different types of tags:
 
 You can use whichever of these you want, wherever you want. For example, all of these do the same:
 ```toml
-background_color = "#000000" # {< replace(`".*"`, `"{colors.background}"`) >}
+background_color = "#000000" # {< replace_re(`".*"`, `"{colors.background}"`) >}
 
-# {# replace(`".*"`, `"{colors.background}"`) #}
+# {# replace_re(`".*"`, `"{colors.background}"`) #}
 background_color = "#000000"
 
-# {% replace(`".*"`, `"{colors.background}"`) %}
+# {% replace_re(`".*"`, `"{colors.background}"`) %}
 background_color = "#000000"
 # {% end %}
 ```
