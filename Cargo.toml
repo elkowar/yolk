@@ -26,6 +26,7 @@ cached = "0.54.0"
 clap = { version = "4.5.21", features = ["derive", "env"] }
 dirs = "5.0.1"
 dunce = "1.0.5"
+edit = "0.1.5"
 extend = "1.2.0"
 fs-err = "3.0.0"
 indoc = "2.0.5"

@@ -90,9 +90,10 @@ enum Command {
         /// If not provided, the program will read from stdin
         path: Option<PathBuf>,
     },
-
     /// List all the eggs in your yolk directory
     List,
+    /// Open your `yolk.lua` or the given egg in your `$EDITOR` of choice
+    Edit { egg: Option<String> },
 }
 
 pub(crate) fn main() -> Result<()> {
@@ -206,6 +207,22 @@ fn run_command(args: Args) -> Result<()> {
             let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(mode)?;
             let result = yolk.eval_template(&mut eval_ctx, "unnamed", &text)?;
             println!("{}", result);
+        }
+        Command::Edit { egg } => {
+            let path = match egg {
+                Some(egg_name) => {
+                    let egg = yolk.paths().get_egg(egg_name)?;
+                    egg.find_first_targetting_symlink()?
+                        .unwrap_or_else(|| yolk.paths().egg_path(egg_name))
+                }
+
+                None => yolk.paths().script_path(),
+            };
+
+            if let Some(parent) = path.parent() {
+                let _ = std::env::set_current_dir(&parent);
+            }
+            edit::edit_file(path).into_diagnostic()?;
         }
     }
     Ok(())

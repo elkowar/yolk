@@ -255,7 +255,9 @@ impl Egg {
         let tmpl_paths = fs_err::read_to_string(tmpl_list_file).into_diagnostic()?;
         let tmpl_paths = tmpl_paths
             .lines()
-            .map(|x| self.egg_dir.join(x).canonical())
+            .map(|x| self.egg_dir.join(x))
+            .filter(|x| x.exists()) // TODO: emit some warning for inexistant files in yolk_templates file
+            .map(|x| x.canonical())
             .collect::<Result<_>>()?;
         Ok(tmpl_paths)
     }
@@ -285,6 +287,41 @@ impl Egg {
         }
         fs_err::write(&yolk_templates_path, yolk_templates.join("\n")).into_diagnostic()?;
         Ok(())
+    }
+
+    pub fn find_first_targetting_symlink(&self) -> Result<Option<PathBuf>> {
+        find_first_deployed_symlink_recursive(&self.home_path, &self.egg_dir, &self.egg_dir)
+    }
+}
+
+/// Basically the same as `check_is_deployed_recursive`, but it returns the first symlink that is found,
+/// rather than checking for all of them to exist.
+// TODO: Clean this up and combine this with `check_is_deployed_recursive` somehow
+fn find_first_deployed_symlink_recursive(
+    target_root: impl AsRef<Path>,
+    egg_root: impl AsRef<Path>,
+    current: impl AsRef<Path>,
+) -> Result<Option<PathBuf>> {
+    let target_root = target_root.as_ref();
+    let egg_root = egg_root.as_ref();
+    let current = current.as_ref();
+    let target_file = target_root.join(current.strip_prefix(egg_root).into_diagnostic()?);
+    if target_file.is_symlink() && target_file.canonical()? == current {
+        Ok(Some(target_file))
+    } else if target_file.is_file() {
+        Ok(None)
+    } else if target_file.is_dir() {
+        for entry in fs_err::read_dir(current).into_diagnostic()? {
+            let entry = entry.into_diagnostic()?;
+            if let Some(file) =
+                find_first_deployed_symlink_recursive(target_root, egg_root, entry.path())?
+            {
+                return Ok(Some(file));
+            }
+        }
+        Ok(None)
+    } else {
+        Ok(None)
     }
 }
 
