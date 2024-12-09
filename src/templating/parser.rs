@@ -102,43 +102,24 @@ fn p_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
         fail.context(lbl("valid element")),
     ))
     .parse_next(input)
-    // .resume_after(
-    //     repeat_till(1.., (not(line_ending), any), line_ending)
-    //         .map(|((), _)| ())
-    //         .void(),
-    // )
-    // .unwrap_or_else(|| Element::Plain(Sp::new(0..0, ""))))
 }
 
 fn p_plain_line_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
-    peek(any).parse_next(input)?;
-    alt((
-        line_ending.take_span(),
-        (p_text_segment, alt((line_ending, eof))).take_span(),
-    ))
-    .map(Element::Plain)
-    .parse_next(input)
-}
-
-/// Returns (terminator, entire text segment before terminator)
-fn p_text_segment<'a>(input: &mut Input<'a>) -> PResult<(&'a str, &'a str)> {
-    repeat_till(
+    let line_content_p = repeat_till(
         1..,
-        (not(p_any_tag_start), not(line_ending), any),
+        (not(alt((p_any_tag_start, line_ending))), any),
         peek(alt((p_any_tag_start, line_ending, eof))),
     )
     .map(|((), terminator)| terminator)
-    .with_taken()
-    .parse_next(input)
-}
+    .with_taken();
 
-#[cfg(test)]
-#[test]
-fn test_p_text_segment() -> TestResult {
-    insta::assert_debug_snapshot!(p_text_segment.parse_peek(new_input("foo {% bar %} baz"))?);
-    insta::assert_debug_snapshot!(p_text_segment.parse_peek(new_input("foo"))?);
-    insta::assert_debug_snapshot!(p_text_segment.parse_peek(new_input("{< bar >}")));
-    Ok(())
+    peek(any).parse_next(input)?;
+    alt((
+        line_ending.take_span(),
+        (line_content_p, alt((line_ending, eof))).take_span(),
+    ))
+    .map(Element::Plain)
+    .parse_next(input)
 }
 
 fn p_regular_tag_inner(end: &str) -> impl winnow::Parser<Input<'_>, &'_ str, YolkParseError> {
