@@ -53,7 +53,6 @@ winnow = { version = "0.6.20", features = ["unstable-recover"] }
 
 [profile.dev.package]
 insta.opt-level = 3
-similar.opt-level = 3
 
 # The profile that 'cargo dist' will build with
 [profile.dist]

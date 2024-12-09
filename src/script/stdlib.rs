@@ -1,5 +1,5 @@
 use cached::proc_macro::cached;
-use miette::{IntoDiagnostic, Result};
+use miette::{Context as _, IntoDiagnostic, Result};
 use std::path::PathBuf;
 
 use mlua::Value;
@@ -39,9 +39,45 @@ pub fn setup_stdlib(eval_mode: EvalMode, eval_ctx: &EvalCtx) -> Result<(), LuaEr
                 .to_string())
         },
     )?;
-    // TODO: Add regex capture group functions
+    eval_ctx.register_fn("regex_captures", |_lua, (pattern, s): (String, String)| {
+        Ok(create_regex(&pattern)?.captures(s.as_str()).map(|caps| {
+            (0..caps.len())
+                .into_iter()
+                .map(|x| caps.get(x).unwrap().as_str().to_string())
+                .collect::<Vec<_>>()
+        }))
+    })?;
+    eval_ctx.register_fn(
+        "contains_value",
+        |_lua, (container, value): (Value, Value)| {
+            let container = container
+                .as_table()
+                .wrap_err("Not a container")
+                .map_err(LuaError::Other)?;
+            for pair in container.pairs::<Value, Value>() {
+                if pair?.1.equals(&value)? {
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        },
+    )?;
+    eval_ctx.register_fn(
+        "contains_key",
+        |_lua, (container, value): (Value, Value)| {
+            let container = container
+                .as_table()
+                .wrap_err("Not a container")
+                .map_err(LuaError::Other)?;
+            for pair in container.pairs::<Value, Value>() {
+                if pair?.0.equals(&value)? {
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        },
+    )?;
     // TODO: Add to_json and from_json functions
-    // TODO: add table_contains and list_contains functions
     Ok(())
 }
 
@@ -230,6 +266,7 @@ fn create_regex(s: &str) -> Result<Regex, LuaError> {
 
 #[cfg(test)]
 mod test {
+    use mlua::FromLuaMulti;
     use testresult::TestResult;
 
     use crate::{
@@ -237,11 +274,28 @@ mod test {
         yolk::EvalMode,
     };
 
+    pub fn run_lua<T: FromLuaMulti>(lua: &str) -> miette::Result<T> {
+        let eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
+        Ok(eval_ctx.eval_lua::<T>("test", lua)?)
+    }
     pub fn run_tag_lua(text: &str, lua: &str) -> Result<String, LuaError> {
         let eval_ctx = EvalCtx::new_empty();
         super::setup_tag_functions(&eval_ctx)?;
         eval_ctx.set_global("YOLK_TEXT", text)?;
         Ok(eval_ctx.eval_lua::<String>("test", lua)?)
+    }
+
+    #[test]
+    pub fn test_regex_captures() -> TestResult {
+        assert_eq!(
+            vec!["<aaaXb>".to_string(), "aaa".to_string(), "b".to_string()],
+            run_lua::<Vec<String>>("regex_captures(`<(.*)X(.)>`, `foo <aaaXb> bar`)")?
+        );
+        assert_eq!(
+            None,
+            run_lua::<Option<Vec<String>>>("regex_captures(`<(.*)X(.)>`, `asdf`)")?
+        );
+        Ok(())
     }
 
     #[test]
