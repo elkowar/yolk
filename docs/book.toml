@@ -5,6 +5,6 @@ multilingual = false
 src = "src"
 title = "Yolk"
 [output.html]
-theme = "yolk"
+theme = "theme"
 default-theme = "dark"
-preferred-dark-theme = "yolk"
+preferred-dark-theme = "theme"
