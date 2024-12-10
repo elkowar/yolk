@@ -1,17 +1,18 @@
 [workspace]
 members = ["cargo:."]
 
-# Config for 'dist'
 [dist]
-# The preferred dist version to use in CI (Cargo.toml SemVer syntax)
+global-artifacts-jobs = ["./build-man"]
 cargo-dist-version = "0.26.0-prerelease.3"
-# CI backends to support
+# pr-run-mode = "upload"
+pr-run-mode = "plan"
 ci = "github"
-# The installers to generate for each app
 installers = ["shell"]
-# Target platforms to build apps for (Rust target-triple syntax)
-targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
-# Path that installers should place binaries in
+targets = [
+    # "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "x86_64-unknown-linux-gnu",
+    # "x86_64-pc-windows-msvc",
+]
 install-path = "CARGO_HOME"
-# Whether to install an updater program
-install-updater = true
+install-updater = false
