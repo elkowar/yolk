@@ -2,20 +2,17 @@
 members = ["cargo:."]
 
 [dist]
-github-build-setup = "dist-custom.yml"
+global-artifacts-jobs = ["./build-man"]
 cargo-dist-version = "0.26.0-prerelease.3"
-pr-run-mode = "upload"
+# pr-run-mode = "upload"
+pr-run-mode = "plan"
 ci = "github"
 installers = ["shell"]
 targets = [
     # "aarch64-apple-darwin",
-    # "x86_64-apple-darwin",
+    "x86_64-apple-darwin",
     "x86_64-unknown-linux-gnu",
     # "x86_64-pc-windows-msvc",
 ]
 install-path = "CARGO_HOME"
-install-updater = true
-
-[[dist.extra-artifacts]]
-artifacts = ["docs/book/book-man/book.man"]
-build = ["mdbook", "build"]
+install-updater = false

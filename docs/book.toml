@@ -4,7 +4,3 @@ language = "en"
 multilingual = false
 src = "src"
 title = "Yolk"
-
-[output.man]
-output-dir = "book-man"
-filename = "book.man"

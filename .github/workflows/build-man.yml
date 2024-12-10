@@ -1,0 +1,35 @@
+name: Build man page
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: true
+        type: string
+
+jobs:
+  build-manpage:
+    runs-on: ubuntu-latest
+    env:
+      PLAN: ${{ inputs.plan }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@v1.10.16
+      - name: Install mdbook, mdbook-man
+        run: cargo binstall mdbook mdbook-man
+      - name: Run mdbook build
+        run: |
+          echo '[output.man]' > docs/book.toml
+          echo 'output-dir = "book-man"' >> docs/book.toml
+          echo 'filename = "book.man"' >> docs/book.toml
+          mdbook build docs
+          mv docs/book/book-man/book.man yolk.man
+      - name: "Upload artifacts"
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-build-manpage
+          path: |
+            yolk.man

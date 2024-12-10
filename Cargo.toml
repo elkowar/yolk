@@ -7,6 +7,8 @@ edition = "2021"
 repository = "https://github.com/elkowar/yolk"
 homepage = "https://elkowar.github.io/yolk"
 license = "MIT OR Apache-2.0"
+documentation = "https://elkowar.github.io/yolk/book"
+categories = ["config", "command-line-utilities", "template-engine"]
 
 [[bin]]
 name = "yolk"
