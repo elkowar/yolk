@@ -1,0 +1,6 @@
+- name: Install cargo-binstall
+  uses: cargo-bins/cargo-binstall@v1.10.16
+- name: Install mdbook, mdbook-man
+  run: cargo binstall mdbook mdbook-man
+# - name: Run mdbook build
+#   run: mdbook build docs && mv docs/book/book-man/book.man yolk.man
