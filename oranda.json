@@ -1,7 +1,7 @@
 {
   "styles": {
     "theme": "dark",
-    "logo": ".github/images/yolk_banner.svg",
+    "logo": ".github/images/yolk_banner_animated.svg",
     "favicon": ".github/images/favicon.ico",
     "additional_css": [".github/oranda_theme.css"]
   },
