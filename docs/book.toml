@@ -4,3 +4,7 @@ language = "en"
 multilingual = false
 src = "src"
 title = "Yolk"
+[output.html]
+theme = "yolk"
+default-theme = "dark"
+preferred-dark-theme = "yolk"

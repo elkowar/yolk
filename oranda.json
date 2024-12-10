@@ -19,7 +19,7 @@
       "auto": true
     },
     "mdbook": {
-      "theme": true
+      "theme": false
     }
   },
   "build": {
