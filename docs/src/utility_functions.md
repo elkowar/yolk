@@ -32,6 +32,22 @@ Yolk provides a set of utility functions that can be used in your [yolk.lua](./y
 
 > serialize a value into a json string
 
+### `table color_hex_to_rgb(hex_str)`
+
+> read a hex color string and return a table with r, g, b, a values
+
+### `string color_hex_to_rgb_str(hex_str)`
+
+> read a hex color string and return a CSS-style rgb string such as `rgb(255, 255, 255)
+
+### `string color_hex_to_rgba_str(hex_str)`
+
+> read a hex color string and return a CSS-style rgb string such as `rgba(255, 255, 255, 125)
+
+### `string color_rgb_to_hex(rgb_table)`
+
+> read a table with r, g, b, a fields and return a hex color string
+
 ## Environment and Filesystem
 
 ### `bool command_available(string)`

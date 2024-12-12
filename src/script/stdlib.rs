@@ -86,9 +86,59 @@ pub fn setup_stdlib(eval_mode: EvalMode, eval_ctx: &EvalCtx) -> Result<(), LuaEr
         Ok(serde_json::to_string(&json_value).unwrap())
     })?;
 
+    eval_ctx.register_fn("color_hex_to_rgb", |lua, hex_string: String| {
+        let (r, g, b, a) = color_hex_to_rgb(&hex_string)?;
+        let table = lua.create_table()?;
+        table.set("r", r)?;
+        table.set("g", g)?;
+        table.set("b", b)?;
+        table.set("a", a)?;
+        Ok(table)
+    })?;
+
+    eval_ctx.register_fn("color_hex_to_rgb_str", |_, hex_string: String| {
+        let (r, g, b, _) = color_hex_to_rgb(&hex_string)?;
+        Ok(format!("rgb({r}, {g}, {b})"))
+    })?;
+    eval_ctx.register_fn("color_hex_to_rgba_str", |_, hex_string: String| {
+        let (r, g, b, a) = color_hex_to_rgb(&hex_string)?;
+        Ok(format!("rgba({r}, {g}, {b}, {a})"))
+    })?;
+    eval_ctx.register_fn("color_rgb_to_hex", |_, rgb_table: mlua::Table| {
+        let r = rgb_table.get::<u8>("r").map_err(LuaError::new_other)?;
+        let g = rgb_table.get::<u8>("g").map_err(LuaError::new_other)?;
+        let b = rgb_table.get::<u8>("b").map_err(LuaError::new_other)?;
+        let a = rgb_table
+            .get::<Option<u8>>("a")
+            .map_err(LuaError::new_other)?;
+        match a {
+            Some(a) => Ok(format!("#{:02x}{:02x}{:02x}{:02x}", r, g, b, a)),
+            None => Ok(format!("#{:02x}{:02x}{:02x}", r, g, b)),
+        }
+    })?;
+
     // TODO: Add deepcopy
-    // TODO: Potentially just add https://lunarmodules.github.io/Penlight/ or a similar utility library
     Ok(())
+}
+
+fn color_hex_to_rgb(hex_string: &str) -> Result<(u8, u8, u8, u8), LuaError> {
+    let hex = hex_string.trim_start_matches('#');
+    if hex.len() != 6 && hex.len() != 8 {
+        return Err(LuaError::Other(miette::miette!(
+            help = "needs to be either 6 or 8 characters long",
+            "Invalid hex color: {}",
+            hex_string
+        )));
+    }
+    let r = u8::from_str_radix(&hex[0..2], 16).map_err(LuaError::new_other)?;
+    let g = u8::from_str_radix(&hex[2..4], 16).map_err(LuaError::new_other)?;
+    let b = u8::from_str_radix(&hex[4..6], 16).map_err(LuaError::new_other)?;
+    let a = if hex.len() == 8 {
+        u8::from_str_radix(&hex[6..8], 16).map_err(LuaError::new_other)?
+    } else {
+        255
+    };
+    Ok((r, g, b, a))
 }
 
 macro_rules! if_canonical_return {
