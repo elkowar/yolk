@@ -1,4 +1,5 @@
 /* Globals */
+@import url("https://fonts.googleapis.com/css2?family=Quicksand:wght@300..700&display=swap");
 
 :root {
     --sidebar-width: 300px;
@@ -24,6 +25,11 @@ a.header {
 .menu-title {
     color: #f7d654 !important;
 }
+
+.header {
+    font-family: "Quicksand", sans-serif;
+}
+
 code.hljs {
     padding-top: 3px;
     padding-bottom: 4px;
