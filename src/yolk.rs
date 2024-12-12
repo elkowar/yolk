@@ -187,7 +187,7 @@ impl Yolk {
         content: &str,
     ) -> Result<String> {
         let doc = Document::parse_string_named(file_path, content)
-            .context("Failed to parse document `{file_path}`")?;
+            .with_context(|| format!("Failed to parse document `{file_path}`"))?;
         tracing::debug!("Rendering template");
         doc.render(eval_ctx)
             .with_context(|| format!("Failed to render document `{file_path}`"))
@@ -202,6 +202,9 @@ impl Yolk {
             .with_context(|| {
                 format!("Failed to eval template file: {}", path.as_ref().display())
             })?;
+        if rendered == content {
+            return Ok(());
+        }
         fs_err::write(&path, rendered).into_diagnostic()?;
         Ok(())
     }

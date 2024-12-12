@@ -1,4 +1,8 @@
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashSet,
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 use fs_err::PathExt;
 use miette::{IntoDiagnostic, Result};
@@ -247,10 +251,10 @@ impl Egg {
     }
 
     /// Returns a list of all the template paths in this egg in canonical form.
-    pub fn template_paths(&self) -> Result<Vec<PathBuf>> {
+    pub fn template_paths(&self) -> Result<HashSet<PathBuf>> {
         let tmpl_list_file = self.egg_dir.join("yolk_templates");
         if !tmpl_list_file.is_file() {
-            return Ok(vec![]);
+            return Ok(HashSet::new());
         }
         let tmpl_paths = fs_err::read_to_string(tmpl_list_file).into_diagnostic()?;
         let tmpl_paths = tmpl_paths
@@ -268,7 +272,8 @@ impl Egg {
             fs_err::File::create(&yolk_templates_path).into_diagnostic()?;
         }
         let yolk_templates = fs_err::read_to_string(&yolk_templates_path).into_diagnostic()?;
-        let mut yolk_templates: Vec<_> = yolk_templates.lines().map(|x| x.to_string()).collect();
+        let mut yolk_templates: HashSet<_> =
+            yolk_templates.lines().map(|x| x.to_string()).collect();
         for path in paths {
             let path = path.as_ref();
             if !path.exists() {
@@ -284,9 +289,21 @@ impl Egg {
             }
             let path_relative = path.strip_prefix(&self.egg_dir).into_diagnostic()?;
             let path_str = path_relative.to_str().unwrap().to_string();
-            yolk_templates.push(path_str);
+            yolk_templates.insert(path_str);
         }
-        fs_err::write(&yolk_templates_path, yolk_templates.join("\n")).into_diagnostic()?;
+        let mut file = fs_err::OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(&yolk_templates_path)
+            .into_diagnostic()?;
+        file.write_all(
+            yolk_templates
+                .into_iter()
+                .collect::<Vec<_>>()
+                .join("\n")
+                .as_bytes(),
+        )
+        .into_diagnostic()?;
         Ok(())
     }
 
@@ -434,10 +451,13 @@ mod test {
         let egg = yolk.paths().get_egg("foo")?;
         assert_eq!(
             vec![root.child("foo/file").to_path_buf().canonical()?],
-            egg.template_paths()?
+            egg.template_paths()?.into_iter().collect::<Vec<_>>()
         );
         fs_err::remove_file(root.child("foo/file"))?;
-        assert_eq!(Vec::<PathBuf>::new(), egg.template_paths()?);
+        assert_eq!(
+            Vec::<PathBuf>::new(),
+            egg.template_paths()?.into_iter().collect::<Vec<_>>()
+        );
 
         Ok(())
     }

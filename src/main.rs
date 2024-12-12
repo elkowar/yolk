@@ -1,7 +1,8 @@
-use std::{io::Read as _, path::PathBuf, str::FromStr};
+use std::{collections::HashSet, io::Read as _, path::PathBuf, str::FromStr};
 
 use clap::{Parser, Subcommand};
 use miette::{IntoDiagnostic, Result};
+use notify_debouncer_full::{new_debouncer, DebounceEventResult};
 use owo_colors::OwoColorize as _;
 use script::eval_ctx;
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
@@ -94,6 +95,10 @@ enum Command {
     List,
     /// Open your `yolk.lua` or the given egg in your `$EDITOR` of choice
     Edit { egg: Option<String> },
+    Watch {
+        #[arg(long)]
+        canonical: bool,
+    },
 }
 
 pub(crate) fn main() -> Result<()> {
@@ -133,7 +138,6 @@ fn run_command(args: Args) -> Result<()> {
             if yolk.paths().active_yolk_git_dir()? == yolk.paths().yolk_default_git_path() {
                 println!("Yolk git is not Safeguarded. It is recommended to run `yolk safeguard`.");
             }
-            println!("Git state:");
             yolk.with_canonical_state(|| {
                 yolk.paths()
                     .start_git_command_builder()?
@@ -215,7 +219,6 @@ fn run_command(args: Args) -> Result<()> {
                     egg.find_first_targetting_symlink()?
                         .unwrap_or_else(|| yolk.paths().egg_path(egg_name))
                 }
-
                 None => yolk.paths().script_path(),
             };
 
@@ -223,6 +226,79 @@ fn run_command(args: Args) -> Result<()> {
                 let _ = std::env::set_current_dir(parent);
             }
             edit::edit_file(path).into_diagnostic()?;
+        }
+        Command::Watch { canonical } => {
+            let mode = match *canonical {
+                true => EvalMode::Canonical,
+                false => EvalMode::Local,
+            };
+
+            let mut dirs_to_watch = HashSet::new();
+            let mut files_to_watch = HashSet::new();
+            let script_path = yolk.paths().script_path();
+            files_to_watch.insert(script_path.clone());
+
+            for egg in yolk.paths().list_eggs()? {
+                let egg = egg?;
+                for path in egg.template_paths()? {
+                    if let Some(parent) = path.parent() {
+                        dirs_to_watch.insert(parent.to_path_buf());
+                    }
+                    files_to_watch.insert(path.to_path_buf());
+                }
+            }
+
+            let mut debouncer = new_debouncer(
+                std::time::Duration::from_millis(800),
+                None,
+                move |res: DebounceEventResult| {
+                    let mut eval_ctx = match yolk.prepare_eval_ctx_for_templates(mode) {
+                        Ok(x) => x,
+                        Err(e) => {
+                            eprintln!("Error: {e:?}");
+                            return;
+                        }
+                    };
+                    match res {
+                        Ok(events) => {
+                            let changed = events
+                                .into_iter()
+                                .filter(|evt| {
+                                    evt.paths.iter().any(|x| files_to_watch.contains(x))
+                                        && (!matches!(evt.kind, notify::EventKind::Access(_)))
+                                })
+                                .flat_map(|x| x.paths.clone().into_iter())
+                                .collect::<HashSet<_>>();
+                            if changed.contains(&yolk.paths().script_path()) {
+                                if let Err(e) = yolk.sync_to_mode(mode) {
+                                    eprintln!("Error: {e:?}");
+                                }
+                            } else {
+                                for path in changed {
+                                    if let Err(e) = yolk.sync_template_file(&mut eval_ctx, path) {
+                                        eprintln!("Error: {e:?}");
+                                    }
+                                }
+                            }
+                        }
+                        Err(error) => tracing::error!("Error: {error:?}"),
+                    }
+                },
+            )
+            .into_diagnostic()?;
+
+            for dir in dirs_to_watch {
+                tracing::info!("Watching {}", dir.display());
+                debouncer
+                    .watch(&dir, notify::RecursiveMode::Recursive)
+                    .into_diagnostic()?;
+            }
+            // Watch the yolk dir non-recursively to catch updates to yolk.lua
+            debouncer
+                .watch(&script_path, notify::RecursiveMode::NonRecursive)
+                .into_diagnostic()?;
+
+            loop {}
         }
     }
     Ok(())
