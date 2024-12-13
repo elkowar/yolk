@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.11](https://github.com/elkowar/yolk/compare/v0.0.10...v0.0.11) - 2024-12-13
+
+### Added
+
+- add a few hex color utility functions
+
+### Fixed
+
+- Improve parser error message for missing end tag
+
+### Other
+
+- Use different font for docs headings to make @druskus20 happy
+- he animated now
+- Try to fix theme
+- Setup matching mdbook theme
+- *(release)* build man page as part of release process
+
 ## [0.0.10](https://github.com/elkowar/yolk/compare/v0.0.9...v0.0.10) - 2024-12-09
 
 ### Added
