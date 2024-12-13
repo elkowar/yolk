@@ -1,4 +1,7 @@
-use std::{path::Path, time::Instant};
+use std::{
+    path::Path,
+    time::{Instant, SystemTime, UNIX_EPOCH},
+};
 
 use fs_err::PathExt as _;
 use miette::{Context, IntoDiagnostic, NamedSource, Result};
@@ -199,17 +202,32 @@ impl Yolk {
 
     /// Sync a single template file in place on the filesystem.
     pub fn sync_template_file(&self, eval_ctx: &mut EvalCtx, path: impl AsRef<Path>) -> Result<()> {
-        tracing::info!("Syncing file {}", path.as_ref().display());
-        let content = fs_err::read_to_string(&path).into_diagnostic()?;
-        let rendered = self
-            .eval_template(eval_ctx, &path.as_ref().to_string_lossy(), &content)
-            .with_context(|| {
-                format!("Failed to eval template file: {}", path.as_ref().display())
-            })?;
-        if rendered == content {
+        let path = path.as_ref();
+        let last_modfied = fs_err::metadata(&path)
+            .into_diagnostic()?
+            .modified()
+            .unwrap_or(UNIX_EPOCH);
+        let mut cache = self.paths().cache_file()?;
+        let tmpl_data = cache.tmpl_mut(path.to_string_lossy().as_ref());
+
+        if tmpl_data.last_synced >= last_modfied {
+            tracing::debug!(
+                "File {} has not changed since the last sync, skipping...",
+                path.display()
+            );
             return Ok(());
         }
-        fs_err::write(&path, rendered).into_diagnostic()?;
+
+        tracing::info!("Syncing file {}", path.display());
+        let content = fs_err::read_to_string(&path).into_diagnostic()?;
+        let rendered = self
+            .eval_template(eval_ctx, &path.to_string_lossy(), &content)
+            .with_context(|| format!("Failed to eval template file: {}", path.display()))?;
+        if rendered != content {
+            fs_err::write(&path, rendered).into_diagnostic()?;
+        }
+        tmpl_data.last_synced = SystemTime::now();
+        self.paths().write_cache_file(&cache)?;
         Ok(())
     }
 

@@ -5,9 +5,9 @@ use std::{
 };
 
 use fs_err::PathExt;
-use miette::{IntoDiagnostic, Result};
+use miette::{Context as _, IntoDiagnostic, Result};
 
-use crate::util::PathExt as _;
+use crate::{cache, util::PathExt as _};
 
 const DEFAULT_LUA: &str = indoc::indoc! {r#"
     data = {
@@ -22,6 +22,7 @@ const DEFAULT_LUA: &str = indoc::indoc! {r#"
 const DEFAULT_GITIGNORE: &str = indoc::indoc! {r#"
     # Ignore the yolk git directory
     /.yolk_git
+    /.yolk_cache
 "#};
 
 pub struct YolkPaths {
@@ -143,6 +144,32 @@ impl YolkPaths {
     pub fn yolk_safeguarded_git_path(&self) -> PathBuf {
         self.root_path.join(".yolk_git")
     }
+    pub fn cache_file_path(&self) -> PathBuf {
+        self.root_path.join(".yolk_cache")
+    }
+
+    pub fn cache_file(&self) -> Result<cache::Cache> {
+        // TODO: potentially just ignore errors here and return an empty Cache instead,
+        // that way, if something breaks we automatically regenerate it in a healthy state.
+        let cache_file = self.cache_file_path();
+        if !cache_file.exists() {
+            return Ok(cache::Cache::new());
+        }
+        let cache_file = fs_err::File::open(cache_file)
+            .into_diagnostic()
+            .wrap_err("Failed to open .yolk_cache")?;
+        let cache: cache::Cache = serde_json::from_reader(cache_file)
+            .into_diagnostic()
+            .wrap_err("Failed to parse .yolk_cache")?;
+        Ok(cache)
+    }
+
+    pub fn write_cache_file(&self, cache: &cache::Cache) -> Result<()> {
+        let json = serde_json::to_string_pretty(&cache).unwrap();
+        fs_err::write(self.cache_file_path(), json).into_diagnostic()?;
+        Ok(())
+    }
+
     /// Return the path to the active git directory,
     /// which is either the [`yolk_default_git_path`] (`.git`) or the [`yolk_safeguarded_git_path`] (`.yolk_git`) if it exists.
     pub fn active_yolk_git_dir(&self) -> Result<PathBuf> {
