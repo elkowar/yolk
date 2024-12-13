@@ -2,8 +2,9 @@
 members = ["cargo:."]
 
 [dist]
-global-artifacts-jobs = ["./build-man"]
-cargo-dist-version = "0.26.0-prerelease.3"
+# global-artifacts-jobs = ["./build-man"]
+github-build-setup = "build-setup.yml"
+cargo-dist-version = "0.26.1"
 # pr-run-mode = "upload"
 pr-run-mode = "plan"
 ci = "github"
@@ -16,3 +17,5 @@ targets = [
 ]
 install-path = "CARGO_HOME"
 install-updater = false
+
+include = ["yolk.man"]
