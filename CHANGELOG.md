@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.11](https://github.com/elkowar/yolk/compare/v0.0.10...v0.0.11) - 2024-12-13
+
+### Added
+
+- Implement `yolk watch` command
+- add a few hex color utility functions
+
+### Fixed
+
+- Improve parser error message for missing end tag
+
+### Other
+
+- Try harder to make @druskus20 happy
+- Slightly clean up parser code
+- Improve error message for empty tag
+- Update cargo dist to 0.26, try to use include and build-setup for man ([#9](https://github.com/elkowar/yolk/pull/9))
+- Use different font for docs headings to make @druskus20 happy
+- he animated now
+- Try to fix theme
+- Setup matching mdbook theme
+- *(release)* build man page as part of release process
+
 ## [0.0.10](https://github.com/elkowar/yolk/compare/v0.0.9...v0.0.10) - 2024-12-09
 
 ### Added
