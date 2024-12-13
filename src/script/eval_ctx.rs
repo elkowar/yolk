@@ -1,3 +1,4 @@
+use miette::IntoDiagnostic;
 use mlua::ExternalResult as _;
 use mlua::FromLua;
 use mlua::FromLuaMulti;
@@ -31,6 +32,30 @@ impl EvalCtx {
 
     pub fn new_in_mode(mode: EvalMode) -> miette::Result<Self> {
         let ctx = Self::new_empty();
+
+        // TODO: Properly set load path
+
+        /*
+        let load_path = ctx
+            .lua
+            .globals()
+            .get::<mlua::Table>("package")
+            .into_diagnostic()?
+            .get::<String>("path")
+            .into_diagnostic()?;
+        let yolk_dir = std::path::PathBuf::from("/home/elk/.config/yolk/?.luau");
+        let lua_path = match load_path.as_str() {
+            "" => yolk_dir.to_string_lossy().to_string(),
+            other => format!("{};{other}", yolk_dir.to_string_lossy()),
+        };
+        ctx.lua
+            .globals()
+            .get::<mlua::Table>("package")
+            .into_diagnostic()?
+            .set("path", lua_path)
+            .into_diagnostic()?;
+        */
+
         stdlib::setup_tag_functions(&ctx)?;
         stdlib::setup_stdlib(mode, &ctx)?;
         Ok(ctx)

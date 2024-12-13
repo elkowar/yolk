@@ -1,10 +1,11 @@
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
 use fs_err::PathExt as _;
 use miette::{Context, IntoDiagnostic, NamedSource, Result};
 use mlua::Value;
 
 use crate::{
+    eggs_config::{EggConfig, EggsConfig},
     eval_ctx::EvalCtx,
     script::sysinfo::SystemInfo,
     templating::{document::Document, template_error::TemplateError},
@@ -87,6 +88,33 @@ impl Yolk {
         Ok(())
     }
 
+    pub fn deploy(&self) -> Result<()> {
+        let eggs_lua_path = self.yolk_paths.eggs_lua_path();
+        let eval_ctx = self.prepare_eval_ctx_for_templates(EvalMode::Local)?;
+        let eggs_lua_content = fs_err::read_to_string(&eggs_lua_path).into_diagnostic()?;
+        let deployment_config = eval_ctx
+            .eval_lua::<HashMap<String, EggConfig>>(
+                &eggs_lua_path.to_string_lossy(),
+                &eggs_lua_content,
+            )
+            .map_err(|e| {
+                miette::Report::from(e)
+                    .with_source_code(
+                        NamedSource::new(eggs_lua_path.to_string_lossy(), eggs_lua_content)
+                            .with_language("lua"),
+                    )
+                    .wrap_err("Failed to execute eggs.lua")
+            })?;
+
+        for (egg_name, egg_config) in deployment_config {
+            if egg_config.enabled {
+                self.deploy_egg(&egg_config)?;
+            }
+        }
+
+        Ok(())
+    }
+
     /// Add a file or directory to an egg, creating the egg if it does not exist.
     pub fn add_to_egg(&self, egg_name: &str, path: impl AsRef<Path>) -> Result<()> {
         let path = path.as_ref();
@@ -145,7 +173,8 @@ impl Yolk {
             EvalMode::Local => SystemInfo::generate(),
         };
         let eval_ctx = EvalCtx::new_in_mode(mode)?;
-        let yolk_file = fs_err::read_to_string(self.yolk_paths.script_path()).into_diagnostic()?;
+        let yolk_file =
+            fs_err::read_to_string(self.yolk_paths.yolk_lua_path()).into_diagnostic()?;
 
         let globals = eval_ctx.lua().globals();
         globals.set("SYSTEM", sysinfo).into_diagnostic()?;
@@ -155,7 +184,7 @@ impl Yolk {
         eval_ctx.exec_lua("yolk.lua", &yolk_file).map_err(|e| {
             miette::Report::from(e)
                 .with_source_code(
-                    NamedSource::new(self.yolk_paths.script_path().to_string_lossy(), yolk_file)
+                    NamedSource::new(self.yolk_paths.yolk_lua_path().to_string_lossy(), yolk_file)
                         .with_language("lua"),
                 )
                 .wrap_err("Failed to execute yolk.lua")

@@ -34,6 +34,7 @@ fs-err = "3.0.0"
 indoc = "2.0.5"
 inotify = "0.11.0"
 insta = { version = "1.41.1", features = ["yaml"] }
+maplit = "1.0.2"
 miette = { version = "7.4.0", features = ["fancy"] }
 mlua = { version = "0.10.1", features = [
     "luau",

@@ -8,6 +8,7 @@ use script::eval_ctx;
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 use yolk::{EvalMode, Yolk};
 
+pub mod eggs_config;
 pub mod script;
 mod templating;
 #[cfg(test)]
@@ -219,7 +220,7 @@ fn run_command(args: Args) -> Result<()> {
                     egg.find_first_targetting_symlink()?
                         .unwrap_or_else(|| yolk.paths().egg_path(egg_name))
                 }
-                None => yolk.paths().script_path(),
+                None => yolk.paths().yolk_lua_path(),
             };
 
             if let Some(parent) = path.parent() {
@@ -235,7 +236,7 @@ fn run_command(args: Args) -> Result<()> {
 
             let mut dirs_to_watch = HashSet::new();
             let mut files_to_watch = HashSet::new();
-            let script_path = yolk.paths().script_path();
+            let script_path = yolk.paths().yolk_lua_path();
             files_to_watch.insert(script_path.clone());
 
             for egg in yolk.paths().list_eggs()? {
@@ -269,7 +270,7 @@ fn run_command(args: Args) -> Result<()> {
                                 })
                                 .flat_map(|x| x.paths.clone().into_iter())
                                 .collect::<HashSet<_>>();
-                            if changed.contains(&yolk.paths().script_path()) {
+                            if changed.contains(&yolk.paths().yolk_lua_path()) {
                                 if let Err(e) = yolk.sync_to_mode(mode) {
                                     eprintln!("Error: {e:?}");
                                 }

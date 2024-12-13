@@ -19,6 +19,11 @@ const DEFAULT_LUA: &str = indoc::indoc! {r#"
     }
 "#};
 
+const DEFAULT_EGGS_LUA: &str = indoc::indoc! {r#"
+    eggs = {}
+    return eggs
+"#};
+
 const DEFAULT_GITIGNORE: &str = indoc::indoc! {r#"
     # Ignore the yolk git directory
     /.yolk_git
@@ -70,10 +75,10 @@ impl YolkPaths {
                 self.root_path().display()
             );
         }
-        if !self.script_path().exists() {
+        if !self.yolk_lua_path().exists() {
             miette::bail!(
                 "Yolk directory does not contain a yolk.lua file at {}",
-                self.script_path().display()
+                self.yolk_lua_path().display()
             );
         }
         if !self.eggs_dir_path().exists() {
@@ -96,7 +101,8 @@ impl YolkPaths {
         fs_err::create_dir_all(path).into_diagnostic()?;
         fs_err::create_dir_all(self.eggs_dir_path()).into_diagnostic()?;
         fs_err::write(self.root_path().join(".gitignore"), DEFAULT_GITIGNORE).into_diagnostic()?;
-        fs_err::write(self.script_path(), DEFAULT_LUA).into_diagnostic()?;
+        fs_err::write(self.yolk_lua_path(), DEFAULT_LUA).into_diagnostic()?;
+        fs_err::write(self.eggs_lua_path(), DEFAULT_EGGS_LUA).into_diagnostic()?;
 
         Ok(())
     }
@@ -156,9 +162,18 @@ impl YolkPaths {
             miette::bail!("No git directory initialized")
         }
     }
-    pub fn script_path(&self) -> PathBuf {
+    ///
+    /// Path to the `yolk.lua` file
+    pub fn yolk_lua_path(&self) -> PathBuf {
         self.root_path.join("yolk.lua")
     }
+
+    /// Path to the `eggs.lua` file
+    pub fn eggs_lua_path(&self) -> PathBuf {
+        self.root_path.join("eggs.lua")
+    }
+
+    /// Path to the `eggs` directory
     pub fn eggs_dir_path(&self) -> PathBuf {
         self.root_path.join("eggs")
     }
