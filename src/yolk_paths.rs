@@ -1,6 +1,5 @@
 use std::{
     collections::HashSet,
-    io::Write,
     path::{Path, PathBuf},
 };
 
@@ -17,6 +16,11 @@ const DEFAULT_LUA: &str = indoc::indoc! {r#"
         else
             25
     }
+"#};
+
+const DEFAULT_EGGS_LUA: &str = indoc::indoc! {r#"
+    eggs = {}
+    return eggs
 "#};
 
 const DEFAULT_GITIGNORE: &str = indoc::indoc! {r#"
@@ -70,10 +74,10 @@ impl YolkPaths {
                 self.root_path().display()
             );
         }
-        if !self.script_path().exists() {
+        if !self.yolk_lua_path().exists() {
             miette::bail!(
                 "Yolk directory does not contain a yolk.lua file at {}",
-                self.script_path().display()
+                self.yolk_lua_path().display()
             );
         }
         if !self.eggs_dir_path().exists() {
@@ -96,7 +100,8 @@ impl YolkPaths {
         fs_err::create_dir_all(path).into_diagnostic()?;
         fs_err::create_dir_all(self.eggs_dir_path()).into_diagnostic()?;
         fs_err::write(self.root_path().join(".gitignore"), DEFAULT_GITIGNORE).into_diagnostic()?;
-        fs_err::write(self.script_path(), DEFAULT_LUA).into_diagnostic()?;
+        fs_err::write(self.yolk_lua_path(), DEFAULT_LUA).into_diagnostic()?;
+        fs_err::write(self.eggs_lua_path(), DEFAULT_EGGS_LUA).into_diagnostic()?;
 
         Ok(())
     }
@@ -143,6 +148,7 @@ impl YolkPaths {
     pub fn yolk_safeguarded_git_path(&self) -> PathBuf {
         self.root_path.join(".yolk_git")
     }
+
     /// Return the path to the active git directory,
     /// which is either the [`yolk_default_git_path`] (`.git`) or the [`yolk_safeguarded_git_path`] (`.yolk_git`) if it exists.
     pub fn active_yolk_git_dir(&self) -> Result<PathBuf> {
@@ -156,24 +162,28 @@ impl YolkPaths {
             miette::bail!("No git directory initialized")
         }
     }
-    pub fn script_path(&self) -> PathBuf {
+    ///
+    /// Path to the `yolk.lua` file
+    pub fn yolk_lua_path(&self) -> PathBuf {
         self.root_path.join("yolk.lua")
     }
+
+    /// Path to the `eggs.lua` file
+    pub fn eggs_lua_path(&self) -> PathBuf {
+        self.root_path.join("eggs.lua")
+    }
+
+    /// Path to the `eggs` directory
     pub fn eggs_dir_path(&self) -> PathBuf {
         self.root_path.join("eggs")
     }
+
     pub fn egg_path(&self, egg_name: &str) -> PathBuf {
         self.eggs_dir_path().join(egg_name)
     }
+
     pub fn get_egg(&self, name: &str) -> Result<Egg> {
         Egg::open(self.home.clone(), self.egg_path(name))
-    }
-    pub fn get_or_create_egg(&self, name: &str) -> Result<Egg> {
-        let egg_path = self.egg_path(name);
-        if !egg_path.exists() {
-            fs_err::create_dir_all(&egg_path).into_diagnostic()?;
-        }
-        Egg::open(self.home.clone(), egg_path)
     }
 
     pub fn list_eggs(&self) -> Result<impl Iterator<Item = Result<Egg>> + '_> {
@@ -224,10 +234,6 @@ impl Egg {
         Ok(true)
     }
 
-    pub fn templates_path(&self) -> PathBuf {
-        self.egg_dir.join("yolk_templates")
-    }
-
     pub fn name(&self) -> &str {
         self.egg_dir
             .file_name()
@@ -264,47 +270,6 @@ impl Egg {
             .map(|x| x.canonical())
             .collect::<Result<_>>()?;
         Ok(tmpl_paths)
-    }
-
-    pub fn add_to_template_paths(&self, paths: &[impl AsRef<Path>]) -> Result<()> {
-        let yolk_templates_path = self.templates_path();
-        if !yolk_templates_path.is_file() {
-            fs_err::File::create(&yolk_templates_path).into_diagnostic()?;
-        }
-        let yolk_templates = fs_err::read_to_string(&yolk_templates_path).into_diagnostic()?;
-        let mut yolk_templates: HashSet<_> =
-            yolk_templates.lines().map(|x| x.to_string()).collect();
-        for path in paths {
-            let path = path.as_ref();
-            if !path.exists() {
-                eprintln!("Warning: {} does not exist, skipping.", path.display());
-                continue;
-            }
-            let path = path.canonical()?;
-            if !path.starts_with(&self.egg_dir) {
-                return Err(miette::miette!(
-                    "The given file path is not within {}",
-                    self.egg_dir.display()
-                ));
-            }
-            let path_relative = path.strip_prefix(&self.egg_dir).into_diagnostic()?;
-            let path_str = path_relative.to_str().unwrap().to_string();
-            yolk_templates.insert(path_str);
-        }
-        let mut file = fs_err::OpenOptions::new()
-            .write(true)
-            .truncate(true)
-            .open(&yolk_templates_path)
-            .into_diagnostic()?;
-        file.write_all(
-            yolk_templates
-                .into_iter()
-                .collect::<Vec<_>>()
-                .join("\n")
-                .as_bytes(),
-        )
-        .into_diagnostic()?;
-        Ok(())
     }
 
     pub fn find_first_targetting_symlink(&self) -> Result<Option<PathBuf>> {
@@ -371,9 +336,6 @@ fn check_is_deployed_recursive(
 
 #[cfg(test)]
 mod test {
-
-    use std::path::PathBuf;
-
     use assert_fs::{
         assert::PathAssert,
         prelude::{FileWriteStr, PathChild, PathCreateDir},
@@ -381,7 +343,7 @@ mod test {
     use predicates::{path::exists, prelude::PredicateBooleanExt};
     use testresult::TestResult;
 
-    use crate::{util::PathExt, yolk::Yolk};
+    use crate::{eggs_config::EggConfig, yolk::Yolk};
 
     use super::YolkPaths;
 
@@ -398,15 +360,14 @@ mod test {
 
     #[test]
     pub fn test_is_deployed() -> TestResult {
-        let root = assert_fs::TempDir::new().unwrap();
-        let yolk_paths = YolkPaths::new(root.child("yolk").to_path_buf(), root.to_path_buf());
+        let home = assert_fs::TempDir::new().unwrap();
+        let yolk_paths = YolkPaths::new(home.child("yolk").to_path_buf(), home.to_path_buf());
         yolk_paths.create()?;
         let yolk = Yolk::new(yolk_paths);
 
-        root.child("content/dir_old").create_dir_all()?;
-        root.child("content/dir_old/file_old").write_str("")?;
-        let egg = yolk.paths().get_or_create_egg("test_egg")?;
-        let test_egg_dir = root.child("yolk/eggs/test_egg");
+        home.child("content/dir_old").create_dir_all()?;
+        home.child("content/dir_old/file_old").write_str("")?;
+        let test_egg_dir = home.child("yolk/eggs/test_egg");
         test_egg_dir.child("content/file").write_str("")?;
         test_egg_dir.child("content/dir1").create_dir_all()?;
         test_egg_dir.child("content/dir2/dir1").create_dir_all()?;
@@ -416,11 +377,12 @@ mod test {
         test_egg_dir.child("content/dir3").create_dir_all()?;
         test_egg_dir.child("content/dir3/file1").write_str("")?;
         test_egg_dir.child("content/dir4/dir1").create_dir_all()?;
+        let egg = yolk.paths().get_egg("test_egg")?;
 
         assert!(!(egg.is_deployed()?));
-        yolk.deploy_egg("test_egg")?;
+        yolk.deploy_egg("test_egg", &EggConfig::new(".", &home))?;
         assert!(egg.is_deployed()?);
-        fs_err::remove_file(root.child("content/dir_old/file1"))?;
+        fs_err::remove_file(home.child("content/dir_old/file1"))?;
         assert!(!(egg.is_deployed()?));
 
         Ok(())
@@ -439,26 +401,27 @@ mod test {
         Ok(())
     }
 
-    #[test]
-    pub fn test_get_templated_files() -> TestResult {
-        let root = assert_fs::TempDir::new().unwrap();
-        let yolk_paths = YolkPaths::new(root.child("yolk").to_path_buf(), root.to_path_buf());
-        yolk_paths.create()?;
-        let yolk = Yolk::new(yolk_paths);
-        root.child("foo/file").write_str("foo")?;
-        yolk.add_to_egg("foo", root.child("foo"))?;
-        yolk.add_to_templated_files(&[root.child("foo/file")])?;
-        let egg = yolk.paths().get_egg("foo")?;
-        assert_eq!(
-            vec![root.child("foo/file").to_path_buf().canonical()?],
-            egg.template_paths()?.into_iter().collect::<Vec<_>>()
-        );
-        fs_err::remove_file(root.child("foo/file"))?;
-        assert_eq!(
-            Vec::<PathBuf>::new(),
-            egg.template_paths()?.into_iter().collect::<Vec<_>>()
-        );
+    // #[test]
+    // pub fn test_get_templated_files() -> TestResult {
+    //     let root = assert_fs::TempDir::new().unwrap();
+    //     let yolk_paths = YolkPaths::new(root.child("yolk").to_path_buf(), root.to_path_buf());
+    //     yolk_paths.create()?;
+    //     todo!("Write test");
+    //     let yolk = Yolk::new(yolk_paths);
+    //     root.child("foo/file").write_str("foo")?;
+    //     // yolk.add_to_egg("foo", root.child("foo"))?;
+    //     // yolk.add_to_templated_files(&[root.child("foo/file")])?;
+    //     let egg = yolk.paths().get_egg("foo")?;
+    //     assert_eq!(
+    //         vec![root.child("foo/file").to_path_buf().canonical()?],
+    //         egg.template_paths()?.into_iter().collect::<Vec<_>>()
+    //     );
+    //     fs_err::remove_file(root.child("foo/file"))?;
+    //     assert_eq!(
+    //         Vec::<PathBuf>::new(),
+    //         egg.template_paths()?.into_iter().collect::<Vec<_>>()
+    //     );
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 }

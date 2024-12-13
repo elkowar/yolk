@@ -8,6 +8,7 @@ use script::eval_ctx;
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 use yolk::{EvalMode, Yolk};
 
+pub mod eggs_config;
 pub mod script;
 mod templating;
 #[cfg(test)]
@@ -46,7 +47,7 @@ enum Command {
     /// This renames `.git` to `.yolk_git` to ensure that git interaction happens through the yolk CLI
     Safeguard,
     /// Deploy an egg
-    Deploy { name: String },
+    Deploy,
     /// Evaluate an expression like it would be done in a template
     Eval {
         /// Evaluate in canonical context instead.
@@ -54,13 +55,6 @@ enum Command {
         canonical: bool,
         /// The expression to evaluate
         expr: String,
-    },
-    /// Add a file or directory to an egg in yolk
-    Add {
-        /// The name of the egg
-        name: String,
-        /// The file to add into your egg
-        path: PathBuf,
     },
     /// Re-evaluate all local templates to ensure that they are in a consistent state
     #[clap(alias = "s")]
@@ -74,13 +68,6 @@ enum Command {
     Git {
         #[clap(allow_hyphen_values = true)]
         command: Vec<String>,
-    },
-    /// Make the given file template capable, by adding it to the yolk_templates file
-    #[clap(alias = "mktmpl")]
-    MakeTemplate {
-        /// The files you want to turn into templates
-        #[arg(required = true)]
-        paths: Vec<PathBuf>,
     },
     /// Evaluate a given templated file, or read a templated string from stdin
     #[clap(name = "eval-template")]
@@ -146,8 +133,7 @@ fn run_command(args: Args) -> Result<()> {
                     .into_diagnostic()
             })?;
         }
-        Command::Deploy { name: egg } => yolk.deploy_egg(egg)?,
-        Command::Add { name: egg, path } => yolk.add_to_egg(egg, path)?,
+        Command::Deploy => yolk.deploy()?,
         Command::List => {
             let mut eggs = yolk.list_eggs()?.collect::<Result<Vec<_>>>()?;
             eggs.sort_by_key(|egg| egg.name().to_string());
@@ -190,9 +176,6 @@ fn run_command(args: Args) -> Result<()> {
                 Ok(())
             })?;
         }
-        Command::MakeTemplate { paths } => {
-            yolk.add_to_templated_files(paths)?;
-        }
         Command::EvalTemplate { path, canonical } => {
             let text = match path {
                 Some(path) => std::fs::read_to_string(path).into_diagnostic()?,
@@ -219,7 +202,7 @@ fn run_command(args: Args) -> Result<()> {
                     egg.find_first_targetting_symlink()?
                         .unwrap_or_else(|| yolk.paths().egg_path(egg_name))
                 }
-                None => yolk.paths().script_path(),
+                None => yolk.paths().yolk_lua_path(),
             };
 
             if let Some(parent) = path.parent() {
@@ -235,7 +218,7 @@ fn run_command(args: Args) -> Result<()> {
 
             let mut dirs_to_watch = HashSet::new();
             let mut files_to_watch = HashSet::new();
-            let script_path = yolk.paths().script_path();
+            let script_path = yolk.paths().yolk_lua_path();
             files_to_watch.insert(script_path.clone());
 
             for egg in yolk.paths().list_eggs()? {
@@ -269,7 +252,7 @@ fn run_command(args: Args) -> Result<()> {
                                 })
                                 .flat_map(|x| x.paths.clone().into_iter())
                                 .collect::<HashSet<_>>();
-                            if changed.contains(&yolk.paths().script_path()) {
+                            if changed.contains(&yolk.paths().yolk_lua_path()) {
                                 if let Err(e) = yolk.sync_to_mode(mode) {
                                     eprintln!("Error: {e:?}");
                                 }
