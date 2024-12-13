@@ -1,8 +1,9 @@
 use std::{
     collections::{HashMap, HashSet},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
+use bon::Builder;
 use miette::miette;
 use mlua::{FromLua, Table, Value};
 
@@ -12,11 +13,29 @@ macro_rules! mlua_miette {
     };
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Builder)]
 pub struct EggConfig {
+    #[builder(default = true)]
     pub enabled: bool,
     pub targets: HashMap<PathBuf, PathBuf>,
+    #[builder(default)]
     pub templates: HashSet<PathBuf>,
+}
+
+impl EggConfig {
+    pub fn new(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Self {
+        EggConfig {
+            enabled: true,
+            targets: maplit::hashmap! {
+                from.as_ref().to_path_buf() => to.as_ref().to_path_buf()
+            },
+            templates: HashSet::new(),
+        }
+    }
+
+    pub fn stow_like(home: impl AsRef<Path>) -> Self {
+        Self::new(".", home)
+    }
 }
 
 impl FromLua for EggConfig {
@@ -79,18 +98,18 @@ impl FromLua for EggConfig {
 mod test {
     use std::{collections::HashSet, path::PathBuf};
 
-    use crate::eggs_config::{EggConfig, EggsConfig};
+    use crate::eggs_config::EggConfig;
 
     #[test]
     fn test_read_verbose_eggs_config() {
         let lua = mlua::Lua::new();
         let config = lua
             .load(indoc::indoc! {r#"
-                {foo = {
+                {
                     enabled = false,
                     targets = { ["foo"] = "~/bar" },
                     templates = { "foo" }
-                }}
+                }
             "#})
             .eval::<EggConfig>()
             .unwrap();
@@ -112,7 +131,7 @@ mod test {
     fn test_read_simple_eggs_config() {
         let lua = mlua::Lua::new();
         let config = lua
-            .load(r#"{foo = { targets = "~/bar" }}"#)
+            .load(r#"{ targets = "~/bar" }"#)
             .eval::<EggConfig>()
             .unwrap();
         assert_eq!(
@@ -129,7 +148,7 @@ mod test {
     #[test]
     fn test_read_minimal_eggs_config() {
         let lua = mlua::Lua::new();
-        let config = lua.load(r#"{foo = "~/bar"}"#).eval::<EggConfig>().unwrap();
+        let config = lua.load(r#""~/bar""#).eval::<EggConfig>().unwrap();
         assert_eq!(
             config,
             EggConfig {

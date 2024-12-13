@@ -47,7 +47,7 @@ enum Command {
     /// This renames `.git` to `.yolk_git` to ensure that git interaction happens through the yolk CLI
     Safeguard,
     /// Deploy an egg
-    Deploy { name: String },
+    Deploy,
     /// Evaluate an expression like it would be done in a template
     Eval {
         /// Evaluate in canonical context instead.
@@ -55,13 +55,6 @@ enum Command {
         canonical: bool,
         /// The expression to evaluate
         expr: String,
-    },
-    /// Add a file or directory to an egg in yolk
-    Add {
-        /// The name of the egg
-        name: String,
-        /// The file to add into your egg
-        path: PathBuf,
     },
     /// Re-evaluate all local templates to ensure that they are in a consistent state
     #[clap(alias = "s")]
@@ -75,13 +68,6 @@ enum Command {
     Git {
         #[clap(allow_hyphen_values = true)]
         command: Vec<String>,
-    },
-    /// Make the given file template capable, by adding it to the yolk_templates file
-    #[clap(alias = "mktmpl")]
-    MakeTemplate {
-        /// The files you want to turn into templates
-        #[arg(required = true)]
-        paths: Vec<PathBuf>,
     },
     /// Evaluate a given templated file, or read a templated string from stdin
     #[clap(name = "eval-template")]
@@ -147,8 +133,7 @@ fn run_command(args: Args) -> Result<()> {
                     .into_diagnostic()
             })?;
         }
-        Command::Deploy { name: egg } => yolk.deploy_egg(egg)?,
-        Command::Add { name: egg, path } => yolk.add_to_egg(egg, path)?,
+        Command::Deploy => yolk.deploy()?,
         Command::List => {
             let mut eggs = yolk.list_eggs()?.collect::<Result<Vec<_>>>()?;
             eggs.sort_by_key(|egg| egg.name().to_string());
@@ -190,9 +175,6 @@ fn run_command(args: Args) -> Result<()> {
                     .into_diagnostic()?;
                 Ok(())
             })?;
-        }
-        Command::MakeTemplate { paths } => {
-            yolk.add_to_templated_files(paths)?;
         }
         Command::EvalTemplate { path, canonical } => {
             let text = match path {

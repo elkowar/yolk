@@ -1,4 +1,3 @@
-use miette::IntoDiagnostic;
 use mlua::ExternalResult as _;
 use mlua::FromLua;
 use mlua::FromLuaMulti;
