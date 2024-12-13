@@ -1,0 +1,14 @@
+---
+source: src/templating/parser.rs
+expression: "render_error(parse_document(\"\\nfoo\\n{%f%}\\nbar\\n\").unwrap_err())"
+---
+  × Failed to parse yolk template file
+
+Error: 
+  × Expected end of block.
+   ╭─[file:4:4]
+ 3 │ {%f%}
+ 4 │ bar
+   ·    ┬
+   ·    ╰── here
+   ╰────

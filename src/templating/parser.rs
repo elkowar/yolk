@@ -226,6 +226,10 @@ fn p_inline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     })
 }
 
+/// Parses 0..n elements until the end tag line, but does not consume the end tag line.
+///
+/// `p_end_tag_inner` is used as the inner parser for the [`p_tag_line`] parser of the end tag,
+/// which allows you to specify the specific set of end tags that should be allowed.
 fn p_multiline_body<'a>(
     p_end_tag_inner: impl winnow::Parser<Input<'a>, &'a str, YolkParseError>,
 ) -> impl Parser<Input<'a>, Vec<Element<'a>>, YolkParseError> {
@@ -233,12 +237,12 @@ fn p_multiline_body<'a>(
     repeat_till(0.., p_element, end_tag_line)
         .context(lbl("end of block"))
         .map(|(elements, _)| elements)
-        .resume_after(
-            (repeat_till(0.., any, peek(p_tag_line("{%", "end", "%}", false))))
-                .map(|((), _)| ())
-                .void(),
-        )
-        .map(|x| x.unwrap_or_default())
+    // .resume_after(
+    //     (repeat_till(0.., any, peek(p_tag_line("{%", "end", "%}", false))))
+    //         .map(|((), _)| ())
+    //         .void(),
+    // )
+    // .map(|x| x.unwrap_or_default())
 }
 
 fn p_multiline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
@@ -489,6 +493,14 @@ mod test {
     fn test_error_incomplete_multiline() {
         insta::assert_snapshot!(render_error(parse_document("{%f%}").unwrap_err()));
     }
+
+    #[test]
+    fn test_error_incomplete_multiline_long() {
+        insta::assert_snapshot!(render_error(
+            parse_document("\nfoo\n{%f%}\nbar\n").unwrap_err()
+        ));
+    }
+
     #[test]
     fn test_error_multiline_with_else() {
         insta::assert_snapshot!(render_error(
