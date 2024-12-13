@@ -1,16 +1,15 @@
 ---
 source: src/templating/parser.rs
 expression: "render_error(parse_document(\"{%f%}\\n{%else%}\\n{%end%}\").unwrap_err())"
-snapshot_kind: text
 ---
   × Failed to parse yolk template file
 
 Error: 
   × Expected valid element.
-   ╭─[file:2:3]
+   ╭─[file:1:6]
  1 │ {%f%}
- 2 │ {%else%}
-   ·   ───┬───
+   ·      ┬
    ·      ╰── here
+ 2 │ {%else%}
  3 │ {%end%}
    ╰────
