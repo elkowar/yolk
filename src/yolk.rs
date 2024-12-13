@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{path::Path, time::Instant};
 
 use fs_err::PathExt as _;
 use miette::{Context, IntoDiagnostic, NamedSource, Result};
@@ -120,6 +120,7 @@ impl Yolk {
             let egg = egg?;
             let tmpl_paths = egg.template_paths()?;
             for templated_file in tmpl_paths {
+                let time_before = Instant::now();
                 if templated_file.is_file() {
                     if let Err(err) = self.sync_template_file(&mut eval_ctx, &templated_file) {
                         eprintln!(
@@ -127,7 +128,11 @@ impl Yolk {
                             templated_file.display(),
                         );
                     }
-                    tracing::info!("Synced templated file {}", templated_file.display());
+                    tracing::info!(
+                        "Synced templated file {} in {}ms",
+                        templated_file.display(),
+                        time_before.elapsed().as_millis()
+                    );
                 } else {
                     println!(
                         "Warning: {} was specified as templated file, but doesn't exist",
@@ -188,7 +193,6 @@ impl Yolk {
     ) -> Result<String> {
         let doc = Document::parse_string_named(file_path, content)
             .with_context(|| format!("Failed to parse document `{file_path}`"))?;
-        tracing::debug!("Rendering template");
         doc.render(eval_ctx)
             .with_context(|| format!("Failed to render document `{file_path}`"))
     }

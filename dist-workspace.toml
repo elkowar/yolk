@@ -2,6 +2,7 @@
 members = ["cargo:."]
 
 [dist]
+display-name = "yolk"
 # global-artifacts-jobs = ["./build-man"]
 github-build-setup = "build-setup.yml"
 cargo-dist-version = "0.26.1"

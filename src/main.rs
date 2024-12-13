@@ -110,7 +110,7 @@ pub(crate) fn main() -> Result<()> {
         tracing_subscriber::EnvFilter::from_default_env()
     };
     tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::fmt::layer().compact())
         .with(env_filter)
         .init();
 
