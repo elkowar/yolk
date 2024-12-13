@@ -1,51 +1,43 @@
 use std::{
-    borrow::BorrowMut,
     collections::HashMap,
+    path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Serialize, Deserialize)]
-pub struct Cache {
-    template_file_data: HashMap<String, TmplData>,
+pub struct SyncTimes {
+    sync_times: HashMap<PathBuf, SyncTime>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TmplData {
-    #[serde(with = "serde_systemtime")]
-    pub last_synced: SystemTime,
-}
-
-impl Default for TmplData {
-    fn default() -> Self {
-        Self {
-            last_synced: SystemTime::UNIX_EPOCH,
-        }
-    }
-}
-
-impl Cache {
+impl SyncTimes {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn tmpl_mut(&mut self, file: &str) -> &mut TmplData {
-        self.template_file_data
-            .entry(file.to_string())
-            .or_default()
-            .borrow_mut()
+    pub fn get_sync_time(&self, path: &PathBuf) -> SyncTime {
+        self.sync_times
+            .get(path)
+            .copied()
+            .unwrap_or(SyncTime(UNIX_EPOCH))
     }
 
-    pub fn set_file_synced_at(&mut self, file: String, time: SystemTime) {
-        self.template_file_data.entry(file).or_default().last_synced = time;
+    pub fn set_sync_time(&mut self, path: PathBuf, time: impl Into<SyncTime>) {
+        self.sync_times.insert(path, time.into());
     }
+}
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+pub struct SyncTime(#[serde(with = "serde_systemtime")] pub SystemTime);
 
-    pub fn get_last_sync_time(&self, file: &str) -> SystemTime {
-        self.template_file_data
-            .get(file)
-            .map(|x| x.last_synced)
-            .unwrap_or(UNIX_EPOCH)
+impl PartialEq<SystemTime> for SyncTime {
+    fn eq(&self, other: &SystemTime) -> bool {
+        self.0 == *other
+    }
+}
+impl PartialOrd<SystemTime> for SyncTime {
+    fn partial_cmp(&self, other: &SystemTime) -> Option<std::cmp::Ordering> {
+        self.0.partial_cmp(other)
     }
 }
 

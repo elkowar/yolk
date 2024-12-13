@@ -206,11 +206,15 @@ impl Yolk {
         let last_modfied = fs_err::metadata(&path)
             .into_diagnostic()?
             .modified()
-            .unwrap_or(UNIX_EPOCH);
-        let mut cache = self.paths().cache_file()?;
-        let tmpl_data = cache.tmpl_mut(path.to_string_lossy().as_ref());
+            .unwrap_or(SystemTime::now());
+        let script_last_modified = fs_err::metadata(&self.paths().script_path())
+            .into_diagnostic()?
+            .modified()
+            .unwrap_or(SystemTime::now());
+        let mut sync_times = self.paths().sync_times_file()?;
 
-        if tmpl_data.last_synced >= last_modfied {
+        // TODO: Figure out if we want to canonicalize here
+        if sync_times.get_sync_time(&path.to_path_buf()) >= last_modfied {
             tracing::debug!(
                 "File {} has not changed since the last sync, skipping...",
                 path.display()
@@ -227,7 +231,7 @@ impl Yolk {
             fs_err::write(&path, rendered).into_diagnostic()?;
         }
         tmpl_data.last_synced = SystemTime::now();
-        self.paths().write_cache_file(&cache)?;
+        self.paths().write_sync_times(&cache)?;
         Ok(())
     }
 

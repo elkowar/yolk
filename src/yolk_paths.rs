@@ -7,7 +7,7 @@ use std::{
 use fs_err::PathExt;
 use miette::{Context as _, IntoDiagnostic, Result};
 
-use crate::{cache, util::PathExt as _};
+use crate::{sync_times::SyncTimes, util::PathExt as _};
 
 const DEFAULT_LUA: &str = indoc::indoc! {r#"
     data = {
@@ -144,29 +144,29 @@ impl YolkPaths {
     pub fn yolk_safeguarded_git_path(&self) -> PathBuf {
         self.root_path.join(".yolk_git")
     }
-    pub fn cache_file_path(&self) -> PathBuf {
+    pub fn sync_times_path(&self) -> PathBuf {
         self.root_path.join(".yolk_cache")
     }
 
-    pub fn cache_file(&self) -> Result<cache::Cache> {
+    pub fn sync_times_file(&self) -> Result<SyncTimes> {
         // TODO: potentially just ignore errors here and return an empty Cache instead,
         // that way, if something breaks we automatically regenerate it in a healthy state.
-        let cache_file = self.cache_file_path();
-        if !cache_file.exists() {
-            return Ok(cache::Cache::new());
+        let path = self.sync_times_path();
+        if !path.exists() {
+            return Ok(SyncTimes::new());
         }
-        let cache_file = fs_err::File::open(cache_file)
+        let file = fs_err::File::open(path)
             .into_diagnostic()
             .wrap_err("Failed to open .yolk_cache")?;
-        let cache: cache::Cache = serde_json::from_reader(cache_file)
+        let sync_times: SyncTimes = serde_json::from_reader(file)
             .into_diagnostic()
             .wrap_err("Failed to parse .yolk_cache")?;
-        Ok(cache)
+        Ok(sync_times)
     }
 
-    pub fn write_cache_file(&self, cache: &cache::Cache) -> Result<()> {
+    pub fn write_sync_times(&self, cache: &SyncTimes) -> Result<()> {
         let json = serde_json::to_string_pretty(&cache).unwrap();
-        fs_err::write(self.cache_file_path(), json).into_diagnostic()?;
+        fs_err::write(self.sync_times_path(), json).into_diagnostic()?;
         Ok(())
     }
 

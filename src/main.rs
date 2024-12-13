@@ -8,8 +8,8 @@ use script::eval_ctx;
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 use yolk::{EvalMode, Yolk};
 
-mod cache;
 pub mod script;
+mod sync_times;
 mod templating;
 #[cfg(test)]
 pub mod test;
