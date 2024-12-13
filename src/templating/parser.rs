@@ -126,15 +126,9 @@ fn p_plain_line_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
 }
 
 fn p_regular_tag_inner(end: &str) -> impl winnow::Parser<Input<'_>, &'_ str, YolkParseError> {
-    trace("p_regular_tag_inner", move |i: &mut _| {
-        cut_err(
-            repeat_till(1.., (not(line_ending), not(end), any), peek(end))
-                .map(|(_, _): ((), _)| ())
-                .context(lbl("expression"))
-                .take(),
-        )
-        .parse_next(i)
-    })
+    let p =
+        repeat_till(1.., (not(line_ending), not(end), any), peek(end)).map(|(_, _): ((), _)| ());
+    cut_err(p.context(lbl("expression")).take())
 }
 
 /// p_tag := <start> <p_inner> <end>
@@ -213,6 +207,7 @@ fn p_nextline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     })
 }
 
+/// Parses an inline element, including the surrounding line
 fn p_inline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     peek(any).parse_next(input)?;
     let p_inner = (
@@ -274,7 +269,8 @@ fn p_multiline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     })
 }
 
-fn p_multiline_block_starting_with<'a, Expr>(
+/// Parse a multiline block starting with a tag line using the given parser into a [`Block`].
+fn p_block<'a, Expr>(
     start_p: impl winnow::Parser<Input<'a>, (TaggedLine<'a>, Expr), YolkParseError>,
     block_p: impl winnow::Parser<Input<'a>, Vec<Element<'a>>, YolkParseError>,
 ) -> impl winnow::Parser<Input<'a>, Block<'a, Expr>, YolkParseError> {
@@ -289,7 +285,7 @@ fn p_multiline_block_starting_with<'a, Expr>(
 
 fn p_conditional_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     peek(any).parse_next(input)?;
-    let p_if = p_multiline_block_starting_with::<Sp<&'a str>>(
+    let p_if = p_block::<Sp<&'a str>>(
         p_tag_line(
             "{%",
             preceded(("if", wsp), p_regular_tag_inner("%}")),
@@ -302,7 +298,7 @@ fn p_conditional_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
             preceded(("elif", wsp), p_regular_tag_inner("%}")),
         ))),
     );
-    let p_elif = p_multiline_block_starting_with::<Sp<&'a str>>(
+    let p_elif = p_block::<Sp<&'a str>>(
         p_tag_line(
             "{%",
             preceded(("elif", wsp), p_regular_tag_inner("%}")),
@@ -315,7 +311,7 @@ fn p_conditional_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
             preceded(("elif", wsp), p_regular_tag_inner("%}")),
         ))),
     );
-    let p_else = p_multiline_block_starting_with(
+    let p_else = p_block(
         p_tag_line("{%", "else".void(), "%}", true).context("else tag"),
         p_multiline_body("end"),
     );
