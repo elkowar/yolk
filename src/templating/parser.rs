@@ -127,11 +127,13 @@ fn p_plain_line_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
 
 fn p_regular_tag_inner(end: &str) -> impl winnow::Parser<Input<'_>, &'_ str, YolkParseError> {
     trace("p_regular_tag_inner", move |i: &mut _| {
-        repeat_till(1.., (not(line_ending), not(end), any), peek(end))
-            .map(|(_, _): ((), _)| ())
-            .context(lbl("expression"))
-            .take()
-            .parse_next(i)
+        cut_err(
+            repeat_till(1.., (not(line_ending), not(end), any), peek(end))
+                .map(|(_, _): ((), _)| ())
+                .context(lbl("expression"))
+                .take(),
+        )
+        .parse_next(i)
     })
 }
 
@@ -509,5 +511,10 @@ mod test {
     #[test]
     fn test_error_if_without_expression() {
         insta::assert_snapshot!(render_error(parse_document("{<if>}").unwrap_err()));
+    }
+
+    #[test]
+    fn test_error_empty_tag() {
+        insta::assert_snapshot!(render_error(parse_document("{%%}").unwrap_err()));
     }
 }
