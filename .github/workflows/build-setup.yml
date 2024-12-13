@@ -1,11 +1,11 @@
-- name: Install cargo-binstall
-  uses: cargo-bins/cargo-binstall@v1.10.16
-- name: Install mdbook, mdbook-man
-  run: cargo binstall mdbook mdbook-man
-- name: Run mdbook build
-  run: |
-    echo '[output.man]' > docs/book.toml
-    echo 'output-dir = "book-man"' >> docs/book.toml
-    echo 'filename = "book.man"' >> docs/book.toml
-    mdbook build docs
-    mv docs/book/book-man/book.man yolk.man
+# - name: Install cargo-binstall
+#   uses: cargo-bins/cargo-binstall@v1.10.16
+# - name: Install mdbook, mdbook-man
+#   run: cargo binstall mdbook mdbook-man
+# - name: Run mdbook build
+#   run: |
+#     echo '[output.man]' > docs/book.toml
+#     echo 'output-dir = "book-man"' >> docs/book.toml
+#     echo 'filename = "book.man"' >> docs/book.toml
+#     mdbook build docs
+#     mv docs/book/book-man/book.man yolk.man
