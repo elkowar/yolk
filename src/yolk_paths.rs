@@ -76,7 +76,7 @@ impl YolkPaths {
         }
         if !self.yolk_lua_path().exists() {
             miette::bail!(
-                "Yolk directory does not contain a yolk.lua file at {}",
+                "Yolk directory does not contain a yolk.luau file at {}",
                 self.yolk_lua_path().display()
             );
         }
@@ -163,14 +163,14 @@ impl YolkPaths {
         }
     }
     ///
-    /// Path to the `yolk.lua` file
+    /// Path to the `yolk.luau` file
     pub fn yolk_lua_path(&self) -> PathBuf {
-        self.root_path.join("yolk.lua")
+        self.root_path.join("yolk.luau")
     }
 
-    /// Path to the `eggs.lua` file
+    /// Path to the `eggs.luau` file
     pub fn eggs_lua_path(&self) -> PathBuf {
-        self.root_path.join("eggs.lua")
+        self.root_path.join("eggs.luau")
     }
 
     /// Path to the `eggs` directory
@@ -355,7 +355,7 @@ mod test {
         yolk_paths.create().unwrap();
         assert!(yolk_paths.check().is_ok());
         root.child("yolk/eggs").assert(exists());
-        root.child("yolk/yolk.lua").assert(exists());
+        root.child("yolk/yolk.luau").assert(exists());
     }
 
     #[test]
