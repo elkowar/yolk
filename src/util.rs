@@ -29,4 +29,20 @@ impl Path {
     fn canonical(&self) -> miette::Result<PathBuf> {
         Ok(dunce::simplified(&fs_err::canonicalize(self).into_diagnostic()?).to_path_buf())
     }
+
+    fn to_abbrev_str(&self) -> String {
+        match (
+            dirs::home_dir(),
+            dirs::config_dir().map(|x| x.join("yolk").join("eggs")),
+        ) {
+            (Some(home), Some(eggs)) => self
+                .strip_prefix(&eggs)
+                .map(|x| PathBuf::from("eggs").join(x))
+                .or_else(|_| self.strip_prefix(&home).map(|x| PathBuf::from("~").join(x)))
+                .unwrap_or_else(|_| self.into())
+                .display()
+                .to_string(),
+            _ => self.display().to_string(),
+        }
+    }
 }
