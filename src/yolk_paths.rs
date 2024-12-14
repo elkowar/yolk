@@ -71,19 +71,19 @@ impl YolkPaths {
         if !self.root_path().exists() {
             miette::bail!(
                 "Yolk directory does not exist at {}",
-                self.root_path().display()
+                self.root_path().to_abbrev_str()
             );
         }
         if !self.yolk_lua_path().exists() {
             miette::bail!(
                 "Yolk directory does not contain a yolk.luau file at {}",
-                self.yolk_lua_path().display()
+                self.yolk_lua_path().to_abbrev_str()
             );
         }
         if !self.eggs_dir_path().exists() {
             miette::bail!(
                 "Yolk directory does not contain an eggs directory at {}",
-                self.eggs_dir_path().display()
+                self.eggs_dir_path().to_abbrev_str()
             );
         }
         Ok(())
@@ -95,7 +95,7 @@ impl YolkPaths {
             && path.is_dir()
             && fs_err::read_dir(path).into_diagnostic()?.next().is_some()
         {
-            miette::bail!("Yolk directory already exists at {}", path.display());
+            miette::bail!("Yolk directory already exists at {}", path.to_abbrev_str());
         }
         fs_err::create_dir_all(path).into_diagnostic()?;
         fs_err::create_dir_all(self.eggs_dir_path()).into_diagnostic()?;
@@ -380,7 +380,7 @@ mod test {
         let egg = yolk.paths().get_egg("test_egg")?;
 
         assert!(!(egg.is_deployed()?));
-        yolk.deploy_egg("test_egg", &EggConfig::new(".", &home))?;
+        yolk.sync_egg_deployment("test_egg", &EggConfig::new(".", &home))?;
         assert!(egg.is_deployed()?);
         fs_err::remove_file(home.child("content/dir_old/file1"))?;
         assert!(!(egg.is_deployed()?));

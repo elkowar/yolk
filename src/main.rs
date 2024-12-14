@@ -5,7 +5,8 @@ use miette::{IntoDiagnostic, Result};
 use notify_debouncer_full::{new_debouncer, DebounceEventResult};
 use owo_colors::OwoColorize as _;
 use script::eval_ctx;
-use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
+use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _, EnvFilter};
+use util::PathExt as _;
 use yolk::{EvalMode, Yolk};
 
 pub mod eggs_config;
@@ -46,8 +47,6 @@ enum Command {
     ///
     /// This renames `.git` to `.yolk_git` to ensure that git interaction happens through the yolk CLI
     Safeguard,
-    /// Deploy an egg
-    Deploy,
     /// Evaluate an expression like it would be done in a template
     Eval {
         /// Evaluate in canonical context instead.
@@ -94,10 +93,16 @@ pub(crate) fn main() -> Result<()> {
     let env_filter = if args.debug {
         tracing_subscriber::EnvFilter::from_str("debug").unwrap()
     } else {
-        tracing_subscriber::EnvFilter::from_default_env()
+        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or(EnvFilter::new("yolk=info"))
     };
     tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_target(false)
+                .without_time()
+                .with_ansi(true)
+                .with_level(true),
+        )
         .with(env_filter)
         .init();
 
@@ -133,7 +138,6 @@ fn run_command(args: Args) -> Result<()> {
                     .into_diagnostic()
             })?;
         }
-        Command::Deploy => yolk.deploy()?,
         Command::List => {
             let mut eggs = yolk.list_eggs()?.collect::<Result<Vec<_>>>()?;
             eggs.sort_by_key(|egg| egg.name().to_string());
@@ -271,7 +275,7 @@ fn run_command(args: Args) -> Result<()> {
             .into_diagnostic()?;
 
             for dir in dirs_to_watch {
-                tracing::info!("Watching {}", dir.display());
+                tracing::info!("Watching {}", dir.to_abbrev_str());
                 debouncer
                     .watch(&dir, notify::RecursiveMode::Recursive)
                     .into_diagnostic()?;
