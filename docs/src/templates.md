@@ -41,7 +41,7 @@ background_color = "#000000"
 foreground_color = "#ffffff"
 ```
 After running `yolk sync`, yolk will replace the regex patterns with the corresponding result of the Lua expression.
-For example, depending on how you configured your `colors` in your `yolk.lua`, this could turn into:
+For example, depending on how you configured your `colors` in your `yolk.luau`, this could turn into:
 ```toml
 # {# replace_quoted(colors.background) #}
 background_color = "#282828"

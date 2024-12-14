@@ -80,7 +80,7 @@ enum Command {
     },
     /// List all the eggs in your yolk directory
     List,
-    /// Open your `yolk.lua` or the given egg in your `$EDITOR` of choice
+    /// Open your `yolk.luau` or the given egg in your `$EDITOR` of choice
     Edit { egg: Option<String> },
     Watch {
         #[arg(long)]
@@ -276,7 +276,7 @@ fn run_command(args: Args) -> Result<()> {
                     .watch(&dir, notify::RecursiveMode::Recursive)
                     .into_diagnostic()?;
             }
-            // Watch the yolk dir non-recursively to catch updates to yolk.lua
+            // Watch the yolk dir non-recursively to catch updates to yolk.luau
             debouncer
                 .watch(&script_path, notify::RecursiveMode::NonRecursive)
                 .into_diagnostic()?;

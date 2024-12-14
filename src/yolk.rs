@@ -46,11 +46,11 @@ impl Yolk {
                         NamedSource::new(eggs_lua_path.to_string_lossy(), eggs_lua_content)
                             .with_language("lua"),
                     )
-                    .wrap_err("Failed to execute eggs.lua")
+                    .wrap_err("Failed to execute eggs.luau")
             })
     }
 
-    /// Execute the `eggs.lua` script and deploy the resulting eggs.
+    /// Execute the `eggs.luau` script and deploy the resulting eggs.
     pub fn deploy(&self) -> Result<()> {
         let mut eval_ctx = self
             .prepare_eval_ctx_for_templates(EvalMode::Local)
@@ -102,7 +102,7 @@ impl Yolk {
             let egg = egg?;
             let egg_config = egg_configs
                 .get(&egg.name().to_string())
-                .ok_or_else(|| miette::miette!("Egg {} not found in eggs.lua", egg.name()))?;
+                .ok_or_else(|| miette::miette!("Egg {} not found in eggs.luau", egg.name()))?;
 
             for templated_file in &egg_config.templates {
                 let templated_file = egg.path().join(templated_file);
@@ -139,13 +139,13 @@ impl Yolk {
         globals
             .set("LOCAL", mode == EvalMode::Local)
             .into_diagnostic()?;
-        eval_ctx.exec_lua("yolk.lua", &yolk_file).map_err(|e| {
+        eval_ctx.exec_lua("yolk.luau", &yolk_file).map_err(|e| {
             miette::Report::from(e)
                 .with_source_code(
                     NamedSource::new(self.yolk_paths.yolk_lua_path().to_string_lossy(), yolk_file)
                         .with_language("lua"),
                 )
-                .wrap_err("Failed to execute yolk.lua")
+                .wrap_err("Failed to execute yolk.luau")
         })?;
         Ok(eval_ctx)
     }
@@ -394,20 +394,20 @@ mod test {
     fn test_syncing() -> TestResult {
         let (home, yolk, eggs) = setup_and_init()?;
         let foo_toml_initial = "{# data.value #}\nfoo";
-        home.child("yolk/yolk.lua").write_str(indoc::indoc! {r#"
+        home.child("yolk/yolk.luau").write_str(indoc::indoc! {r#"
             data = if LOCAL then {value = "local"} else {value = "canonical"}
         "#})?;
-        home.child("yolk/eggs.lua")
+        home.child("yolk/eggs.luau")
             .write_str(&format!("return {{ foo = `{}` }}", home.display()))?;
         eggs.child("foo/foo.toml").write_str(foo_toml_initial)?;
         yolk.deploy()?;
         yolk.sync_to_mode(EvalMode::Local)?;
-        // No template set in eggs.lua, so no templating should happen
+        // No template set in eggs.luau, so no templating should happen
         home.child("foo.toml").assert(is_symlink());
         eggs.child("foo/foo.toml").assert(foo_toml_initial);
 
         // Now we make the file a template, so it should be updated
-        home.child("yolk/eggs.lua").write_str(&format!(
+        home.child("yolk/eggs.luau").write_str(&format!(
             r#"return {{ foo = {{targets = "{}", templates = {{"foo.toml"}} }} }}"#,
             home.display()
         ))?;
@@ -415,7 +415,7 @@ mod test {
         eggs.child("foo/foo.toml").assert("{# data.value #}\nlocal");
 
         // Update the state, to see if applying again just works :tm:
-        home.child("yolk/yolk.lua").write_str(indoc::indoc! {r#"
+        home.child("yolk/yolk.luau").write_str(indoc::indoc! {r#"
             data = if LOCAL then {value = "new local"} else {value = "new canonical"}
         "#})?;
         yolk.sync_to_mode(EvalMode::Local)?;
