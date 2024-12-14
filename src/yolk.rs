@@ -112,21 +112,43 @@ impl Yolk {
             };
             self.sync_egg_deployment(&egg.name(), &egg_config)?;
 
-            for templated_file in &egg_config.templates {
-                let templated_file = egg.path().join(templated_file);
-                if templated_file.is_file() {
-                    if let Err(err) = self.sync_template_file(&mut eval_ctx, &templated_file) {
-                        eprintln!(
-                            "Warning: Failed to sync templated file {}: {err:?}",
-                            templated_file.to_abbrev_str(),
+            for tmpl_path_glob in &egg_config.templates {
+                let tmpl_path_glob = egg.path().join(tmpl_path_glob);
+                let glob_paths = match glob::glob(&tmpl_path_glob.to_string_lossy()) {
+                    Ok(x) => x,
+                    Err(err) => {
+                        tracing::warn!(
+                            "Failed to glob for templated file {}: {err:?}",
+                            tmpl_path_glob.to_abbrev_str(),
+                        );
+                        continue;
+                    }
+                };
+                for path_result in glob_paths {
+                    let tmpl_path = match path_result {
+                        Ok(x) => x,
+                        Err(err) => {
+                            tracing::warn!(
+                                "Failed to glob for templated file {}: {err:?}",
+                                tmpl_path_glob.to_abbrev_str(),
+                            );
+                            continue;
+                        }
+                    };
+                    if tmpl_path.is_file() {
+                        if let Err(err) = self.sync_template_file(&mut eval_ctx, &tmpl_path) {
+                            tracing::warn!(
+                                "Failed to sync templated file {}: {err:?}",
+                                tmpl_path.to_abbrev_str(),
+                            );
+                        }
+                        tracing::info!("Synced templated file {}", tmpl_path.to_abbrev_str());
+                    } else if !tmpl_path.exists() {
+                        tracing::warn!(
+                            "{} was specified as templated file, but doesn't exist",
+                            tmpl_path.to_abbrev_str()
                         );
                     }
-                    tracing::info!("Synced templated file {}", templated_file.to_abbrev_str());
-                } else {
-                    println!(
-                        "Warning: {} was specified as templated file, but doesn't exist",
-                        templated_file.to_abbrev_str()
-                    );
                 }
             }
         }
