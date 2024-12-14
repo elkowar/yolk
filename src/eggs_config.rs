@@ -15,11 +15,20 @@ macro_rules! mlua_miette {
 
 #[derive(Debug, PartialEq, Eq, Clone, Builder)]
 pub struct EggConfig {
+    #[builder(field)]
+    pub targets: HashMap<PathBuf, PathBuf>,
     #[builder(default = true)]
     pub enabled: bool,
-    pub targets: HashMap<PathBuf, PathBuf>,
     #[builder(default)]
     pub templates: HashSet<PathBuf>,
+}
+
+impl<S: egg_config_builder::State> EggConfigBuilder<S> {
+    pub fn target(mut self, from: impl AsRef<Path>, to: impl AsRef<Path>) -> Self {
+        self.targets
+            .insert(from.as_ref().to_path_buf(), to.as_ref().to_path_buf());
+        self
+    }
 }
 
 impl EggConfig {
@@ -31,10 +40,6 @@ impl EggConfig {
             },
             templates: HashSet::new(),
         }
-    }
-
-    pub fn stow_like(home: impl AsRef<Path>) -> Self {
-        Self::new(".", home)
     }
 }
 
@@ -84,7 +89,7 @@ impl FromLua for EggConfig {
             HashSet::new()
         };
 
-        let enabled = dbg!(table.get::<Option<bool>>("enabled"))?.unwrap_or(true);
+        let enabled = table.get::<Option<bool>>("enabled")?.unwrap_or(true);
 
         Ok(EggConfig {
             targets,
