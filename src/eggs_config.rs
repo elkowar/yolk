@@ -3,7 +3,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use bon::Builder;
 use miette::miette;
 use mlua::{FromLua, Table, Value};
 
@@ -13,21 +12,20 @@ macro_rules! mlua_miette {
     };
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Builder)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct EggConfig {
-    #[builder(field)]
     pub targets: HashMap<PathBuf, PathBuf>,
-    #[builder(default = true)]
     pub enabled: bool,
-    #[builder(default)]
     pub templates: HashSet<PathBuf>,
 }
 
-impl<S: egg_config_builder::State> EggConfigBuilder<S> {
-    pub fn target(mut self, from: impl AsRef<Path>, to: impl AsRef<Path>) -> Self {
-        self.targets
-            .insert(from.as_ref().to_path_buf(), to.as_ref().to_path_buf());
-        self
+impl Default for EggConfig {
+    fn default() -> Self {
+        EggConfig {
+            enabled: true,
+            targets: HashMap::new(),
+            templates: HashSet::new(),
+        }
     }
 }
 
@@ -40,6 +38,21 @@ impl EggConfig {
             },
             templates: HashSet::new(),
         }
+    }
+    pub fn with_enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+
+    pub fn with_template(mut self, template: impl AsRef<Path>) -> Self {
+        self.templates.insert(template.as_ref().to_path_buf());
+        self
+    }
+
+    pub fn with_target(mut self, from: impl AsRef<Path>, to: impl AsRef<Path>) -> Self {
+        self.targets
+            .insert(from.as_ref().to_path_buf(), to.as_ref().to_path_buf());
+        self
     }
 }
 

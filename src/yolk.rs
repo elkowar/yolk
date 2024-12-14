@@ -349,10 +349,9 @@ mod test {
         eggs.child("foo/thing/thing.toml").write_str("")?;
         yolk.sync_egg_deployment(
             "foo",
-            &EggConfig::builder()
-                .target("foo.toml", home.child("foo.toml"))
-                .target("thing", home.child("thing"))
-                .build(),
+            &EggConfig::default()
+                .with_target("foo.toml", home.child("foo.toml"))
+                .with_target("thing", home.child("thing")),
         )?;
         home.child("foo.toml").assert(is_symlink());
         home.child("thing").assert(is_symlink());
@@ -360,7 +359,7 @@ mod test {
         // Verify stow-style usage works
         home.child(".config").create_dir_all()?;
         eggs.child("bar/.config/thing.toml").write_str("")?;
-        yolk.sync_egg_deployment("bar", &EggConfig::builder().target(".", &home).build())?;
+        yolk.sync_egg_deployment("bar", &EggConfig::new(".", &home))?;
         home.child(".config").assert(is_dir());
         home.child(".config/thing.toml").assert(is_symlink());
         Ok(())
@@ -372,34 +371,20 @@ mod test {
         home.child(".config").create_dir_all()?;
         eggs.child("foo/foo.toml").write_str("")?;
         eggs.child("bar/.config/thing.toml").write_str("")?;
-        yolk.sync_egg_deployment(
-            "foo",
-            &EggConfig::builder()
-                .target("foo.toml", home.child("foo.toml"))
-                .build(),
-        )?;
+        yolk.sync_egg_deployment("foo", &EggConfig::new("foo.toml", home.child("foo.toml")))?;
         home.child("foo.toml").assert(is_symlink());
         yolk.sync_egg_deployment(
             "foo",
-            &EggConfig::builder()
-                .target("foo.toml", home.child("foo.toml"))
-                .enabled(false)
-                .build(),
+            &EggConfig::new("foo.toml", home.child("foo.toml")).with_enabled(false),
         )?;
         home.child("foo.toml").assert(exists().not());
 
         // Verify stow-style usage works
         home.child(".config").create_dir_all()?;
         eggs.child("bar/.config/thing.toml").write_str("")?;
-        yolk.sync_egg_deployment("bar", &EggConfig::builder().target(".", &home).build())?;
+        yolk.sync_egg_deployment("bar", &EggConfig::new(".", &home))?;
         home.child(".config/thing.toml").assert(is_symlink());
-        yolk.sync_egg_deployment(
-            "bar",
-            &EggConfig::builder()
-                .target(".", &home)
-                .enabled(false)
-                .build(),
-        )?;
+        yolk.sync_egg_deployment("bar", &EggConfig::new(".", &home).with_enabled(false))?;
         home.child(".config/thing.toml").assert(exists().not());
         home.child(".config").assert(is_dir());
         Ok(())
@@ -441,44 +426,4 @@ mod test {
         })?;
         Ok(())
     }
-
-    // #[test]
-    // fn test_re_use_egg() -> TestResult {
-    //     let home = assert_fs::TempDir::new()?;
-    //     let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
-    //     yolk.init_yolk()?;
-    //     todo!("Write test");
-    //     Ok(())
-    // }
-
-    // #[test]
-    // fn test_add_to_existing_egg() -> TestResult {
-    //     let home = assert_fs::TempDir::new()?;
-    //     let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
-    //     yolk.init_yolk()?;
-    //     todo!("Write test");
-
-    //     Ok(())
-    // }
-
-    // #[test]
-    // fn test_use_logic() -> TestResult {
-    //     let home = assert_fs::TempDir::new()?;
-    //     home.child("existing-dir").create_dir_all()?;
-    //     let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
-    //     yolk.init_yolk()?;
-    //     home.child("yolk/eggs/foo/new-dir/foo.toml").write_str("")?;
-    //     home.child("yolk/eggs/foo/existing-dir/new-subdir/foo.toml")
-    //         .write_str("")?;
-    //     home.child("yolk/eggs/foo/existing-dir/new-file.toml")
-    //         .write_str("")?;
-    //     todo!("Rewrite this test without dependency on yolk");
-    //     home.child("new-dir").assert(is_symlink());
-    //     home.child("existing-dir")
-    //         .assert(is_symlink().not().and(is_dir()));
-    //     home.child("existing-dir/new-subdir").assert(is_symlink());
-    //     home.child("existing-dir/new-file.toml")
-    //         .assert(is_symlink());
-    //     Ok(())
-    // }
 }
