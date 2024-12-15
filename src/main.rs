@@ -288,7 +288,9 @@ fn run_command(args: Args) -> Result<()> {
                 .watch(&script_path, notify::RecursiveMode::NonRecursive)
                 .into_diagnostic()?;
 
-            loop {}
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
         }
     }
     Ok(())

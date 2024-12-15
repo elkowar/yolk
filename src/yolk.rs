@@ -38,7 +38,7 @@ impl Yolk {
         if config.enabled && !deployed {
             tracing::info!("Deploying egg {name}");
             for (source, target) in &config.targets {
-                let source = self.yolk_paths.egg_path(&name).canonical()?.join(source);
+                let source = self.yolk_paths.egg_path(name).canonical()?.join(source);
                 let target = expanduser(target.to_string_lossy()).into_diagnostic()?;
                 let target = if target.is_absolute() {
                     target
@@ -55,7 +55,7 @@ impl Yolk {
         } else if !config.enabled && deployed {
             tracing::debug!("Removing egg {name}");
             for (source, target) in &config.targets {
-                let source = self.yolk_paths.egg_path(&name).canonical()?.join(source);
+                let source = self.yolk_paths.egg_path(name).canonical()?.join(source);
                 let target = expanduser(target.to_string_lossy()).into_diagnostic()?;
                 let target = if target.is_absolute() {
                     target
@@ -103,7 +103,7 @@ impl Yolk {
                     continue;
                 }
             };
-            self.sync_egg_deployment(&egg.name(), &egg_config)?;
+            self.sync_egg_deployment(egg.name(), egg_config)?;
             let templates_expanded = match egg_config.templates_globexpanded(egg.path()) {
                 Ok(x) => x,
                 Err(err) => {
@@ -258,7 +258,7 @@ fn symlink_recursive(source: impl AsRef<Path>, target: &impl AsRef<Path>) -> Res
             );
         }
     } else {
-        util::create_symlink(&source, &target)?;
+        util::create_symlink(source, target)?;
         println!(
             "Symlinked {} to {}",
             source.to_abbrev_str(),
@@ -277,7 +277,7 @@ fn remove_symlink_recursive(source: impl AsRef<Path>, target: &impl AsRef<Path>)
             source.to_abbrev_str(),
             target.to_abbrev_str()
         );
-        fs_err::remove_file(&target).into_diagnostic()?;
+        fs_err::remove_file(target).into_diagnostic()?;
     } else if target.is_dir() && source.is_dir() {
         for entry in source.fs_err_read_dir().into_diagnostic()? {
             let entry = entry.into_diagnostic()?;
@@ -383,10 +383,12 @@ mod test {
     fn test_syncing() -> TestResult {
         let (home, yolk, eggs) = setup_and_init()?;
         let foo_toml_initial = "{# data.value #}\nfoo";
-        home.child("yolk/yolk.rhai").write_str(&indoc::indoc! {r#"
+        home.child("yolk/yolk.rhai").write_str(
+            r#"
             const data = if LOCAL { #{value: "local"} } else { #{value: "canonical"} };
             let eggs = #{foo: `~`};
-        "#})?;
+        "#,
+        )?;
         eggs.child("foo/foo.toml").write_str(foo_toml_initial)?;
         yolk.sync_to_mode(EvalMode::Local)?;
         // No template set in eggs.rhai, so no templating should happen
@@ -394,19 +396,23 @@ mod test {
         eggs.child("foo/foo.toml").assert(foo_toml_initial);
 
         // Now we make the file a template, so it should be updated
-        home.child("yolk/yolk.rhai").write_str(&indoc::indoc! {r#"
+        home.child("yolk/yolk.rhai").write_str(
+            r#"
             const data = if LOCAL {#{value: "local"}} else {#{value: "canonical"}};
             let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"]}};
-        "#})?;
+        "#,
+        )?;
 
         yolk.sync_to_mode(EvalMode::Local)?;
         eggs.child("foo/foo.toml").assert("{# data.value #}\nlocal");
 
         // Update the state, to see if applying again just works :tm:
-        home.child("yolk/yolk.rhai").write_str(&indoc::indoc! {r#"
+        home.child("yolk/yolk.rhai").write_str(
+            r#"
                 const data = if LOCAL {#{value: "new local"}} else {#{value: "new canonical"}};
                 let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"]}};
-            "#})?;
+            "#,
+        )?;
         yolk.sync_to_mode(EvalMode::Local)?;
         home.child("foo.toml").assert("{# data.value #}\nnew local");
         yolk.with_canonical_state(|| {
@@ -420,10 +426,12 @@ mod test {
     #[test]
     fn test_access_sysinfo() -> TestResult {
         let (home, yolk, eggs) = setup_and_init()?;
-        home.child("yolk/yolk.rhai").write_str(&indoc::indoc! {r#"
+        home.child("yolk/yolk.rhai").write_str(
+            r#"
             const hostname = SYSTEM.hostname;
             let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"]}};
-        "#})?;
+        "#,
+        )?;
         eggs.child("foo/foo.toml")
             .write_str("{< `host=${hostname}|${SYSTEM.hostname}` >}")?;
         yolk.sync_to_mode(EvalMode::Local)?;

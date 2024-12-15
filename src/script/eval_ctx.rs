@@ -110,10 +110,9 @@ impl EvalCtx {
     }
 
     pub fn call_fn<T: Variant + Clone>(&mut self, ast: &rhai::AST) -> Result<T, RhaiError> {
-        Ok(self
-            .engine
+        self.engine
             .call_fn(&mut self.scope, ast, "eggs", ())
-            .map_err(|e| RhaiError::from_rhai(&ast.source().unwrap(), *e))?)
+            .map_err(|e| RhaiError::from_rhai(ast.source().unwrap(), *e))
     }
 
     #[inline]

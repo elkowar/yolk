@@ -48,11 +48,14 @@ impl Path {
 }
 
 /// like <https://crates.io/crates/testresult>, but shows the debug output instead of display.
+#[cfg(test)]
 pub type TestResult<T = ()> = std::result::Result<T, TestError>;
 
+#[cfg(test)]
 #[derive(Debug)]
 pub enum TestError {}
 
+#[cfg(test)]
 impl<T: std::fmt::Debug + std::fmt::Display> From<T> for TestError {
     #[track_caller] // Will show the location of the caller in test failure messages
     fn from(error: T) -> Self {

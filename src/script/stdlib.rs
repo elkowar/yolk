@@ -10,7 +10,7 @@ use super::eval_ctx::EvalCtx;
 use cached::proc_macro::cached;
 
 type IStr = ImmutableString;
-type NCC<'a> = NativeCallContext<'a>;
+type Ncc<'a> = NativeCallContext<'a>;
 
 pub fn setup(eval_mode: EvalMode, eval_ctx: &mut EvalCtx) -> Result<(), TemplateError> {
     setup_environment_stuff(eval_mode, eval_ctx)?;
@@ -118,20 +118,20 @@ fn setup_utilities(eval_ctx: &mut EvalCtx) -> Result<(), TemplateError> {
         .register_fn("color_rgb_to_hex", |rgb_table: Map| -> RhaiFnResult<_> {
             let r = rgb_table
                 .get("r")
-                .map(|x| dynamic_to_u8(x))
+                .map(dynamic_to_u8)
                 .transpose()?
                 .unwrap_or(0);
             let g = rgb_table
                 .get("g")
-                .map(|x| dynamic_to_u8(x))
+                .map(dynamic_to_u8)
                 .transpose()?
                 .unwrap_or(0);
             let b = rgb_table
                 .get("b")
-                .map(|x| dynamic_to_u8(x))
+                .map(dynamic_to_u8)
                 .transpose()?
                 .unwrap_or(0);
-            let a = rgb_table.get("a").map(|x| dynamic_to_u8(x)).transpose()?;
+            let a = rgb_table.get("a").map(dynamic_to_u8).transpose()?;
             match a {
                 Some(a) => Ok(format!("#{:02x}{:02x}{:02x}{:02x}", r, g, b, a)),
                 None => Ok(format!("#{:02x}{:02x}{:02x}", r, g, b)),
@@ -267,14 +267,14 @@ fn setup_tag_functions(eval_ctx: &mut EvalCtx) -> Result<(), TemplateError> {
         Ok(after_replace.to_string())
     }
 
-    let f = |ctx: NCC, regex: IStr, replacement: IStr| -> RhaiFnResult<_> {
+    let f = |ctx: Ncc, regex: IStr, replacement: IStr| -> RhaiFnResult<_> {
         let text: IStr = ctx.call_fn("get_yolk_text", ())?;
         tag_text_replace(&text, &regex, &replacement)
     };
     eval_ctx.engine_mut().register_fn("replace_re", f);
     eval_ctx.engine_mut().register_fn("rr", f);
 
-    let f = |ctx: NCC, between: IStr, replacement: IStr| -> RhaiFnResult<_> {
+    let f = |ctx: Ncc, between: IStr, replacement: IStr| -> RhaiFnResult<_> {
         let text: IStr = ctx.call_fn("get_yolk_text", ())?;
         let regex = format!("{between}[^{between}]*{between}");
         tag_text_replace(&text, &regex, &format!("{between}{replacement}{between}"))
@@ -282,7 +282,7 @@ fn setup_tag_functions(eval_ctx: &mut EvalCtx) -> Result<(), TemplateError> {
     eval_ctx.engine_mut().register_fn("replace_in", f);
     eval_ctx.engine_mut().register_fn("rin", f);
 
-    let f = |ctx: NCC, left: IStr, right: IStr, replacement: IStr| -> RhaiFnResult<_> {
+    let f = |ctx: Ncc, left: IStr, right: IStr, replacement: IStr| -> RhaiFnResult<_> {
         let text: IStr = ctx.call_fn("get_yolk_text", ())?;
         let regex = format!("{left}[^{right}]*{right}");
         tag_text_replace(&text, &regex, &format!("{left}{replacement}{right}"))
@@ -290,25 +290,25 @@ fn setup_tag_functions(eval_ctx: &mut EvalCtx) -> Result<(), TemplateError> {
     eval_ctx.engine_mut().register_fn("replace_between", f);
     eval_ctx.engine_mut().register_fn("rbet", f);
 
-    let f = |ctx: NCC, replacement: IStr| -> RhaiFnResult<_> {
+    let f = |ctx: Ncc, replacement: IStr| -> RhaiFnResult<_> {
         let text: IStr = ctx.call_fn("get_yolk_text", ())?;
         tag_text_replace(
             &text,
             r"#[\da-fA-F]{6}([\da-fA-F]{2})?",
-            &replacement.to_string(),
+            replacement.as_ref(),
         )
     };
     eval_ctx.register_fn("replace_color", f);
     eval_ctx.register_fn("rcol", f);
 
-    let f = |ctx: NCC, replacement: Dynamic| -> RhaiFnResult<_> {
+    let f = |ctx: Ncc, replacement: Dynamic| -> RhaiFnResult<_> {
         let text: IStr = ctx.call_fn("get_yolk_text", ())?;
         tag_text_replace(&text, r"-?\d+(?:\.\d+)?", &replacement.to_string())
     };
     eval_ctx.register_fn("replace_number", f);
     eval_ctx.register_fn("rnum", f);
 
-    let f = |ctx: NCC, replacement: IStr| -> RhaiFnResult<_> {
+    let f = |ctx: Ncc, replacement: IStr| -> RhaiFnResult<_> {
         let text: IStr = ctx.call_fn("get_yolk_text", ())?;
         let mut result = tag_text_replace(&text, r#"".*""#, &format!("\"{replacement}\""))?;
         if result == text {
@@ -324,7 +324,7 @@ fn setup_tag_functions(eval_ctx: &mut EvalCtx) -> Result<(), TemplateError> {
 
     eval_ctx.register_fn(
         "replace_value",
-        |ctx: NCC, replacement: IStr| -> RhaiFnResult<_> {
+        |ctx: Ncc, replacement: IStr| -> RhaiFnResult<_> {
             let text: IStr = ctx.call_fn("get_yolk_text", ())?;
             let regex = create_regex(r"([=:])( *)([^\s]+)").unwrap();
 
@@ -336,7 +336,7 @@ fn setup_tag_functions(eval_ctx: &mut EvalCtx) -> Result<(), TemplateError> {
                     &text,
                     format!("{}{}{}", equals.as_str(), space.as_str(), replacement),
                 );
-                if regex.replace(&new_value, full_match.as_str()) == &*text {
+                if regex.replace(&new_value, full_match.as_str()) == *text {
                     Ok(new_value.to_string())
                 } else {
                     Err(format!(
