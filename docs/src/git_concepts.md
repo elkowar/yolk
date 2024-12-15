@@ -30,4 +30,16 @@ $ git clone <your-dots-repo> "$XDG_CONFIG_HOME/yolk"
 $ yolk safeguard
 ```
 
-After that, you can start `yolk deploy`ing your eggs!
+After that, you can start `yolk sync`ing your eggs!
+
+## Interacting with git
+
+To stage or commit changes, get the git diff or status, you can use the `yolk git` command, which behaves just like the `git` CLI.
+So, instead of
+
+- `git status`, you run `yolk git status`,
+- `git add .`, you run `yolk git add --all`,
+- `git commit -m "cool changes"`, you run `yolk git commit -m "cool changes`,
+
+and so on.
+This ensures the files are always in the correct canonical state, and makes it possible to interact with a safeguarded git repository.

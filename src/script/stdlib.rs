@@ -1,145 +1,484 @@
 use miette::{IntoDiagnostic, Result};
 use rhai::{Dynamic, EvalAltResult, ImmutableString, Map, NativeCallContext};
+use rhai::{FuncRegistration, Module};
 use std::path::PathBuf;
 
 use regex::Regex;
 
-use crate::{templating::template_error::TemplateError, yolk::EvalMode};
+use crate::yolk::EvalMode;
 
-use super::eval_ctx::EvalCtx;
 use cached::proc_macro::cached;
+
+use super::sysinfo::{SystemInfo, SystemInfoPaths};
+
+macro_rules! if_canonical_return {
+    ($eval_mode:expr) => {
+        if $eval_mode == EvalMode::Canonical {
+            return Ok(Default::default());
+        }
+    };
+    ($eval_mode:expr, $value:expr) => {
+        if $eval_mode == EvalMode::Canonical {
+            return Ok($value);
+        }
+    };
+}
 
 type IStr = ImmutableString;
 type Ncc<'a> = NativeCallContext<'a>;
 
-pub fn setup(eval_mode: EvalMode, eval_ctx: &mut EvalCtx) -> Result<(), TemplateError> {
-    setup_environment_stuff(eval_mode, eval_ctx)?;
-    setup_utilities(eval_ctx)?;
-    setup_tag_functions(eval_ctx)?;
-    Ok(())
+pub fn global_stuff() -> Module {
+    let mut module = Module::new();
+
+    FuncRegistration::new("to_string")
+        .in_global_namespace()
+        .set_into_module(&mut module, |x: &mut SystemInfo| format!("{x:#?}"));
+    FuncRegistration::new("to_debug")
+        .in_global_namespace()
+        .set_into_module(&mut module, |x: &mut SystemInfo| format!("{x:?}"));
+    FuncRegistration::new("to_string")
+        .in_global_namespace()
+        .set_into_module(&mut module, |x: &mut SystemInfoPaths| format!("{x:#?}"));
+    FuncRegistration::new("to_debug")
+        .in_global_namespace()
+        .set_into_module(&mut module, |x: &mut SystemInfoPaths| format!("{x:?}"));
+    module
 }
 
-fn setup_utilities(eval_ctx: &mut EvalCtx) -> Result<(), TemplateError> {
-    eval_ctx.engine_mut().register_fn(
-        "regex_match",
-        |pattern: IStr, haystack: IStr| -> RhaiFnResult<_> {
-            Ok(create_regex(&pattern)?.is_match(&haystack))
-        },
-    );
+pub fn utils_module() -> Module {
+    let mut module = Module::new();
+    module.set_doc(indoc::indoc! {r"
+        # Utility functions
 
-    eval_ctx.engine_mut().register_fn(
-        "regex_replace",
-        |pattern: IStr, haystack: IStr, replacement: IStr| -> RhaiFnResult<_> {
-            Ok(create_regex(&pattern)?
-                .replace_all(&haystack, &*replacement)
-                .to_string())
-        },
-    );
-    eval_ctx.engine_mut().register_fn(
-        "regex_captures",
-        |pattern: IStr, s: IStr| -> RhaiFnResult<_> {
+        A collection of utility functions
+    "});
+
+    let regex_match = |pattern: String, haystack: String| -> Result<bool, Box<EvalAltResult>> {
+        Ok(create_regex(&pattern)?.is_match(&haystack))
+    };
+    FuncRegistration::new("regex_match")
+        .with_comments(["/// Check if a given string matches a given regex pattern."])
+        .with_params_info(["pattern: &str", "haystack: &str", "Result<bool>"])
+        .in_global_namespace()
+        .set_into_module(&mut module, regex_match);
+
+    let regex_replace = |pattern: String,
+                         haystack: String,
+                         replacement: String|
+     -> Result<String, Box<EvalAltResult>> {
+        Ok(create_regex(&pattern)?
+            .replace_all(&haystack, &*replacement)
+            .to_string())
+    };
+    FuncRegistration::new("regex_replace")
+        .with_comments(["/// Replace a regex pattern in a string with a replacement."])
+        .with_params_info([
+            "pattern: &str",
+            "haystack: &str",
+            "replacement: &str",
+            "Result<String>",
+        ])
+        .in_global_namespace()
+        .set_into_module(&mut module, regex_replace);
+
+    let regex_captures =
+        |pattern: String, s: String| -> Result<Option<Vec<String>>, Box<EvalAltResult>> {
             Ok(create_regex(&pattern)?.captures(s.as_str()).map(|caps| {
                 (0..caps.len())
                     .map(|x| caps.get(x).unwrap().as_str().to_string())
                     .collect::<Vec<_>>()
             }))
-        },
-    );
-    // eval_ctx
-    //     .engine_mut()
-    //     .register_fn("contains_value", |container: Dynamic, value: Dynamic| {
-    //         let container = container
-    //             .as_map_ref()
-    //             .wrap_err("Not a container")
-    //             .map_err(LuaError::Other)?;
-    //         for pair in container.pairs::<Value, Value>() {
-    //             if pair?.1.equals(&value)? {
-    //                 return Ok(true);
-    //             }
-    //         }
-    //         Ok(false)
-    //     });
-    // eval_ctx
-    //     .engine_mut()
-    //     .register_fn("contains_key", |container: Dynamic, value: Dynamic| {
-    //         let container = container
-    //             .as_table()
-    //             .wrap_err("Not a container")
-    //             .map_err(LuaError::Other)?;
-    //         for pair in container.pairs::<Value, Value>() {
-    //             if pair?.0.equals(&value)? {
-    //                 return Ok(true);
-    //             }
-    //         }
-    //         Ok(false)
-    //     });
+        };
+    FuncRegistration::new("regex_captures")
+        .with_comments([
+            "/// Match a string against a regex pattern and return the capture groups as a list.",
+        ])
+        .with_params_info(["pattern: &str", "s: &str", "Result<Option<Vec<String>>>"])
+        .in_global_namespace()
+        .set_into_module(&mut module, regex_captures);
 
-    // eval_ctx
-    //     .engine_mut()
-    //     .register_fn("from_json", |json: IStr| {
-    //         let value: serde_json::Value = serde_json::from_str(&json)?;
-    //         Ok(rhai.to_value(&value))
-    //     });
-    // eval_ctx
-    //     .engine_mut()
-    //     .register_fn("to_json", |value: Dynamic| {
-    //         let json_value: serde_json::Value = lua.from_value(value)?;
-    //         Ok(serde_json::to_string(&json_value).unwrap())
-    //     });
+    let rhai_color_hex_to_rgb = |hex_string: String| -> Result<Map, Box<EvalAltResult>> {
+        let (r, g, b, a) = color_hex_to_rgb(&hex_string)?;
+        let mut map = Map::new();
+        map.insert("r".to_string().into(), Dynamic::from_int(r as i64));
+        map.insert("g".to_string().into(), Dynamic::from_int(g as i64));
+        map.insert("b".to_string().into(), Dynamic::from_int(b as i64));
+        map.insert("a".to_string().into(), Dynamic::from_int(a as i64));
+        Ok(map)
+    };
+    FuncRegistration::new("color_hex_to_rgb")
+        .with_comments(["/// Convert a hex color string to an RGB map."])
+        .with_params_info(["hex_string: &str", "Result<Map>"])
+        .in_global_namespace()
+        .set_into_module(&mut module, rhai_color_hex_to_rgb);
 
-    eval_ctx
-        .engine_mut()
-        .register_fn("color_hex_to_rgb", |hex_string: IStr| -> RhaiFnResult<_> {
-            let (r, g, b, a) = color_hex_to_rgb(&hex_string)?;
-            let mut map = Map::new();
-            map.insert("r".to_string().into(), Dynamic::from_int(r as i64));
-            map.insert("g".to_string().into(), Dynamic::from_int(g as i64));
-            map.insert("b".to_string().into(), Dynamic::from_int(b as i64));
-            map.insert("a".to_string().into(), Dynamic::from_int(a as i64));
-            Ok(map)
-        });
+    let color_hex_to_rgb_str = |hex_string: String| -> Result<String, Box<EvalAltResult>> {
+        let (r, g, b, _) = color_hex_to_rgb(&hex_string)?;
+        Ok(format!("rgb({r}, {g}, {b})"))
+    };
+    FuncRegistration::new("color_hex_to_rgb_str")
+        .with_comments(["/// Convert a hex color string to an RGB string."])
+        .with_params_info(["hex_string: &str", "Result<String>"])
+        .in_global_namespace()
+        .set_into_module(&mut module, color_hex_to_rgb_str);
 
-    eval_ctx.engine_mut().register_fn(
-        "color_hex_to_rgb_str",
-        |hex_string: IStr| -> RhaiFnResult<_> {
-            let (r, g, b, _) = color_hex_to_rgb(&hex_string)?;
-            Ok(format!("rgb({r}, {g}, {b})"))
-        },
-    );
-    eval_ctx.engine_mut().register_fn(
-        "color_hex_to_rgba_str",
-        |hex_string: IStr| -> RhaiFnResult<_> {
-            let (r, g, b, a) = color_hex_to_rgb(&hex_string)?;
-            Ok(format!("rgba({r}, {g}, {b}, {a})"))
-        },
-    );
-    eval_ctx
-        .engine_mut()
-        .register_fn("color_rgb_to_hex", |rgb_table: Map| -> RhaiFnResult<_> {
-            let r = rgb_table
-                .get("r")
-                .map(dynamic_to_u8)
-                .transpose()?
-                .unwrap_or(0);
-            let g = rgb_table
-                .get("g")
-                .map(dynamic_to_u8)
-                .transpose()?
-                .unwrap_or(0);
-            let b = rgb_table
-                .get("b")
-                .map(dynamic_to_u8)
-                .transpose()?
-                .unwrap_or(0);
-            let a = rgb_table.get("a").map(dynamic_to_u8).transpose()?;
-            match a {
-                Some(a) => Ok(format!("#{:02x}{:02x}{:02x}{:02x}", r, g, b, a)),
-                None => Ok(format!("#{:02x}{:02x}{:02x}", r, g, b)),
+    let color_hex_to_rgba_str = |hex_string: String| -> Result<String, Box<EvalAltResult>> {
+        let (r, g, b, a) = color_hex_to_rgb(&hex_string)?;
+        Ok(format!("rgba({r}, {g}, {b}, {a})"))
+    };
+    FuncRegistration::new("color_hex_to_rgba_str")
+        .with_comments(["/// Convert a hex color string to an RGBA string."])
+        .with_params_info(["hex_string: &str", "Result<String>"])
+        .in_global_namespace()
+        .set_into_module(&mut module, color_hex_to_rgba_str);
+
+    let color_rgb_to_hex = |rgb_table: Map| -> Result<String, Box<EvalAltResult>> {
+        let r = rgb_table
+            .get("r")
+            .map(dynamic_to_u8)
+            .transpose()?
+            .unwrap_or(0);
+        let g = rgb_table
+            .get("g")
+            .map(dynamic_to_u8)
+            .transpose()?
+            .unwrap_or(0);
+        let b = rgb_table
+            .get("b")
+            .map(dynamic_to_u8)
+            .transpose()?
+            .unwrap_or(0);
+        let a = rgb_table.get("a").map(dynamic_to_u8).transpose()?;
+        match a {
+            Some(a) => Ok(format!("#{:02x}{:02x}{:02x}{:02x}", r, g, b, a)),
+            None => Ok(format!("#{:02x}{:02x}{:02x}", r, g, b)),
+        }
+    };
+    FuncRegistration::new("color_rgb_to_hex")
+        .with_comments(["/// Convert an RGB map to a hex color string."])
+        .with_params_info(["rgb_table: Map", "Result<String>"])
+        .in_global_namespace()
+        .set_into_module(&mut module, color_rgb_to_hex);
+
+    module
+}
+
+pub fn io_module(eval_mode: EvalMode) -> Module {
+    use which::which_all_global;
+    let mut module = Module::new();
+    module.set_doc(indoc::indoc! {r"
+        # IO Functions
+
+        A collection of functions that can read the environment and filesystem.
+        These return standardized values in canonical mode.
+    "});
+
+    let command_available = move |name: IStr| -> RhaiFnResult<bool> {
+        if_canonical_return!(eval_mode, false);
+        Ok(match which_all_global(&*name) {
+            Ok(mut iter) => iter.next().is_some(),
+            Err(err) => {
+                tracing::warn!("Error checking if command is available: {}", err);
+                false
             }
-        });
+        })
+    };
+    FuncRegistration::new("command_available")
+        .with_comments(["/// Check if a given command is available"])
+        .with_params_info(["name: &str", "Result<bool>"])
+        .set_into_module(&mut module, command_available);
 
-    // TODO: Add deepcopy
-    Ok(())
+    let env = move |name: IStr, def: IStr| -> RhaiFnResult<IStr> {
+        if_canonical_return!(eval_mode, def.clone());
+        Ok(std::env::var(&*name).map(|x| x.into()).unwrap_or(def))
+    };
+    FuncRegistration::new("env")
+        .with_comments(["/// Read an environment variable, or return the given default"])
+        .with_params_info(["name: &str", "def: &str", "Result<String>"])
+        .set_into_module(&mut module, env);
+
+    let path_exists = move |p: IStr| -> RhaiFnResult<bool> {
+        if_canonical_return!(eval_mode, false);
+        Ok(PathBuf::from(&*p).exists())
+    };
+    FuncRegistration::new("path_exists")
+        .with_comments(["/// Check if something exists at a given path"])
+        .with_params_info(["p: &str", "Result<bool>"])
+        .set_into_module(&mut module, path_exists);
+
+    let path_is_dir = move |p: String| -> RhaiFnResult<bool> {
+        if_canonical_return!(eval_mode, false);
+        Ok(fs_err::metadata(p).map(|m| m.is_dir()).unwrap_or(false))
+    };
+    FuncRegistration::new("path_is_dir")
+        .with_comments(["/// Check if the given path is a directory"])
+        .with_params_info(["p: &str", "Result<bool>"])
+        .set_into_module(&mut module, path_is_dir);
+
+    let path_is_file = move |p: String| -> RhaiFnResult<bool> {
+        if_canonical_return!(eval_mode, false);
+        Ok(fs_err::metadata(p).map(|m| m.is_file()).unwrap_or(false))
+    };
+    FuncRegistration::new("path_is_file")
+        .with_comments(["/// Check if the given path is a file"])
+        .with_params_info(["p: &str", "Result<bool>"])
+        .set_into_module(&mut module, path_is_file);
+
+    let read_file = move |p: String| -> RhaiFnResult<String> {
+        if_canonical_return!(eval_mode, String::new());
+        Ok(fs_err::read_to_string(p).unwrap_or_default())
+    };
+    FuncRegistration::new("read_file")
+        .with_comments(["/// Read the contents of a given file"])
+        .with_params_info(["p: &str", "Result<String>"])
+        .set_into_module(&mut module, read_file);
+
+    let read_dir = move |p: String| -> RhaiFnResult<Vec<String>> {
+        if_canonical_return!(eval_mode, vec![]);
+        fs_err::read_dir(p)
+            .into_diagnostic()
+            .map_err(|e| e.to_string())?
+            .map(|x| {
+                Ok(x.map_err(|e| e.to_string())?
+                    .path()
+                    .to_string_lossy()
+                    .to_string())
+            })
+            .collect()
+    };
+    FuncRegistration::new("read_dir")
+        .with_comments(["/// Read the children of a given dir"])
+        .with_params_info(["p: &str", "Result<Vec<String>>"])
+        .set_into_module(&mut module, read_dir);
+
+    module
+}
+
+pub fn tag_module() -> Module {
+    use indoc::indoc;
+    let mut module = rhai::Module::new();
+    module.set_doc(indoc::indoc! {r"
+        # Template tag functions
+
+        Yolk template tags simply execute rhai functions that transform the block of text the tag operates on.
+
+        Quick reminder: Yolk has three different types of tags, that differ only in what text they operate on:
+
+        - Next-line tags (`{# ... #}`): These tags operate on the line following the tag.
+        - Inline tags (`{< ... >}`): These tags operate on everything before the tag within the same line.
+        - Block tags (`{% ... %} ... {% end %}`): These tags operate on everything between the tag and the corresponding `{% end %}` tag.
+
+        Inside these tags, you can call any of Yolks template tag functions (Or, in fact, any rhai expression that returns a string).
+    "});
+
+    fn tag_text_replace(text: &str, pattern: &str, replacement: &str) -> RhaiFnResult<String> {
+        let pattern = create_regex(pattern)?;
+        let after_replace = pattern.replace(text, replacement);
+        if let Some(original_value) = pattern.find(text) {
+            let original_value = original_value.as_str();
+            let reversed = pattern.replace(&after_replace, original_value);
+            if reversed != text {
+                return Err(format!(
+                    "Refusing to run non-reversible replacement: {text} -> {after_replace}",
+                )
+                .into());
+            }
+        };
+        Ok(after_replace.to_string())
+    }
+
+    let f = |ctx: Ncc, regex: IStr, replacement: IStr| -> RhaiFnResult<_> {
+        let text: IStr = ctx.call_fn("get_yolk_text", ())?;
+        tag_text_replace(&text, &regex, &replacement)
+    };
+    FuncRegistration::new("replace_re")
+        .with_comments([indoc! {"
+            /// **shorthand**: `rr`.
+            ///
+            /// Replaces all occurrences of a Regex `pattern` with `replacement` in the text.
+            ///
+            /// #### Example
+            ///
+            /// ```handlebars
+            /// ui_font = \"Arial\" # {< replace_re(`\".*\"`, `\"{data.font.ui}\"`) >}
+            /// ```
+            ///
+            /// Note that the replacement value needs to contain the quotes, as those are also matched against in the regex pattern.
+            /// Otherwise, we would end up with invalid toml.
+        "}])
+        .with_params_info(["regex: &str", "replacement: &str", "Result<String>"])
+        .set_into_module(&mut module, f);
+    FuncRegistration::new("rr").set_into_module(&mut module, f);
+
+    let f = |ctx: Ncc, between: IStr, replacement: IStr| -> RhaiFnResult<_> {
+        let text: IStr = ctx.call_fn("get_yolk_text", ())?;
+        let regex = format!("{between}[^{between}]*{between}");
+        tag_text_replace(&text, &regex, &format!("{between}{replacement}{between}"))
+    };
+    FuncRegistration::new("replace_in")
+        .with_comments([indoc! {"
+            /// **shorthand**: `rin`.
+            ///
+            /// Replaces the text between two delimiters with the `replacement`.
+            ///
+            /// #### Example
+            ///
+            /// ```toml
+            /// ui_font = \"Arial\" # {< replace_in(`\"`, data.font.ui) >}
+            /// ```
+            ///
+            /// Note: we don't need to include the quotes in the replacement here.
+        "}])
+        .with_params_info(["between: &str", "replacement: &str", "Result<String>"])
+        .in_global_namespace()
+        .set_into_module(&mut module, f);
+    FuncRegistration::new("rin").set_into_module(&mut module, f);
+
+    let f = |ctx: Ncc, left: IStr, right: IStr, replacement: IStr| -> RhaiFnResult<_> {
+        let text: IStr = ctx.call_fn("get_yolk_text", ())?;
+        let regex = format!("{left}[^{right}]*{right}");
+        tag_text_replace(&text, &regex, &format!("{left}{replacement}{right}"))
+    };
+    FuncRegistration::new("replace_between")
+        .with_comments([indoc! {"
+            /// **shorthand**: `rbet`.
+            ///
+            /// Replaces the text between two delimiters with the `replacement`.
+            ///
+            /// #### Example
+            ///
+            /// ```handlebars
+            /// ui_font = (Arial) # {< replace_between(`(`, `)`, data.font.ui) >}
+            /// ```
+            ///
+            /// Note: we don't need to include the quotes in the replacement here.
+        "}])
+        .with_params_info([
+            "left: &str",
+            "right: &str",
+            "replacement: &str",
+            "Result<String>",
+        ])
+        .in_global_namespace()
+        .set_into_module(&mut module, f);
+    FuncRegistration::new("rbet").set_into_module(&mut module, f);
+
+    let f = |ctx: Ncc, replacement: IStr| -> RhaiFnResult<_> {
+        let text: IStr = ctx.call_fn("get_yolk_text", ())?;
+        tag_text_replace(
+            &text,
+            r"#[\da-fA-F]{6}([\da-fA-F]{2})?",
+            replacement.as_ref(),
+        )
+    };
+    FuncRegistration::new("replace_color")
+        .with_comments([indoc! {"
+            /// **shorthand**: `rcol`.
+            ///
+            /// Replaces a hex color value with a new hex color.
+            ///
+            /// #### Example
+            ///
+            /// ```handlebars
+            /// background_color = \"#282828\" # {< replace_color(data.colors.bg) >}
+            /// ```
+        "}])
+        .with_params_info(["replacement: &str", "Result<String>"])
+        .in_global_namespace()
+        .set_into_module(&mut module, f);
+    FuncRegistration::new("rcol").set_into_module(&mut module, f);
+
+    let f = |ctx: Ncc, replacement: Dynamic| -> RhaiFnResult<_> {
+        let text: IStr = ctx.call_fn("get_yolk_text", ())?;
+        tag_text_replace(&text, r"-?\d+(?:\.\d+)?", &replacement.to_string())
+    };
+    FuncRegistration::new("replace_number")
+        .with_comments([indoc! {"
+            /// **shorthand**: `rnum`.
+            ///
+            /// Replaces a number with another number.
+            ///
+            /// #### Example
+            ///
+            /// ```handlebars
+            /// cursor_size = 32 # {< replace_number(data.cursor_size) >}
+            /// ```
+        "}])
+        .with_params_info(["replacement: Dynamic", "Result<String>"])
+        .in_global_namespace()
+        .set_into_module(&mut module, f);
+    FuncRegistration::new("rnum").set_into_module(&mut module, f);
+
+    let f = |ctx: Ncc, replacement: IStr| -> RhaiFnResult<_> {
+        let text: IStr = ctx.call_fn("get_yolk_text", ())?;
+        let mut result = tag_text_replace(&text, r#"".*""#, &format!("\"{replacement}\""))?;
+        if result == text {
+            result = tag_text_replace(&text, r#"`.*`"#, &format!("`{replacement}`"))?;
+        }
+        if result == text {
+            result = tag_text_replace(&text, r#"'.*'"#, &format!("'{replacement}'"))?;
+        }
+        Ok(result)
+    };
+    FuncRegistration::new("replace_quoted")
+        .with_comments([indoc! {"
+            /// **shorthand**: `rq`.
+            ///
+            /// Replaces a value between quotes with another value
+            ///
+            /// #### Example
+            ///
+            /// ```handlebars
+            /// ui_font = \"Arial\" # {< replace_quoted(data.font.ui) >}
+            /// ```
+        "}])
+        .with_params_info(["replacement: &str", "Result<String>"])
+        .in_global_namespace()
+        .set_into_module(&mut module, f);
+    FuncRegistration::new("rq").set_into_module(&mut module, f);
+
+    let f = |ctx: Ncc, replacement: IStr| -> RhaiFnResult<_> {
+        let text: IStr = ctx.call_fn("get_yolk_text", ())?;
+        let regex = create_regex(r"([=:])( *)([^\s]+)").unwrap();
+
+        if let Some(caps) = regex.captures(&text) {
+            let full_match = caps.get(0).unwrap();
+            let equals = caps.get(1).unwrap();
+            let space = caps.get(2).unwrap();
+            let new_value = regex.replace(
+                &text,
+                format!("{}{}{}", equals.as_str(), space.as_str(), replacement),
+            );
+            if regex.replace(&new_value, full_match.as_str()) == *text {
+                Ok(new_value.to_string())
+            } else {
+                Err(
+                    format!("Refusing to run non-reversible replacement: {text} -> {new_value}",)
+                        .into(),
+                )
+            }
+        } else {
+            Ok(text.into())
+        }
+    };
+    FuncRegistration::new("replace_value")
+        .with_comments([indoc! {"
+            /// **shorthand**: `rv`.
+            ///
+            /// Replaces a value (without spaces) after a `:` or a `=` with another value
+            ///
+            /// #### Example
+            ///
+            /// ```handlebars
+            /// ui_font = Arial # {< replace_value(data.font.ui) >}
+            /// ```
+        "}])
+        .with_params_info(["replacement: &str", "Result<String>"])
+        .in_global_namespace()
+        .set_into_module(&mut module, f);
+    FuncRegistration::new("rv").set_into_module(&mut module, f);
+
+    module
 }
 
 fn dynamic_to_u8(x: &Dynamic) -> RhaiFnResult<u8> {
@@ -168,193 +507,7 @@ fn color_hex_to_rgb(hex_string: &str) -> Result<(u8, u8, u8, u8), Box<EvalAltRes
     Ok((r, g, b, a))
 }
 
-macro_rules! if_canonical_return {
-    ($eval_mode:expr) => {
-        if $eval_mode == EvalMode::Canonical {
-            return Ok(Default::default());
-        }
-    };
-    ($eval_mode:expr, $value:expr) => {
-        if $eval_mode == EvalMode::Canonical {
-            return Ok($value);
-        }
-    };
-}
-
 type RhaiFnResult<T> = Result<T, Box<EvalAltResult>>;
-
-pub fn setup_environment_stuff(
-    eval_mode: EvalMode,
-    eval_ctx: &mut EvalCtx,
-) -> Result<(), TemplateError> {
-    eval_ctx
-        .engine_mut()
-        .register_fn("command_available", move |name: IStr| -> RhaiFnResult<_> {
-            if_canonical_return!(eval_mode);
-            Ok(match which::which_all_global(&*name) {
-                Ok(mut iter) => iter.next().is_some(),
-                Err(err) => {
-                    tracing::warn!("Error checking if command is available: {}", err);
-                    false
-                }
-            })
-        });
-    eval_ctx
-        .engine_mut()
-        .register_fn("env", move |name: IStr, default: IStr| -> RhaiFnResult<_> {
-            if_canonical_return!(eval_mode);
-            Ok(std::env::var(&*name).map(|x| x.into()).unwrap_or(default))
-        });
-    eval_ctx
-        .engine_mut()
-        .register_fn("path_exists", move |p: IStr| -> RhaiFnResult<_> {
-            if_canonical_return!(eval_mode);
-            Ok(PathBuf::from(&*p).exists())
-        });
-    eval_ctx
-        .engine_mut()
-        .register_fn("path_is_dir", move |p: String| -> RhaiFnResult<_> {
-            if_canonical_return!(eval_mode);
-            Ok(fs_err::metadata(p).map(|m| m.is_dir()).unwrap_or(false))
-        });
-    eval_ctx
-        .engine_mut()
-        .register_fn("path_is_file", move |p: String| -> RhaiFnResult<_> {
-            if_canonical_return!(eval_mode);
-            Ok(fs_err::metadata(p).map(|m| m.is_file()).unwrap_or(false))
-        });
-    eval_ctx
-        .engine_mut()
-        .register_fn("read_file", move |p: String| -> RhaiFnResult<_> {
-            if_canonical_return!(eval_mode);
-            Ok(fs_err::read_to_string(p).unwrap_or_default())
-        });
-    eval_ctx.engine_mut().register_fn(
-        "read_dir",
-        move |p: String| -> Result<Vec<_>, Box<EvalAltResult>> {
-            if_canonical_return!(eval_mode);
-            fs_err::read_dir(p)
-                .into_diagnostic()
-                .map_err(|e| e.to_string())?
-                .map(|x| {
-                    Ok(x.map_err(|e| e.to_string())?
-                        .path()
-                        .to_string_lossy()
-                        .to_string())
-                })
-                .collect()
-        },
-    );
-    Ok(())
-}
-
-fn setup_tag_functions(eval_ctx: &mut EvalCtx) -> Result<(), TemplateError> {
-    /// Simple regex replacement that will refuse to run a non-reversible replacement.
-    /// If the replacement value is non-reversible, will return the original text and log a warning.
-    fn tag_text_replace(text: &str, pattern: &str, replacement: &str) -> RhaiFnResult<String> {
-        let pattern = create_regex(pattern)?;
-        let after_replace = pattern.replace(text, replacement);
-        if let Some(original_value) = pattern.find(text) {
-            let original_value = original_value.as_str();
-            let reversed = pattern.replace(&after_replace, original_value);
-            if reversed != text {
-                return Err(format!(
-                    "Refusing to run non-reversible replacement: {text} -> {after_replace}",
-                )
-                .into());
-            }
-        };
-        Ok(after_replace.to_string())
-    }
-
-    let f = |ctx: Ncc, regex: IStr, replacement: IStr| -> RhaiFnResult<_> {
-        let text: IStr = ctx.call_fn("get_yolk_text", ())?;
-        tag_text_replace(&text, &regex, &replacement)
-    };
-    eval_ctx.engine_mut().register_fn("replace_re", f);
-    eval_ctx.engine_mut().register_fn("rr", f);
-
-    let f = |ctx: Ncc, between: IStr, replacement: IStr| -> RhaiFnResult<_> {
-        let text: IStr = ctx.call_fn("get_yolk_text", ())?;
-        let regex = format!("{between}[^{between}]*{between}");
-        tag_text_replace(&text, &regex, &format!("{between}{replacement}{between}"))
-    };
-    eval_ctx.engine_mut().register_fn("replace_in", f);
-    eval_ctx.engine_mut().register_fn("rin", f);
-
-    let f = |ctx: Ncc, left: IStr, right: IStr, replacement: IStr| -> RhaiFnResult<_> {
-        let text: IStr = ctx.call_fn("get_yolk_text", ())?;
-        let regex = format!("{left}[^{right}]*{right}");
-        tag_text_replace(&text, &regex, &format!("{left}{replacement}{right}"))
-    };
-    eval_ctx.engine_mut().register_fn("replace_between", f);
-    eval_ctx.engine_mut().register_fn("rbet", f);
-
-    let f = |ctx: Ncc, replacement: IStr| -> RhaiFnResult<_> {
-        let text: IStr = ctx.call_fn("get_yolk_text", ())?;
-        tag_text_replace(
-            &text,
-            r"#[\da-fA-F]{6}([\da-fA-F]{2})?",
-            replacement.as_ref(),
-        )
-    };
-    eval_ctx.register_fn("replace_color", f);
-    eval_ctx.register_fn("rcol", f);
-
-    let f = |ctx: Ncc, replacement: Dynamic| -> RhaiFnResult<_> {
-        let text: IStr = ctx.call_fn("get_yolk_text", ())?;
-        tag_text_replace(&text, r"-?\d+(?:\.\d+)?", &replacement.to_string())
-    };
-    eval_ctx.register_fn("replace_number", f);
-    eval_ctx.register_fn("rnum", f);
-
-    let f = |ctx: Ncc, replacement: IStr| -> RhaiFnResult<_> {
-        let text: IStr = ctx.call_fn("get_yolk_text", ())?;
-        let mut result = tag_text_replace(&text, r#"".*""#, &format!("\"{replacement}\""))?;
-        if result == text {
-            result = tag_text_replace(&text, r#"`.*`"#, &format!("`{replacement}`"))?;
-        }
-        if result == text {
-            result = tag_text_replace(&text, r#"'.*'"#, &format!("'{replacement}'"))?;
-        }
-        Ok(result)
-    };
-    eval_ctx.register_fn("replace_quoted", f);
-    eval_ctx.register_fn("rqot", f);
-
-    eval_ctx.register_fn(
-        "replace_value",
-        |ctx: Ncc, replacement: IStr| -> RhaiFnResult<_> {
-            let text: IStr = ctx.call_fn("get_yolk_text", ())?;
-            let regex = create_regex(r"([=:])( *)([^\s]+)").unwrap();
-
-            if let Some(caps) = regex.captures(&text) {
-                let full_match = caps.get(0).unwrap();
-                let equals = caps.get(1).unwrap();
-                let space = caps.get(2).unwrap();
-                let new_value = regex.replace(
-                    &text,
-                    format!("{}{}{}", equals.as_str(), space.as_str(), replacement),
-                );
-                if regex.replace(&new_value, full_match.as_str()) == *text {
-                    Ok(new_value.to_string())
-                } else {
-                    Err(format!(
-                        "Refusing to run non-reversible replacement: {text} -> {new_value}",
-                    )
-                    .into())
-                }
-            } else {
-                Ok(text.into())
-            }
-        },
-    );
-    // eval_ctx.set_global(
-    //     "rv",
-    //     eval_ctx.get_global::<mlua::Function>("replace_value")?,
-    // )?;
-    Ok(())
-}
 
 #[cached(key = "String", convert = r#"{s.to_string()}"#, result)]
 fn create_regex(s: &str) -> RhaiFnResult<Regex> {

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use miette::Context;
 
 use miette::Result;
@@ -30,6 +32,7 @@ impl EvalCtx {
     pub fn new_empty() -> Self {
         let mut engine = Engine::new();
         engine.set_optimization_level(rhai::OptimizationLevel::Simple);
+
         engine.build_type::<super::sysinfo::SystemInfo>();
         engine.build_type::<super::sysinfo::SystemInfoPaths>();
         Self {
@@ -41,7 +44,17 @@ impl EvalCtx {
 
     pub fn new_in_mode(mode: EvalMode) -> Result<Self> {
         let mut ctx = Self::new_empty();
-        stdlib::setup(mode, &mut ctx)?;
+        ctx.engine
+            .register_global_module(Arc::new(stdlib::global_stuff()));
+        ctx.engine
+            .register_static_module("utils", Arc::new(stdlib::utils_module()));
+        ctx.engine
+            .register_static_module("io", Arc::new(stdlib::io_module(mode)));
+        let template_module = Arc::new(stdlib::tag_module());
+        ctx.engine.register_global_module(template_module.clone());
+        ctx.engine
+            .register_static_module("template", template_module);
+
         Ok(ctx)
     }
 

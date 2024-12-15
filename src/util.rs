@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 
+use cached::proc_macro::cached;
 use miette::{Context as _, IntoDiagnostic as _};
+use regex::Regex;
 
 /// Create a symlink at `link` pointing to `original`.
 pub fn create_symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> miette::Result<()> {
@@ -63,4 +65,9 @@ impl<T: std::fmt::Debug + std::fmt::Display> From<T> for TestError {
         // See: https://docs.rs/anyhow/latest/anyhow/struct.Error.html#display-representations
         panic!("error: {} - {:?}", std::any::type_name::<T>(), error);
     }
+}
+
+#[cached(key = "String", convert = r#"{s.to_string()}"#, result)]
+pub fn create_regex(s: &str) -> miette::Result<Regex> {
+    Ok(Regex::new(s).into_diagnostic()?)
 }

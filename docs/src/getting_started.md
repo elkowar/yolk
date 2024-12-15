@@ -25,18 +25,27 @@ This will create the yolk directory, with a default `yolk.rhai` file, and an `eg
 ### Adding your first egg
 
 let's say we want to manage the configuration for the `alacritty` terminal emulator.
-To do this, we add it to a new egg called `alacritty`:
+To do this, we first move our alacritty configuration into the `eggs` directory:
 
 ```bash
-$ yolk add alacritty ~/.config/alacritty
+$ mv ~/.config/alacritty ~/.config/yolk/eggs/
 ```
 
-Let's look at what just happened:
+And then configure the corresponding [egg deployment](./yolk_lua.md#basic-structure):
 
-- Yolk created a new directory `~/.config/yolk/eggs/alacritty`. This is called the egg directory.
-- Inside that directory, Yolk set up a file structure mirroring your home directory,
-  and moved the provided alacritty config dir into there: `~/.config/yolk/eggs/alacritty/.config/alacritty`.
-- Yolk set up a symlink from that directory back to the original location: `~/.config/alacritty`.
+```rust,ignore
+let eggs = #{
+    alacritty: #{
+        targets: "~/.config/alacritty",
+        templates: ["alacritty.yml"],
+        enabled: true,
+    }
+}
+```
+
+Now we can run `yolk sync`!
+This will set up a symlink from the target location `~/.config/alacritty`
+back to the alacritty egg directory `~/.config/yolk/eggs/alacritty`.
 
 ### Committing your dots to git
 
@@ -63,15 +72,20 @@ You also decide that you want to use a different color scheme on your desktop an
 
 To achieve this, let's first declare your color theme in your `~/.config/yolk/yolk.rhai` file:
 
-```lua
-data = {
-  colors = if SYSTEM.hostname == "laptop" then {
-    background = "#282828",
-    foreground = "#ebdbb2",
-  } else {
-    background = "#000000",
-    foreground = "#ffffff",
-  }
+```rust,ignore
+const themes = #{
+    gruvbox: #{
+        background: "#282828",
+        foreground: "#ebdbb2",
+    },
+    monochrome: #{
+        background: "#000000",
+        foreground: "#ffffff",
+    },
+}
+
+data = #{
+    colors = if SYSTEM.hostname == "laptop" { themes.gruvbox } else { themes.monochrome }
 }
 ```
 
@@ -94,16 +108,8 @@ Inside the comments after the color declarations, we're using "inline template t
 These inline tags transform whatever is before them in the line.
 The tag calls the built-in `replace_color` function, which looks for a hex-code and replaces it with the value from the `data.colors` table.
 
-Of course, we now need to apply this template.
-However, running `yolk sync` will not do anything just yet: We first need to tell Yolk about the fact that this file contains a template.
-To do this we run the following:
-
-```bash
-$ yolk make-template ~/.config/alacritty/alacritty.yml
-```
-
-This will now add the `alacritty.toml` file into a special `yolk_templates` file inside the alacritty egg.
-Now, run:
+**Let's try it**!
+Run
 
 ```bash
 $ yolk sync

@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use crate::eval_ctx::EvalCtx;
+use crate::script::eval_ctx::EvalCtx;
 use miette::{IntoDiagnostic, Result};
 
 use super::{
@@ -283,7 +283,7 @@ mod test {
                 {# replace_re(`'.*'`, `'new'`) #}
                 foo: 'new'
             "},
-            doc.render(&mut eval_ctx).map_err(|e| format!("{e:?}"))?
+            doc.render(&mut eval_ctx)?
         );
         Ok(())
     }

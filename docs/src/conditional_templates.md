@@ -13,9 +13,9 @@ The most common form of conditional block is using the multiline template tag sy
 Let's type out a simple example:
 
 ```toml
-# {% if system.hostname == "epic-desktop" %}
+# {% if SYSTEM.hostname == "epic-desktop" %}
 displays = ["DP-1", "DP-2"]
-# {% if system.hostname == "business-desktop" %}
+# {% if SYSTEM.hostname == "business-desktop" %}
 displays = ["HDMI-1", "HDMI-2"]
 # {% else %}
 displays = ["eDP-1"]
@@ -28,9 +28,9 @@ However, once you run `yolk sync`, yolk will evaluate the condition and comment 
 For example, on your laptop, this config might be turned into:
 
 ```toml
-# {% if system.hostname == "epic-desktop" %}
+# {% if SYSTEM.hostname == "epic-desktop" %}
 #<yolk> displays = ["DP-1", "DP-2"]
-# {% if system.hostname == "business-desktop" %}
+# {% if SYSTEM.hostname == "business-desktop" %}
 #<yolk> displays = ["HDMI-1", "HDMI-2"]
 # {% else %}
 displays = ["eDP-1"]
@@ -45,9 +45,9 @@ which means that you can still have regular comments in those conditional blocks
 
 A more simplified version of this is also supported in inline and next-line tags:
 
-```ini
-enable_variable_refreshrate ;; {< if data.is_desktop() >}
+```kdl
+enable_variable_refreshrate // {< if data.is_desktop() >}
 
-;; {# if data.enable_xwayland #}
+// {# if data.enable_xwayland #}
 spawn-at-startup "xwayland-satellite"
 ```

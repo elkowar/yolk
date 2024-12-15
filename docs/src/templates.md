@@ -1,29 +1,40 @@
 # Templates in Yolk
 
 Yolk allows you to use simple templates directly within your config files.
-Those templates will be evaluated whenever you run `yolk sync`, use a new egg, or interact with git through yolk.
+Those templates will be evaluated whenever you run `yolk sync` or interact with git (see [Git concepts](./git_concepts.md)).
 
-Expressions within these templates are written in the [Luau](https://luau.org) scripting language,
+Expressions within these templates are written in the [Rhai](https://rhai.rs) scripting language,
 and have access to a couple special variables that allow you to reference your configuration and system state.
 
 ## Preparation
 To make yolk evaluate your file as a template, you need to explicitly tell yolk about it.
-To do this, run `yolk make-template <egg-name> <filepath>` on the file you want to turn into a template.
-Note that it needs to already be managed as part of an egg for this to work.
+To do this, make sure you include it in the `templates` list of your eggs deployment configuration in your `yolk.rhai`:
+
+```rust,ignore
+let eggs = #{
+  foo: {
+    targets: "~/.config/foo",
+    templates: ["foo.toml"],
+  }
+}
+```
+
 
 ## Conditional
 Let's take a look at a simple example of conditional template syntax:
+
 ```toml
-# {% if system.hostname == "epic-desktop" %}
+# {% if SYSTEM.hostname == "epic-desktop" %}
 displays = ["DP-1", "DP-2"]
 # {% else %}
 displays = ["eDP-1"]
 # {% end %}
 ```
+
 Once you run `yolk sync`, yolk will evaluate the condition and comment out the block that doesn't apply.
 For example, on your laptop, this config would be turned into:
 ```toml
-# {% if system.hostname == "epic-desktop" %}
+# {% if SYSTEM.hostname == "epic-desktop" %}
 #<yolk> displays = ["DP-1", "DP-2"]
 # {% else %}
 displays = ["eDP-1"]
@@ -58,12 +69,12 @@ Yolk supports three different types of tags:
 
 You can use whichever of these you want, wherever you want. For example, all of these do the same:
 ```toml
-background_color = "#000000" # {< replace_re(`".*"`, `"{colors.background}"`) >}
+background_color = "#000000" # {< replace_re(`".*"`, `"${colors.background}"`) >}
 
-# {# replace_re(`".*"`, `"{colors.background}"`) #}
+# {# replace_re(`".*"`, `"${colors.background}"`) #}
 background_color = "#000000"
 
-# {% replace_re(`".*"`, `"{colors.background}"`) %}
+# {% replace_re(`".*"`, `"${colors.background}"`) %}
 background_color = "#000000"
 # {% end %}
 ```

@@ -5,11 +5,11 @@ use miette::{IntoDiagnostic, Result};
 use notify_debouncer_full::{new_debouncer, DebounceEventResult};
 use owo_colors::OwoColorize as _;
 use rhai::Dynamic;
-use script::eval_ctx;
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _, EnvFilter};
-use util::PathExt as _;
+use util::PathExt;
 use yolk::{EvalMode, Yolk};
 
+mod doc_generator;
 pub mod eggs_config;
 pub mod script;
 mod templating;
@@ -81,15 +81,15 @@ enum Command {
     /// List all the eggs in your yolk directory
     List,
     /// Open your `yolk.rhai` or the given egg in your `$EDITOR` of choice
-    Edit {
-        egg: Option<String>,
-    },
+    Edit { egg: Option<String> },
     /// Watch for changes in your templated files and re-sync them when they change.
     Watch {
         #[arg(long)]
         canonical: bool,
     },
-    Docs,
+
+    #[command(hide(true))]
+    Docs { dir: PathBuf },
 }
 
 pub(crate) fn main() -> Result<()> {
@@ -177,7 +177,9 @@ fn run_command(args: Args) -> Result<()> {
             cmd.args(command);
             // if the command is `git push`, we don't need to enter canonical state
             // before executing it
-            if command.first().map(|x| x.as_ref()) == Some("push") {
+
+            let first_cmd = command.first().map(|x| x.as_ref());
+            if first_cmd == Some("push") || first_cmd == Some("init") || first_cmd == Some("pull") {
                 cmd.status().into_diagnostic()?;
             } else {
                 yolk.with_canonical_state(|| {
@@ -296,19 +298,10 @@ fn run_command(args: Args) -> Result<()> {
                 std::thread::sleep(std::time::Duration::from_secs(1));
             }
         }
-        Command::Docs => {
-            let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(EvalMode::Canonical)?;
-
-            let docs = rhai_autodocs::export::options()
-                .include_standard_packages(true)
-                .export(&mut eval_ctx.engine_mut())
-                .into_diagnostic()?;
-            let docs = rhai_autodocs::generate::mdbook()
-                .generate(&docs)
-                .into_diagnostic()?;
+        Command::Docs { dir } => {
+            let docs = doc_generator::generate_docs(yolk)?;
             for (name, docs) in docs {
-                fs_err::create_dir_all("yolk-docs").into_diagnostic()?;
-                fs_err::write(PathBuf::from(format!("yolk-docs/{name}.md")), docs)
+                fs_err::write(PathBuf::from(dir.join(format!("{name}.md"))), docs)
                     .into_diagnostic()?;
             }
         }

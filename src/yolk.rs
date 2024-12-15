@@ -6,7 +6,7 @@ use miette::{Context, IntoDiagnostic, NamedSource, Result};
 
 use crate::{
     eggs_config::EggConfig,
-    eval_ctx::EvalCtx,
+    script::eval_ctx::EvalCtx,
     script::{lua_error::RhaiError, sysinfo::SystemInfo},
     templating::document::Document,
     util::{self, PathExt as _},
