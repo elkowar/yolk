@@ -34,7 +34,7 @@ $ mv ~/.config/alacritty ~/.config/yolk/eggs/
 And then configure the corresponding [egg deployment](./yolk_lua.md#basic-structure):
 
 ```rust,ignore
-let eggs = #{
+export let eggs = #{
     alacritty: #{
         targets: "~/.config/alacritty",
         templates: ["alacritty.yml"],
@@ -70,9 +70,11 @@ Because you too are very indecisive about your terminal colors,
 you now decide you want to use yolk to manage your color theme for alacritty, and any other applications that you might add later.
 You also decide that you want to use a different color scheme on your desktop and your laptop.
 
-To achieve this, let's first declare your color theme in your `~/.config/yolk/yolk.rhai` file:
+To achieve this, let's first add a declaration of your color theme in your `~/.config/yolk/yolk.rhai` file:
 
 ```rust,ignore
+// ... snip ...
+
 const themes = #{
     gruvbox: #{
         background: "#282828",

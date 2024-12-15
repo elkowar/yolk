@@ -11,7 +11,7 @@ To make yolk evaluate your file as a template, you need to explicitly tell yolk 
 To do this, make sure you include it in the `templates` list of your eggs deployment configuration in your `yolk.rhai`:
 
 ```rust,ignore
-let eggs = #{
+export let eggs = #{
   foo: {
     targets: "~/.config/foo",
     templates: ["foo.toml"],
