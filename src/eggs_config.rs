@@ -1,3 +1,4 @@
+use expanduser::expanduser;
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
@@ -6,7 +7,7 @@ use std::{
 use miette::{miette, IntoDiagnostic as _};
 use rhai::Dynamic;
 
-use crate::script::lua_error::RhaiError;
+use crate::{script::rhai_error::RhaiError, util::PathExt as _};
 
 macro_rules! rhai_error {
     ($($tt:tt)*) => {
@@ -16,6 +17,7 @@ macro_rules! rhai_error {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct EggConfig {
+    /// The targets map is a map from `path-relative-to-egg-dir` -> `path-where-it-should-go`.
     pub targets: HashMap<PathBuf, PathBuf>,
     pub enabled: bool,
     pub templates: HashSet<PathBuf>,
@@ -51,10 +53,35 @@ impl EggConfig {
         self
     }
 
+    /// Add a new target from a path inside the egg dir to the path it should be deployed as.
     pub fn with_target(mut self, from: impl AsRef<Path>, to: impl AsRef<Path>) -> Self {
         self.targets
             .insert(from.as_ref().to_path_buf(), to.as_ref().to_path_buf());
         self
+    }
+
+    /// Returns the targets map, but with any `~` expanded to the home directory.
+    ///
+    /// The targets map is a map from `path-relative-to-egg-dir` -> `path-where-it-should-go`.
+    pub fn targets_expanded(
+        &self,
+        home: impl AsRef<Path>,
+        egg_root: impl AsRef<Path>,
+    ) -> miette::Result<HashMap<PathBuf, PathBuf>> {
+        let egg_root = egg_root.as_ref();
+        self.targets
+            .iter()
+            .map(|(source, target)| {
+                let source = egg_root.canonical()?.join(source);
+                let target = expanduser(target.to_string_lossy()).into_diagnostic()?;
+                let target = if target.is_absolute() {
+                    target
+                } else {
+                    home.as_ref().join(target)
+                };
+                Ok((source, target))
+            })
+            .collect()
     }
 
     pub fn templates_globexpanded(&self, in_dir: impl AsRef<Path>) -> miette::Result<Vec<PathBuf>> {

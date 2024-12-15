@@ -31,7 +31,7 @@ To do this, we first move our alacritty configuration into the `eggs` directory:
 $ mv ~/.config/alacritty ~/.config/yolk/eggs/
 ```
 
-And then configure the corresponding [egg deployment](./yolk_lua.md#basic-structure):
+And then configure the corresponding [egg deployment](./yolk_rhai.md#basic-structure):
 
 ```rust,ignore
 export let eggs = #{

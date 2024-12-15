@@ -1,10 +1,10 @@
 use miette::SourceSpan;
 
-use crate::script::lua_error::RhaiError;
+use crate::script::rhai_error::RhaiError;
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum TemplateError {
-    #[error("Error evaluating lua")]
+    #[error("Error evaluating rhai")]
     Rhai {
         #[source]
         error: RhaiError,

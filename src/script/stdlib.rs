@@ -522,17 +522,17 @@ mod test {
 
     use crate::{script::eval_ctx::EvalCtx, yolk::EvalMode};
 
-    pub fn run_expr<T: Variant + Clone>(lua: &str) -> miette::Result<T> {
+    pub fn run_expr<T: Variant + Clone>(code: &str) -> miette::Result<T> {
         let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
-        Ok(eval_ctx.eval_rhai::<T>(lua)?)
+        Ok(eval_ctx.eval_rhai::<T>(code)?)
     }
-    pub fn run_tag_expr(text: &str, lua: &str) -> miette::Result<String> {
+    pub fn run_tag_expr(text: &str, code: &str) -> miette::Result<String> {
         let text = text.to_string();
         let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
         eval_ctx
             .engine_mut()
             .register_fn("get_yolk_text", move || text.clone());
-        eval_ctx.eval_rhai::<String>(lua).into_diagnostic()
+        eval_ctx.eval_rhai::<String>(code).into_diagnostic()
     }
 
     #[test]

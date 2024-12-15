@@ -12,7 +12,7 @@ use rhai::Variant;
 
 use crate::yolk::EvalMode;
 
-use super::lua_error::RhaiError;
+use super::rhai_error::RhaiError;
 use super::stdlib;
 
 pub const YOLK_TEXT_NAME: &str = "YOLK_TEXT";

@@ -160,7 +160,7 @@ fn run_command(args: Args) -> Result<()> {
             })?;
         }
         Command::List => {
-            let mut eggs = yolk.list_eggs()?.collect::<Result<Vec<_>>>()?;
+            let mut eggs = yolk.list_eggs()?;
             eggs.sort_by_key(|egg| egg.name().to_string());
             for egg in eggs {
                 let deployed = egg.is_deployed()?;
@@ -186,7 +186,12 @@ fn run_command(args: Args) -> Result<()> {
                 true => EvalMode::Canonical,
                 false => EvalMode::Local,
             })?;
-            println!("{}", eval_ctx.eval_rhai::<Dynamic>(expr)?);
+            let result = eval_ctx.eval_rhai::<Dynamic>(expr).map_err(|e| {
+                miette::Report::from(e).with_source_code(
+                    miette::NamedSource::new("<inline>", expr.to_string()).with_language("Rust"),
+                )
+            })?;
+            println!("{result}");
         }
         Command::Git { command } => {
             let mut cmd = yolk.paths().start_git_command_builder()?;
@@ -229,8 +234,8 @@ fn run_command(args: Args) -> Result<()> {
         Command::Edit { egg } => {
             let path = match egg {
                 Some(egg_name) => {
-                    let egg = yolk.paths().get_egg(egg_name)?;
-                    egg.find_first_targetting_symlink()?
+                    let egg = yolk.get_egg(egg_name)?;
+                    egg.find_first_deployed_symlink()?
                         .unwrap_or_else(|| yolk.paths().egg_path(egg_name))
                 }
                 None => yolk.paths().yolk_rhai_path(),
@@ -278,18 +283,18 @@ fn run_command(args: Args) -> Result<()> {
                     };
 
                     let mut on_file_updated = |path: &Path| {
-                        if no_sync {
+                        let result = if no_sync {
                             let Ok(content) = fs_err::read_to_string(&path) else {
                                 return;
                             };
                             let path = path.to_string_lossy();
-                            if let Err(e) = yolk.eval_template(&mut eval_ctx, &path, &content) {
-                                eprintln!("Error: {e:?}");
-                            }
+                            yolk.eval_template(&mut eval_ctx, &path, &content)
+                                .map(|_| ())
                         } else {
-                            if let Err(e) = yolk.sync_template_file(&mut eval_ctx, path) {
-                                eprintln!("Error: {e:?}");
-                            }
+                            yolk.sync_template_file(&mut eval_ctx, path)
+                        };
+                        if let Err(e) = result {
+                            eprintln!("Error: {e:?}");
                         }
                     };
 
