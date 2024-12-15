@@ -106,7 +106,12 @@ pub(crate) fn main() -> Result<()> {
     let env_filter = if args.debug {
         tracing_subscriber::EnvFilter::from_str("debug").unwrap()
     } else {
-        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or(EnvFilter::new("yolk=info"))
+        let default = if matches!(args.command, Command::Git { .. }) {
+            EnvFilter::new("yolk=warn")
+        } else {
+            EnvFilter::new("yolk=info")
+        };
+        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or(default)
     };
     tracing_subscriber::registry()
         .with(
@@ -139,6 +144,9 @@ fn run_command(args: Args) -> Result<()> {
         Command::Init => yolk.init_yolk()?,
         Command::Safeguard => yolk.paths().safeguard_git_dir()?,
         Command::Status => {
+            // TODO: Add a verification that exactly all the eggs in the eggs dir are defined in the
+            // yolk.rhai file.
+
             yolk.paths().check()?;
             if yolk.paths().active_yolk_git_dir()? == yolk.paths().yolk_default_git_path() {
                 println!("Yolk git is not safeguarded. It is recommended to run `yolk safeguard`.");
@@ -187,7 +195,11 @@ fn run_command(args: Args) -> Result<()> {
             // before executing it
 
             let first_cmd = command.first().map(|x| x.as_ref());
-            if first_cmd == Some("push") || first_cmd == Some("init") || first_cmd == Some("pull") {
+            if first_cmd == Some("push")
+                || first_cmd == Some("init")
+                || first_cmd == Some("pull")
+                || first_cmd.is_none()
+            {
                 cmd.status().into_diagnostic()?;
             } else {
                 yolk.with_canonical_state(|| {
