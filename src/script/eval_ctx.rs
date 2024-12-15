@@ -5,6 +5,7 @@ use miette::Context;
 use miette::Result;
 use rhai::Dynamic;
 use rhai::Engine;
+use rhai::Module;
 use rhai::RhaiNativeFunc;
 use rhai::Scope;
 use rhai::Variant;
@@ -19,7 +20,7 @@ pub const YOLK_TEXT_NAME: &str = "YOLK_TEXT";
 pub struct EvalCtx {
     engine: Engine,
     scope: Scope<'static>,
-    header_ast: Option<rhai::AST>,
+    yolk_file_module: Option<Arc<Module>>,
 }
 
 impl Default for EvalCtx {
@@ -38,7 +39,7 @@ impl EvalCtx {
         Self {
             engine,
             scope: Scope::new(),
-            header_ast: None,
+            yolk_file_module: None,
         }
     }
 
@@ -58,20 +59,31 @@ impl EvalCtx {
         Ok(ctx)
     }
 
-    pub fn set_and_run_header_ast(&mut self, content: &str) -> Result<(), RhaiError> {
+    // pub fn set_and_run_header_ast(&mut self, content: &str) -> Result<(), RhaiError> {
+    //     // let ast = self.compile(content)?;
+    //     // self.engine
+    //     //     .run_ast_with_scope(&mut self.scope, &ast)
+    //     //     .map_err(|e| RhaiError::from_rhai(content, *e))?;
+    //     // self.header_ast = Some(ast);
+    //     // Ok(())
+    //     self.load_as_global_module(content)
+    // }
+
+    pub fn load_as_global_module(&mut self, content: &str) -> Result<(), RhaiError> {
         let ast = self.compile(content)?;
-        self.engine
-            .run_ast_with_scope(&mut self.scope, &ast)
+        let module = Module::eval_ast_as_new(self.scope.clone(), &ast, &mut self.engine)
             .map_err(|e| RhaiError::from_rhai(content, *e))?;
-        self.header_ast = Some(ast);
+        let module = Arc::new(module);
+        self.engine.register_global_module(module.clone());
+        self.yolk_file_module = Some(module.clone());
         Ok(())
     }
 
     pub fn eval_rhai<T: Variant + Clone>(&mut self, content: &str) -> Result<T, RhaiError> {
         let mut ast = self.compile(content)?;
-        if let Some(header_ast) = &self.header_ast {
-            ast = header_ast.merge(&ast);
-        }
+        // if let Some(header_ast) = &self.yolk_file_module {
+        //     ast = header_ast.merge(&ast);
+        // }
         self.engine
             .eval_ast_with_scope(&mut self.scope, &ast)
             .map_err(|e| RhaiError::from_rhai(content, *e))
@@ -79,9 +91,9 @@ impl EvalCtx {
 
     pub fn exec_rhai(&mut self, content: &str) -> Result<(), RhaiError> {
         let mut ast = self.compile(content)?;
-        if let Some(header_ast) = &self.header_ast {
-            ast = header_ast.merge(&ast);
-        }
+        // if let Some(header_ast) = &self.header_ast {
+        //     ast = header_ast.merge(&ast);
+        // }
         self.engine
             .run_ast_with_scope(&mut self.scope, &ast)
             .map_err(|e| RhaiError::from_rhai(content, *e))
@@ -118,9 +130,13 @@ impl EvalCtx {
         &mut self.scope
     }
 
-    pub fn header_ast(&self) -> Option<&rhai::AST> {
-        self.header_ast.as_ref()
+    pub fn yolk_file_module(&self) -> Option<&Arc<Module>> {
+        self.yolk_file_module.as_ref()
     }
+
+    // pub fn header_ast(&self) -> Option<&rhai::AST> {
+    //     self.header_ast.as_ref()
+    // }
 
     pub fn call_fn<T: Variant + Clone>(&mut self, ast: &rhai::AST) -> Result<T, RhaiError> {
         self.engine

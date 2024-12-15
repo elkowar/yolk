@@ -1,7 +1,10 @@
 # The yolk.rhai file
 
 The `yolk.rhai` file is the heart of your Yolk configuration.
-It's where you define all of your eggs (packages), as well as all the variables and functionality you will then refer to inside your templates.
+
+It's where you define all of your eggs (packages), as well as export any variables and functionality you will then refer to inside your templates.
+
+If you're familiar with [Rhai](https://rhai.rs/), this is loaded as a module, imported into the global scope of your template tags.
 
 ## Basic structure
 
@@ -16,7 +19,7 @@ and which files should be treated as template files.
 Let's look at an example:
 
 ```rust,ignore
-let eggs = #{
+export let eggs = #{
     foot: #{
         targets: "~/.config/foot",
         templates: ["foot.ini"],

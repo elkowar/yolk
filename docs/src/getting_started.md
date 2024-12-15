@@ -84,14 +84,16 @@ const themes = #{
     },
 }
 
-data = #{
+export const data = #{
     colors = if SYSTEM.hostname == "laptop" { themes.gruvbox } else { themes.monochrome }
 }
 ```
 
 Beautiful!
-What we're doing here is setting up a table called `data`, which will store any user-data we might want to refer to in our templates in the future.
+What we're doing here is setting up an *exported* table called `data`, which will store any user-data we might want to refer to in our templates in the future.
 We set up a field `colors`, which we then set to a different color scheme depending on the hostname of the system.
+
+**Don't forget to `export` any variables you might want to reference in your template tags!**
 
 Now, let's set up a template in our alacritty config file:
 

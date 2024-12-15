@@ -77,8 +77,13 @@ impl Yolk {
     /// fetch the `eggs` variable from a given EvalCtx.
     pub fn load_egg_configs(&self, eval_ctx: &mut EvalCtx) -> Result<HashMap<String, EggConfig>> {
         let eggs_map = eval_ctx
-            .scope_mut()
-            .get_value::<rhai::Map>("eggs")
+            .yolk_file_module()
+            .ok_or_else(|| {
+                miette::miette!(
+                    "Tried to load egg configs before loading yolk file. This is a bug."
+                )
+            })?
+            .get_var_value::<rhai::Map>("eggs")
             .ok_or_else(|| miette::miette!("Could not find an `eggs` variable in scope"))?;
         Ok(eggs_map
             .into_iter()
@@ -145,7 +150,7 @@ impl Yolk {
 
         eval_ctx.set_global("SYSTEM", sysinfo);
         eval_ctx.set_global("LOCAL", mode == EvalMode::Local);
-        eval_ctx.set_and_run_header_ast(&yolk_file).map_err(|e| {
+        eval_ctx.load_as_global_module(&yolk_file).map_err(|e| {
             miette::Report::from(e)
                 .with_source_code(
                     NamedSource::new(
@@ -385,8 +390,8 @@ mod test {
         let foo_toml_initial = "{# data.value #}\nfoo";
         home.child("yolk/yolk.rhai").write_str(
             r#"
-            const data = if LOCAL { #{value: "local"} } else { #{value: "canonical"} };
-            let eggs = #{foo: `~`};
+            export const data = if LOCAL { #{value: "local"} } else { #{value: "canonical"} };
+            export let eggs = #{foo: `~`};
         "#,
         )?;
         eggs.child("foo/foo.toml").write_str(foo_toml_initial)?;
@@ -398,8 +403,8 @@ mod test {
         // Now we make the file a template, so it should be updated
         home.child("yolk/yolk.rhai").write_str(
             r#"
-            const data = if LOCAL {#{value: "local"}} else {#{value: "canonical"}};
-            let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"]}};
+            export const data = if LOCAL {#{value: "local"}} else {#{value: "canonical"}};
+            export let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"]}};
         "#,
         )?;
 
@@ -409,8 +414,8 @@ mod test {
         // Update the state, to see if applying again just works :tm:
         home.child("yolk/yolk.rhai").write_str(
             r#"
-                const data = if LOCAL {#{value: "new local"}} else {#{value: "new canonical"}};
-                let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"]}};
+                export const data = if LOCAL {#{value: "new local"}} else {#{value: "new canonical"}};
+                export let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"]}};
             "#,
         )?;
         yolk.sync_to_mode(EvalMode::Local)?;
@@ -428,8 +433,8 @@ mod test {
         let (home, yolk, eggs) = setup_and_init()?;
         home.child("yolk/yolk.rhai").write_str(
             r#"
-            const hostname = SYSTEM.hostname;
-            let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"]}};
+            export const hostname = SYSTEM.hostname;
+            export let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"]}};
         "#,
         )?;
         eggs.child("foo/foo.toml")
