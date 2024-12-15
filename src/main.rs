@@ -1,4 +1,9 @@
-use std::{collections::HashSet, io::Read as _, path::PathBuf, str::FromStr};
+use std::{
+    collections::HashSet,
+    io::Read as _,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use clap::{Parser, Subcommand};
 use miette::{IntoDiagnostic, Result};
@@ -86,6 +91,9 @@ enum Command {
     Watch {
         #[arg(long)]
         canonical: bool,
+        /// Don't actually update any files, just evaluate the templates and print any errors.
+        #[arg(long)]
+        no_sync: bool,
     },
 
     #[command(hide(true))]
@@ -221,7 +229,8 @@ fn run_command(args: Args) -> Result<()> {
             }
             edit::edit_file(path).into_diagnostic()?;
         }
-        Command::Watch { canonical } => {
+        Command::Watch { canonical, no_sync } => {
+            let no_sync = *no_sync;
             let mode = match *canonical {
                 true => EvalMode::Canonical,
                 false => EvalMode::Local,
@@ -255,6 +264,23 @@ fn run_command(args: Args) -> Result<()> {
                             return;
                         }
                     };
+
+                    let mut on_file_updated = |path: &Path| {
+                        if no_sync {
+                            let Ok(content) = fs_err::read_to_string(&path) else {
+                                return;
+                            };
+                            let path = path.to_string_lossy();
+                            if let Err(e) = yolk.eval_template(&mut eval_ctx, &path, &content) {
+                                eprintln!("Error: {e:?}");
+                            }
+                        } else {
+                            if let Err(e) = yolk.sync_template_file(&mut eval_ctx, path) {
+                                eprintln!("Error: {e:?}");
+                            }
+                        }
+                    };
+
                     match res {
                         Ok(events) => {
                             let changed = events
@@ -266,14 +292,18 @@ fn run_command(args: Args) -> Result<()> {
                                 .flat_map(|x| x.paths.clone().into_iter())
                                 .collect::<HashSet<_>>();
                             if changed.contains(&yolk.paths().yolk_rhai_path()) {
-                                if let Err(e) = yolk.sync_to_mode(mode) {
-                                    eprintln!("Error: {e:?}");
+                                if no_sync {
+                                    for file in files_to_watch.iter() {
+                                        on_file_updated(file);
+                                    }
+                                } else {
+                                    if let Err(e) = yolk.sync_to_mode(mode) {
+                                        eprintln!("Error: {e:?}");
+                                    }
                                 }
                             } else {
                                 for path in changed {
-                                    if let Err(e) = yolk.sync_template_file(&mut eval_ctx, path) {
-                                        eprintln!("Error: {e:?}");
-                                    }
+                                    on_file_updated(&path);
                                 }
                             }
                         }
