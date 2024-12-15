@@ -81,11 +81,15 @@ enum Command {
     /// List all the eggs in your yolk directory
     List,
     /// Open your `yolk.rhai` or the given egg in your `$EDITOR` of choice
-    Edit { egg: Option<String> },
+    Edit {
+        egg: Option<String>,
+    },
+    /// Watch for changes in your templated files and re-sync them when they change.
     Watch {
         #[arg(long)]
         canonical: bool,
     },
+    Docs,
 }
 
 pub(crate) fn main() -> Result<()> {
@@ -290,6 +294,22 @@ fn run_command(args: Args) -> Result<()> {
 
             loop {
                 std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+        }
+        Command::Docs => {
+            let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(EvalMode::Canonical)?;
+
+            let docs = rhai_autodocs::export::options()
+                .include_standard_packages(true)
+                .export(&mut eval_ctx.engine_mut())
+                .into_diagnostic()?;
+            let docs = rhai_autodocs::generate::mdbook()
+                .generate(&docs)
+                .into_diagnostic()?;
+            for (name, docs) in docs {
+                fs_err::create_dir_all("yolk-docs").into_diagnostic()?;
+                fs_err::write(PathBuf::from(format!("yolk-docs/{name}.md")), docs)
+                    .into_diagnostic()?;
             }
         }
     }
