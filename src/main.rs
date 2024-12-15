@@ -128,7 +128,7 @@ fn run_command(args: Args) -> Result<()> {
         Command::Status => {
             yolk.paths().check()?;
             if yolk.paths().active_yolk_git_dir()? == yolk.paths().yolk_default_git_path() {
-                println!("Yolk git is not Safeguarded. It is recommended to run `yolk safeguard`.");
+                println!("Yolk git is not safeguarded. It is recommended to run `yolk safeguard`.");
             }
             yolk.with_canonical_state(|| {
                 yolk.paths()
@@ -171,14 +171,18 @@ fn run_command(args: Args) -> Result<()> {
             println!("{}", yolk.eval_template_lua(mode, expr)?);
         }
         Command::Git { command } => {
-            yolk.with_canonical_state(|| {
-                yolk.paths()
-                    .start_git_command_builder()?
-                    .args(command)
-                    .status()
-                    .into_diagnostic()?;
-                Ok(())
-            })?;
+            let mut cmd = yolk.paths().start_git_command_builder()?;
+            cmd.args(command);
+            // if the command is `git push`, we don't need to enter canonical state
+            // before executing it
+            if command.first().map(|x| x.as_ref()) == Some("push") {
+                cmd.status().into_diagnostic()?;
+            } else {
+                yolk.with_canonical_state(|| {
+                    cmd.status().into_diagnostic()?;
+                    Ok(())
+                })?;
+            }
         }
         Command::EvalTemplate { path, canonical } => {
             let text = match path {
