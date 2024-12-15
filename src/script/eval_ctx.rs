@@ -138,32 +138,3 @@ impl EvalCtx {
             .map_err(|e| RhaiError::from_rhai_compile(text, e))
     }
 }
-
-#[cfg(test)]
-mod test {
-    // use std::collections::HashSet;
-
-    // use crate::util::TestResult;
-    // use rhai::Dynamic;
-
-    // use super::{EvalCtx, EvalMode};
-
-    // TODO: Add a test like this?
-    // #[test]
-    // pub fn test_globals_match_between_local_and_canonical() -> TestResult {
-    //     let local = EvalCtx::new_in_mode(EvalMode::Local).unwrap();
-    //     let canonical = EvalCtx::new_in_mode(EvalMode::Canonical).unwrap();
-    //     let canonical_entries: HashSet<_> = canonical
-    //         .scope
-    //         .pairs::<Dynamic, Dynamic>()
-    //         .map(|x| x.unwrap().0.to_string().unwrap())
-    //         .collect();
-    //     let local_entries: HashSet<_> = local
-    //         .scope
-    //         .pairs::<Dynamic, Dynamic>()
-    //         .map(|x| x.unwrap().0.to_string().unwrap())
-    //         .collect();
-    //     assert_eq!(local_entries, canonical_entries);
-    //     Ok(())
-    // }
-}

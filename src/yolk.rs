@@ -74,6 +74,18 @@ impl Yolk {
         Ok(())
     }
 
+    /// fetch the `eggs` variable from a given EvalCtx.
+    pub fn load_egg_configs(&self, eval_ctx: &mut EvalCtx) -> Result<HashMap<String, EggConfig>> {
+        let eggs_map = eval_ctx
+            .scope_mut()
+            .get_value::<rhai::Map>("eggs")
+            .ok_or_else(|| miette::miette!("Could not find an `eggs` variable in scope"))?;
+        Ok(eggs_map
+            .into_iter()
+            .map(|(x, v)| Ok((x.into(), EggConfig::from_dynamic(v)?)))
+            .collect::<Result<HashMap<_, _>, RhaiError>>()?)
+    }
+
     /// First, sync the deployment of all eggs to the local system.
     /// Then, update any templated files in the eggs to the given mode.
     pub fn sync_to_mode(&self, mode: EvalMode) -> Result<()> {
@@ -81,14 +93,7 @@ impl Yolk {
             .prepare_eval_ctx_for_templates(mode)
             .context("Failed to prepare evaluation context")?;
 
-        let eggs_map = eval_ctx
-            .scope_mut()
-            .get_value::<rhai::Map>("eggs")
-            .ok_or_else(|| miette::miette!("yolk.rhai did not define a global `eggs` variable"))?;
-        let egg_configs: HashMap<String, EggConfig> = eggs_map
-            .into_iter()
-            .map(|(x, v)| Ok((x.into(), EggConfig::from_dynamic(v)?)))
-            .collect::<Result<HashMap<_, _>, RhaiError>>()?;
+        let egg_configs = self.load_egg_configs(&mut eval_ctx)?;
 
         for (egg, egg_config) in &egg_configs {
             let egg = match self.yolk_paths.get_egg(egg) {
@@ -99,44 +104,30 @@ impl Yolk {
                 }
             };
             self.sync_egg_deployment(&egg.name(), &egg_config)?;
-
-            for tmpl_path_glob in &egg_config.templates {
-                let tmpl_path_glob = egg.path().join(tmpl_path_glob);
-                let glob_paths = match glob::glob(&tmpl_path_glob.to_string_lossy()) {
-                    Ok(x) => x,
-                    Err(err) => {
+            let templates_expanded = match egg_config.templates_globexpanded(egg.path()) {
+                Ok(x) => x,
+                Err(err) => {
+                    tracing::warn!(
+                        "Failed to glob-expand templates for egg {}: {err:?}",
+                        egg.name()
+                    );
+                    continue;
+                }
+            };
+            for tmpl_path in templates_expanded {
+                if tmpl_path.is_file() {
+                    if let Err(err) = self.sync_template_file(&mut eval_ctx, &tmpl_path) {
                         tracing::warn!(
-                            "Failed to glob for templated file {}: {err:?}",
-                            tmpl_path_glob.to_abbrev_str(),
-                        );
-                        continue;
-                    }
-                };
-                for path_result in glob_paths {
-                    let tmpl_path = match path_result {
-                        Ok(x) => x,
-                        Err(err) => {
-                            tracing::warn!(
-                                "Failed to glob for templated file {}: {err:?}",
-                                tmpl_path_glob.to_abbrev_str(),
-                            );
-                            continue;
-                        }
-                    };
-                    if tmpl_path.is_file() {
-                        if let Err(err) = self.sync_template_file(&mut eval_ctx, &tmpl_path) {
-                            tracing::warn!(
-                                "Failed to sync templated file {}: {err:?}",
-                                tmpl_path.to_abbrev_str(),
-                            );
-                        }
-                        tracing::info!("Synced templated file {}", tmpl_path.to_abbrev_str());
-                    } else if !tmpl_path.exists() {
-                        tracing::warn!(
-                            "{} was specified as templated file, but doesn't exist",
-                            tmpl_path.to_abbrev_str()
+                            "Failed to sync templated file {}: {err:?}",
+                            tmpl_path.to_abbrev_str(),
                         );
                     }
+                    tracing::info!("Synced templated file {}", tmpl_path.to_abbrev_str());
+                } else if !tmpl_path.exists() {
+                    tracing::warn!(
+                        "{} was specified as templated file, but doesn't exist",
+                        tmpl_path.to_abbrev_str()
+                    );
                 }
             }
         }
@@ -427,4 +418,4 @@ mod test {
     }
 }
 
-// TODO: write test to verify that hostname can be accessed from within templates and the scripts
+// TODO: write test to verify that hostname can be accessed from within templates and the scripts(?)

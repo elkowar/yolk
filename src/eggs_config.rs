@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use miette::miette;
+use miette::{miette, IntoDiagnostic as _};
 use rhai::Dynamic;
 
 use crate::script::lua_error::RhaiError;
@@ -55,6 +55,18 @@ impl EggConfig {
         self.targets
             .insert(from.as_ref().to_path_buf(), to.as_ref().to_path_buf());
         self
+    }
+
+    pub fn templates_globexpanded(&self, in_dir: impl AsRef<Path>) -> miette::Result<Vec<PathBuf>> {
+        let in_dir = in_dir.as_ref();
+        let mut paths = Vec::new();
+        for globbed in &self.templates {
+            let expanded = glob::glob(&in_dir.join(globbed).to_string_lossy()).into_diagnostic()?;
+            for path in expanded {
+                paths.push(path.into_diagnostic()?);
+            }
+        }
+        Ok(paths)
     }
 
     pub fn from_dynamic(value: Dynamic) -> Result<Self, RhaiError> {
@@ -126,70 +138,64 @@ impl EggConfig {
     }
 }
 
-// #[cfg(test)]
-// mod test {
-//     use std::{collections::HashSet, path::PathBuf};
+#[cfg(test)]
+mod test {
+    use std::{collections::HashSet, path::PathBuf};
 
-//     use crate::eggs_config::EggConfig;
+    use crate::{eggs_config::EggConfig, util::TestResult};
 
-//     #[test]
-//     fn test_read_verbose_eggs_config() {
-//         let lua = mlua::Lua::new();
-//         let config = lua
-//             .load(indoc::indoc! {r#"
-//                 {
-//                     enabled = false,
-//                     targets = { ["foo"] = "~/bar" },
-//                     templates = { "foo" }
-//                 }
-//             "#})
-//             .eval::<EggConfig>()
-//             .unwrap();
-//         assert_eq!(
-//             config,
-//             EggConfig {
-//                 enabled: false,
-//                 targets: maplit::hashmap! {
-//                     PathBuf::from("foo") => PathBuf::from("~/bar")
-//                 },
-//                 templates: maplit::hashset! {
-//                     PathBuf::from("foo")
-//                 }
-//             }
-//         );
-//     }
+    #[test]
+    fn test_read_verbose_eggs_config() -> TestResult {
+        let result = rhai::Engine::new().eval(indoc::indoc! {r#"
+            #{
+                enabled: false,
+                targets: #{ "foo": "~/bar" },
+                templates: ["foo"]
+            }
+        "#})?;
+        assert_eq!(
+            EggConfig::from_dynamic(result)?,
+            EggConfig {
+                enabled: false,
+                targets: maplit::hashmap! {
+                    PathBuf::from("foo") => PathBuf::from("~/bar")
+                },
+                templates: maplit::hashset! {
+                    PathBuf::from("foo")
+                }
+            }
+        );
+        Ok(())
+    }
 
-//     #[test]
-//     fn test_read_simple_eggs_config() {
-//         let lua = mlua::Lua::new();
-//         let config = lua
-//             .load(r#"{ targets = "~/bar" }"#)
-//             .eval::<EggConfig>()
-//             .unwrap();
-//         assert_eq!(
-//             config,
-//             EggConfig {
-//                 enabled: true,
-//                 targets: maplit::hashmap! {
-//                     PathBuf::from(".") => PathBuf::from("~/bar")
-//                 },
-//                 templates: HashSet::new(),
-//             }
-//         );
-//     }
-//     #[test]
-//     fn test_read_minimal_eggs_config() {
-//         let lua = mlua::Lua::new();
-//         let config = lua.load(r#""~/bar""#).eval::<EggConfig>().unwrap();
-//         assert_eq!(
-//             config,
-//             EggConfig {
-//                 enabled: true,
-//                 targets: maplit::hashmap! {
-//                     PathBuf::from(".") => PathBuf::from("~/bar")
-//                 },
-//                 templates: HashSet::new(),
-//             }
-//         );
-//     }
-// }
+    #[test]
+    fn test_read_simple_eggs_config() -> TestResult {
+        let result = rhai::Engine::new().eval(r#"#{ targets: "~/bar" }"#)?;
+        assert_eq!(
+            EggConfig::from_dynamic(result).unwrap(),
+            EggConfig {
+                enabled: true,
+                targets: maplit::hashmap! {
+                    PathBuf::from(".") => PathBuf::from("~/bar")
+                },
+                templates: HashSet::new(),
+            }
+        );
+        Ok(())
+    }
+    #[test]
+    fn test_read_minimal_eggs_config() -> TestResult {
+        let result = rhai::Engine::new().eval(r#""~/bar""#)?;
+        assert_eq!(
+            EggConfig::from_dynamic(result)?,
+            EggConfig {
+                enabled: true,
+                targets: maplit::hashmap! {
+                    PathBuf::from(".") => PathBuf::from("~/bar")
+                },
+                templates: HashSet::new(),
+            }
+        );
+        Ok(())
+    }
+}

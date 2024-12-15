@@ -1,7 +1,4 @@
-use std::{
-    collections::HashSet,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use fs_err::PathExt;
 use miette::{IntoDiagnostic, Result};
@@ -241,34 +238,14 @@ impl Egg {
             .unwrap_or_default()
     }
 
-    /// Returns a list of all entries in this egg,
-    /// meaning all files and directories in the egg dir except for the yolk_templates file.
+    /// Returns a list of all entries in this egg (all files and directories in the egg dir).
     pub fn entries(&self) -> Result<Vec<fs_err::DirEntry>> {
         let mut entries = Vec::new();
         for entry in self.egg_dir.fs_err_read_dir().into_diagnostic()? {
             let entry = entry.into_diagnostic()?;
-            if entry.file_name() == "yolk_templates" {
-                continue;
-            }
             entries.push(entry)
         }
         Ok(entries)
-    }
-
-    /// Returns a list of all the template paths in this egg in canonical form.
-    pub fn template_paths(&self) -> Result<HashSet<PathBuf>> {
-        let tmpl_list_file = self.egg_dir.join("yolk_templates");
-        if !tmpl_list_file.is_file() {
-            return Ok(HashSet::new());
-        }
-        let tmpl_paths = fs_err::read_to_string(tmpl_list_file).into_diagnostic()?;
-        let tmpl_paths = tmpl_paths
-            .lines()
-            .map(|x| self.egg_dir.join(x))
-            .filter(|x| x.exists()) // TODO: emit some warning for inexistant files in yolk_templates file
-            .map(|x| x.canonical())
-            .collect::<Result<_>>()?;
-        Ok(tmpl_paths)
     }
 
     pub fn find_first_targetting_symlink(&self) -> Result<Option<PathBuf>> {

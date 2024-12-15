@@ -226,9 +226,11 @@ fn run_command(args: Args) -> Result<()> {
             let script_path = yolk.paths().yolk_rhai_path();
             files_to_watch.insert(script_path.clone());
 
-            for egg in yolk.paths().list_eggs()? {
-                let egg = egg?;
-                for path in egg.template_paths()? {
+            let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(mode)?;
+            let egg_configs = yolk.load_egg_configs(&mut eval_ctx)?;
+
+            for (egg_name, egg_config) in egg_configs {
+                for path in egg_config.templates_globexpanded(yolk.paths().egg_path(&egg_name))? {
                     if let Some(parent) = path.parent() {
                         dirs_to_watch.insert(parent.to_path_buf());
                     }
