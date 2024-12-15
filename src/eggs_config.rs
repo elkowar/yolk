@@ -142,6 +142,13 @@ impl EggConfig {
 mod test {
     use std::{collections::HashSet, path::PathBuf};
 
+    use assert_fs::{
+        prelude::{FileWriteStr as _, PathChild as _},
+        TempDir,
+    };
+    use maplit::hashset;
+    use miette::IntoDiagnostic as _;
+
     use crate::{eggs_config::EggConfig, util::TestResult};
 
     #[test]
@@ -183,6 +190,7 @@ mod test {
         );
         Ok(())
     }
+
     #[test]
     fn test_read_minimal_eggs_config() -> TestResult {
         let result = rhai::Engine::new().eval(r#""~/bar""#)?;
@@ -195,6 +203,29 @@ mod test {
                 },
                 templates: HashSet::new(),
             }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_template_globbed() -> TestResult {
+        let home = TempDir::new().into_diagnostic()?;
+        let config = EggConfig::new(home.to_str().unwrap(), ".")
+            .with_template("foo")
+            .with_template("**/*.foo");
+        home.child("foo").write_str("a")?;
+        home.child("bar/baz/a.foo").write_str("a")?;
+        home.child("bar/a.foo").write_str("a")?;
+        home.child("bar/foo").write_str("a")?;
+        let result = config.templates_globexpanded(&home)?;
+
+        assert_eq!(
+            result.into_iter().collect::<HashSet<_>>(),
+            hashset![
+                home.child("foo").path().to_path_buf(),
+                home.child("bar/baz/a.foo").path().to_path_buf(),
+                home.child("bar/a.foo").path().to_path_buf(),
+            ]
         );
         Ok(())
     }

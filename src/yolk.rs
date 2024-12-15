@@ -306,6 +306,7 @@ mod test {
     use assert_fs::{
         assert::PathAssert,
         prelude::{FileWriteStr, PathChild, PathCreateDir},
+        TempDir,
     };
     use miette::IntoDiagnostic as _;
     use p::path::{exists, is_dir, is_symlink};
@@ -316,9 +317,8 @@ mod test {
 
     use super::{EvalMode, Yolk};
 
-    fn setup_and_init() -> miette::Result<(assert_fs::TempDir, Yolk, assert_fs::fixture::ChildPath)>
-    {
-        let home = assert_fs::TempDir::new().into_diagnostic()?;
+    fn setup_and_init() -> miette::Result<(TempDir, Yolk, assert_fs::fixture::ChildPath)> {
+        let home = TempDir::new().into_diagnostic()?;
         let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
         std::env::set_var("HOME", home.to_string_lossy().to_string());
         let eggs = home.child("yolk/eggs");
@@ -416,6 +416,20 @@ mod test {
         })?;
         Ok(())
     }
-}
 
-// TODO: write test to verify that hostname can be accessed from within templates and the scripts(?)
+    #[test]
+    fn test_access_sysinfo() -> TestResult {
+        let (home, yolk, eggs) = setup_and_init()?;
+        home.child("yolk/yolk.rhai").write_str(&indoc::indoc! {r#"
+            const hostname = SYSTEM.hostname;
+            let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"]}};
+        "#})?;
+        eggs.child("foo/foo.toml")
+            .write_str("{< `host=${hostname}|${SYSTEM.hostname}` >}")?;
+        yolk.sync_to_mode(EvalMode::Local)?;
+        eggs.child("foo/foo.toml").assert(
+            "host=canonical-hostname|canonical-hostname{< `host=${hostname}|${SYSTEM.hostname}` >}",
+        );
+        Ok(())
+    }
+}
