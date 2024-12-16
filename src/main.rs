@@ -15,6 +15,7 @@ use util::PathExt;
 use yolk::{EvalMode, Yolk};
 
 mod doc_generator;
+
 pub mod eggs_config;
 pub mod script;
 mod templating;
