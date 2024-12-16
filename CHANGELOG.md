@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.12](https://github.com/elkowar/yolk/compare/v0.0.11...v0.0.12) - 2024-12-16
+
+### Added
+
+- [**breaking**] Add --no-sync to yolk watch
+- don't canonicalize templates when running yolk git push
+- support globs in templates-declaration
+- [**breaking**] Rename yolk.lua to yolk.luau
+
+### Other
+
+- Add link to docs to readme
+- Update cargo dist, fix clippy warnings
+- Update dependencies
+- Fix autodocs being local path dependency
+- Add test for default rhai file
+- Fix is_deployed() not working
+- Add TODO comment
+- Cleanup
+- Load yolk.rhai as module
+- Generate documentation for rhai API via rhai-autodocs
+- Add `yolk docs` command to generate documentation
+- Fix clippy warnings
+- Fix systeminfo getters
+- Fix watch not properly reading templates
+- Move back to rhai
+- move build-setup.yaml out of workflows dir
+- Various cleanups
+- Start work on declarative egg deployment config
+- Move back to global-artifacts-jobs for man
+
 ## [0.0.11](https://github.com/elkowar/yolk/compare/v0.0.10...v0.0.11) - 2024-12-13
 
 ### Added
