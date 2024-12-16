@@ -14,7 +14,7 @@ pub fn generate_docs(yolk: Yolk) -> miette::Result<HashMap<String, String>> {
     let docs = rhai_autodocs::export::options()
         .include_standard_packages(false)
         .format_sections_with(rhai_autodocs::export::SectionFormat::Rust)
-        .export(&mut eval_ctx.engine_mut())
+        .export(eval_ctx.engine_mut())
         .into_diagnostic()?;
 
     let mut docs = render_docs(&docs);
@@ -36,7 +36,7 @@ pub fn generate_docs(yolk: Yolk) -> miette::Result<HashMap<String, String>> {
     let mut stdlib_docs = rhai_autodocs::export::options()
         .include_standard_packages(true)
         .format_sections_with(rhai_autodocs::export::SectionFormat::Rust)
-        .export(&mut empty_engine)
+        .export(&empty_engine)
         .into_diagnostic()?;
 
     stdlib_docs.items.retain(|x| match x {

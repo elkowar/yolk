@@ -16,7 +16,7 @@ pub struct Document<'a> {
     source_name: Option<String>,
 }
 
-impl<'a> Default for Document<'a> {
+impl Default for Document<'_> {
     fn default() -> Self {
         Self {
             comment_style: CommentStyle::Prefix("#".to_string()),

@@ -285,7 +285,7 @@ fn run_command(args: Args) -> Result<()> {
 
                     let mut on_file_updated = |path: &Path| {
                         let result = if no_sync {
-                            let Ok(content) = fs_err::read_to_string(&path) else {
+                            let Ok(content) = fs_err::read_to_string(path) else {
                                 return;
                             };
                             let path = path.to_string_lossy();
@@ -314,10 +314,8 @@ fn run_command(args: Args) -> Result<()> {
                                     for file in files_to_watch.iter() {
                                         on_file_updated(file);
                                     }
-                                } else {
-                                    if let Err(e) = yolk.sync_to_mode(mode) {
-                                        eprintln!("Error: {e:?}");
-                                    }
+                                } else if let Err(e) = yolk.sync_to_mode(mode) {
+                                    eprintln!("Error: {e:?}");
                                 }
                             } else {
                                 for path in changed {
@@ -349,8 +347,7 @@ fn run_command(args: Args) -> Result<()> {
         Command::Docs { dir } => {
             let docs = doc_generator::generate_docs(yolk)?;
             for (name, docs) in docs {
-                fs_err::write(PathBuf::from(dir.join(format!("{name}.md"))), docs)
-                    .into_diagnostic()?;
+                fs_err::write(dir.join(format!("{name}.md")), docs).into_diagnostic()?;
             }
         }
     }

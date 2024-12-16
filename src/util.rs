@@ -69,7 +69,7 @@ impl<T: std::fmt::Debug + std::fmt::Display> From<T> for TestError {
 
 #[cached(key = "String", convert = r#"{s.to_string()}"#, result)]
 pub fn create_regex(s: &str) -> miette::Result<Regex> {
-    Ok(Regex::new(s).into_diagnostic()?)
+    Regex::new(s).into_diagnostic()
 }
 
 #[cfg(test)]

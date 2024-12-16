@@ -273,11 +273,11 @@ impl Iterator for TraverseDeployment {
     fn next(&mut self) -> Option<miette::Result<Result<PathBuf, PathBuf>>> {
         let (in_egg, link) = self.stack.pop()?;
         if link.is_symlink() {
-            return match (in_egg.canonical(), link.canonical()) {
+            match (in_egg.canonical(), link.canonical()) {
                 (Ok(in_egg), Ok(link)) if in_egg == link => Some(Ok(Ok(link))),
                 (Ok(in_egg), Ok(_)) => Some(Ok(Err(in_egg))),
                 (Err(e), _) | (_, Err(e)) => Some(Err(e)),
-            };
+            }
         } else if link.is_dir() && in_egg.is_dir() {
             for in_egg_entry in fs_err::read_dir(&in_egg).ok()? {
                 let in_egg_entry = match in_egg_entry {
@@ -351,7 +351,7 @@ mod test {
         let egg = Egg::open(
             home.to_path_buf(),
             test_egg_dir.to_path_buf(),
-            EggConfig::new(".", &home.child("target")),
+            EggConfig::new(".", home.child("target")),
         )?;
         assert!(!(egg.is_deployed()?));
         yolk.sync_egg_deployment(&egg)?;

@@ -46,7 +46,7 @@ impl Yolk {
                 .targets_expanded(self.yolk_paths.home_path(), egg.path())?;
             let mut did_fail = false;
             for (in_egg, deployed) in &mappings {
-                if let Err(e) = symlink_recursive(&in_egg, &deployed) {
+                if let Err(e) = symlink_recursive(in_egg, &deployed) {
                     did_fail = true;
                     tracing::warn!(
                         "Warning: Failed to deploy {}: {e:?}",
@@ -199,7 +199,7 @@ impl Yolk {
     pub fn sync_template_file(&self, eval_ctx: &mut EvalCtx, path: impl AsRef<Path>) -> Result<()> {
         let path = path.as_ref();
         tracing::debug!("Syncing file {}", path.to_abbrev_str());
-        let content = fs_err::read_to_string(&path).into_diagnostic()?;
+        let content = fs_err::read_to_string(path).into_diagnostic()?;
         let rendered = self
             .eval_template(eval_ctx, &path.to_string_lossy(), &content)
             .with_context(|| format!("Failed to eval template file: {}", path.to_abbrev_str()))?;
@@ -207,7 +207,7 @@ impl Yolk {
             tracing::debug!("No changes needed in {}", path.to_abbrev_str());
             return Ok(());
         }
-        fs_err::write(&path, rendered).into_diagnostic()?;
+        fs_err::write(path, rendered).into_diagnostic()?;
         tracing::info!("Synced templated file {}", path.to_abbrev_str());
         Ok(())
     }
@@ -241,7 +241,7 @@ impl Yolk {
         egg_configs
             .remove(egg_name)
             .ok_or_else(|| miette::miette!("No egg with name {egg_name}"))
-            .and_then(|config| self.yolk_paths.get_egg(&egg_name, config))
+            .and_then(|config| self.yolk_paths.get_egg(egg_name, config))
     }
 }
 
@@ -292,7 +292,7 @@ fn symlink_recursive(actual_path: impl AsRef<Path>, link_path: &impl AsRef<Path>
             );
         }
     } else {
-        util::create_symlink(&actual_path, &link_path)?;
+        util::create_symlink(&actual_path, link_path)?;
         tracing::info!(
             "created symlink {} -> {}",
             link_path.to_abbrev_str(),

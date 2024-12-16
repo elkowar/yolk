@@ -61,7 +61,7 @@ impl EvalCtx {
 
     pub fn load_as_global_module(&mut self, content: &str) -> Result<(), RhaiError> {
         let ast = self.compile(content)?;
-        let module = Module::eval_ast_as_new(self.scope.clone(), &ast, &mut self.engine)
+        let module = Module::eval_ast_as_new(self.scope.clone(), &ast, &self.engine)
             .map_err(|e| RhaiError::from_rhai(content, *e))?;
         let module = Arc::new(module);
         self.engine.register_global_module(module.clone());
