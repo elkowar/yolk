@@ -3,14 +3,19 @@
 **Remember: Yolk is currently in very early development. Expect breakages, lost files, and other issues.
 Always have a good backup of your files before using Yolk in this stage. You have been warned.**
 
-Yolk uses an approach to dotfile management very similar to [GNU Stow](https://www.gnu.org/software/stow/):
-Your dotfiles are stored in a separate directory (typically `~/.config/yolk/eggs/<egg-name>/<path_to_your_configs>`),
-and are then symlinked into their original location.
+## How dotfiles are stored
+
+Yolk manages your dotfiles by storing them in a separate directory, typically inside `~/.config/yolk`.
+This allows you to keep your dotfiles in version control easily, and lets you manage your configuration from one central location.
 
 Yolk groups dotfiles into so-called "eggs", which are packages of configuration,
 typically for one single application (although you can group them however you want, or even just have one egg for all your configuration files).
 
-Inside an egg directory, yolk mirrors the directory structure of your home directory, to ensure that it knows where to place your files.
+When an egg is "deployed", Yolk creates symlinks in the target location pointing towards the egg directory.
+This way, the configured appliactions will see the configuration files as they expect to see them.
+
+To define where a set of configuration files should be deployed to, you declare each of your eggs in your [main yolk configuration file](./yolk_rhai.md).
+This allows you, among other things, to define a different target directory per system.
 
 ## Initial setup
 
