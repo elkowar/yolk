@@ -234,6 +234,7 @@ impl Yolk {
             .collect()
     }
 
+    /// Run the yolk.rhai script, load the egg configs and return the requested egg.
     pub fn get_egg(&self, egg_name: &str) -> Result<Egg> {
         let mut eval_ctx = self.prepare_eval_ctx_for_templates(EvalMode::Local)?;
         let mut egg_configs = self.load_egg_configs(&mut eval_ctx)?;

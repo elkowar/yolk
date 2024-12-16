@@ -10,7 +10,7 @@ const DEFAULT_YOLK_RHAI: &str = indoc::indoc! {r#"
         cool_setting: if SYSTEM.hostname == "foo" { 10 } else { 25 }
     };
     export let eggs = #{
-        foo: #{ targets: "~/.config/your-appliaction", enabled = false, templates = [] }
+        foo: #{ targets: "~/.config/your-application", enabled: false, templates: [] }
     };
 "#};
 
@@ -298,18 +298,20 @@ impl Iterator for TraverseDeployment {
 mod test {
     use crate::{
         util::{setup_and_init_test_yolk, TestResult},
-        yolk_paths::Egg,
+        yolk_paths::{Egg, DEFAULT_YOLK_RHAI},
     };
     use assert_fs::{
         assert::PathAssert,
         prelude::{FileWriteStr, PathChild, PathCreateDir},
+        TempDir,
     };
+    use miette::IntoDiagnostic;
     use predicates::{path::exists, prelude::PredicateBooleanExt};
     use test_log::test;
 
     use crate::eggs_config::EggConfig;
 
-    use super::YolkPaths;
+    use super::{YolkPaths, DEFAULT_GITIGNORE};
 
     #[test]
     pub fn test_setup() {
@@ -319,7 +321,8 @@ mod test {
         yolk_paths.create().unwrap();
         assert!(yolk_paths.check().is_ok());
         root.child("yolk/eggs").assert(exists());
-        root.child("yolk/yolk.rhai").assert(exists());
+        root.child("yolk/yolk.rhai").assert(DEFAULT_YOLK_RHAI);
+        root.child("yolk/.gitignore").assert(DEFAULT_GITIGNORE);
     }
 
     #[test]
@@ -398,27 +401,13 @@ mod test {
         Ok(())
     }
 
-    // #[test]
-    // pub fn test_get_templated_files() -> TestResult {
-    //     let root = assert_fs::TempDir::new().unwrap();
-    //     let yolk_paths = YolkPaths::new(root.child("yolk").to_path_buf(), root.to_path_buf());
-    //     yolk_paths.create()?;
-    //     todo!("Write test");
-    //     let yolk = Yolk::new(yolk_paths);
-    //     root.child("foo/file").write_str("foo")?;
-    //     // yolk.add_to_egg("foo", root.child("foo"))?;
-    //     // yolk.add_to_templated_files(&[root.child("foo/file")])?;
-    //     let egg = yolk.paths().get_egg("foo")?;
-    //     assert_eq!(
-    //         vec![root.child("foo/file").to_path_buf().canonical()?],
-    //         egg.template_paths()?.into_iter().collect::<Vec<_>>()
-    //     );
-    //     fs_err::remove_file(root.child("foo/file"))?;
-    //     assert_eq!(
-    //         Vec::<PathBuf>::new(),
-    //         egg.template_paths()?.into_iter().collect::<Vec<_>>()
-    //     );
-
-    //     Ok(())
-    // }
+    #[test]
+    pub fn test_default_script() -> TestResult {
+        let root = TempDir::new().into_diagnostic()?;
+        let yolk_paths = YolkPaths::new(root.child("yolk").to_path_buf(), root.to_path_buf());
+        yolk_paths.create().unwrap();
+        let yolk = crate::yolk::Yolk::new(yolk_paths);
+        _ = yolk.prepare_eval_ctx_for_templates(crate::yolk::EvalMode::Local)?;
+        Ok(())
+    }
 }

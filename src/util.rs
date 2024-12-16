@@ -81,10 +81,8 @@ pub fn setup_and_init_test_yolk() -> miette::Result<(
     use assert_fs::prelude::PathChild as _;
 
     let home = assert_fs::TempDir::new().into_diagnostic()?;
-    let yolk = crate::yolk::Yolk::new(crate::yolk_paths::YolkPaths::new(
-        home.join("yolk"),
-        home.to_path_buf(),
-    ));
+    let paths = crate::yolk_paths::YolkPaths::new(home.join("yolk"), home.to_path_buf());
+    let yolk = crate::yolk::Yolk::new(paths);
     std::env::set_var("HOME", home.to_string_lossy().to_string());
     let eggs = home.child("yolk/eggs");
     yolk.init_yolk()?;
