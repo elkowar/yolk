@@ -66,7 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - rename mktmpl to make-template
 - show proper errors for yolk eval
-- show source in errors in yolk.lua
+- show source in errors in yolk.rhai
 - parser not preserving newline after conditional end tag
 
 ### Other

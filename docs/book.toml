@@ -8,3 +8,4 @@ title = "Yolk"
 theme = "theme"
 default-theme = "dark"
 preferred-dark-theme = "theme"
+additional-js = ["./theme/tabs.js"]

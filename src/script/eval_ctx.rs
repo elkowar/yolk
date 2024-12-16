@@ -1,21 +1,26 @@
-use mlua::ExternalResult as _;
-use mlua::FromLua;
-use mlua::FromLuaMulti;
-use mlua::IntoLua;
-use mlua::IntoLuaMulti;
-use mlua::Lua;
-use mlua::MaybeSend;
-use mlua::Value;
+use std::sync::Arc;
+
+use miette::Context;
+
+use miette::Result;
+use rhai::Dynamic;
+use rhai::Engine;
+use rhai::Module;
+use rhai::RhaiNativeFunc;
+use rhai::Scope;
+use rhai::Variant;
 
 use crate::yolk::EvalMode;
 
-use super::lua_error::LuaError;
+use super::rhai_error::RhaiError;
 use super::stdlib;
 
 pub const YOLK_TEXT_NAME: &str = "YOLK_TEXT";
 
 pub struct EvalCtx {
-    lua: Lua,
+    engine: Engine,
+    scope: Scope<'static>,
+    yolk_file_module: Option<Arc<Module>>,
 }
 
 impl Default for EvalCtx {
@@ -26,114 +31,118 @@ impl Default for EvalCtx {
 
 impl EvalCtx {
     pub fn new_empty() -> Self {
-        Self { lua: Lua::new() }
+        let mut engine = Engine::new();
+        engine.set_optimization_level(rhai::OptimizationLevel::Simple);
+
+        engine.build_type::<super::sysinfo::SystemInfo>();
+        engine.build_type::<super::sysinfo::SystemInfoPaths>();
+        Self {
+            engine,
+            scope: Scope::new(),
+            yolk_file_module: None,
+        }
     }
 
-    pub fn new_in_mode(mode: EvalMode) -> miette::Result<Self> {
-        let ctx = Self::new_empty();
-        stdlib::setup_tag_functions(&ctx)?;
-        stdlib::setup_stdlib(mode, &ctx)?;
+    pub fn new_in_mode(mode: EvalMode) -> Result<Self> {
+        let mut ctx = Self::new_empty();
+        ctx.engine
+            .register_global_module(Arc::new(stdlib::global_stuff()));
+        ctx.engine
+            .register_static_module("utils", Arc::new(stdlib::utils_module()));
+        ctx.engine
+            .register_static_module("io", Arc::new(stdlib::io_module(mode)));
+        let template_module = Arc::new(stdlib::tag_module());
+        ctx.engine.register_global_module(template_module.clone());
+        ctx.engine
+            .register_static_module("template", template_module);
+
         Ok(ctx)
     }
 
-    /// Like [`Self::exec_lua`], but with sandboxing enabled[^sandbox].
-    ///
-    /// [^sandbox]: See: [`Lua::sandbox`]
-    pub fn eval_template_lua<T: FromLuaMulti>(
-        &self,
-        name: &str,
-        content: &str,
-    ) -> Result<T, LuaError> {
-        self.lua().sandbox(true)?;
-        self.lua()
-            .load(content)
-            .set_name(name)
-            .eval()
-            .map_err(|e| LuaError::from_mlua_with_source(content, e))
-    }
-
-    /// Evaluate a lua expression.
-    pub fn eval_lua<T: FromLuaMulti>(&self, name: &str, content: &str) -> Result<T, LuaError> {
-        self.lua().sandbox(false)?;
-        self.lua()
-            .load(content)
-            .set_name(name)
-            .eval()
-            .map_err(|e| LuaError::from_mlua_with_source(content, e))
-    }
-
-    /// Execute a bit of lua code.
-    pub fn exec_lua(&self, name: &str, content: &str) -> Result<(), LuaError> {
-        self.lua().sandbox(false)?;
-        self.lua()
-            .load(content)
-            .set_name(name)
-            .exec()
-            .map_err(|e| LuaError::from_mlua_with_source(content, e))
-    }
-
-    pub fn eval_text_transformation(&self, text: &str, expr: &str) -> Result<String, LuaError> {
-        let old_text = self.get_global::<Value>(YOLK_TEXT_NAME)?;
-        self.set_global(YOLK_TEXT_NAME, text)?;
-        let result = self.eval_template_lua("template tag", expr)?;
-        self.set_global(YOLK_TEXT_NAME, old_text)?;
-        Ok(result)
-    }
-
-    pub fn set_global<T: IntoLua>(&self, name: impl IntoLua, value: T) -> Result<(), LuaError> {
-        Ok(self.lua.globals().set(name, value)?)
-    }
-    pub fn get_global<T: FromLua>(&self, name: impl IntoLua) -> Result<T, LuaError> {
-        Ok(self.lua.globals().get::<T>(name)?)
-    }
-
-    pub fn register_fn<F, A, R>(&self, name: &str, func: F) -> Result<(), LuaError>
-    where
-        F: Fn(&Lua, A) -> Result<R, LuaError> + MaybeSend + 'static + Send + Sync,
-        A: FromLuaMulti,
-        R: IntoLuaMulti,
-    {
-        self.set_global(
-            name,
-            self.lua
-                .create_function(move |lua, x| func(lua, x).into_lua_err())?,
-        )
-    }
-
-    pub fn lua(&self) -> &Lua {
-        &self.lua
-    }
-    pub fn lua_mut(&mut self) -> &mut Lua {
-        &mut self.lua
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use std::collections::HashSet;
-
-    use mlua::Value;
-    use testresult::TestResult;
-
-    use super::{EvalCtx, EvalMode};
-
-    #[test]
-    pub fn test_globals_match_between_local_and_canonical() -> TestResult {
-        let local = EvalCtx::new_in_mode(EvalMode::Local).unwrap();
-        let canonical = EvalCtx::new_in_mode(EvalMode::Canonical).unwrap();
-        let canonical_entries: HashSet<_> = canonical
-            .lua
-            .globals()
-            .pairs::<Value, Value>()
-            .map(|x| x.unwrap().0.to_string().unwrap())
-            .collect();
-        let local_entries: HashSet<_> = local
-            .lua
-            .globals()
-            .pairs::<Value, Value>()
-            .map(|x| x.unwrap().0.to_string().unwrap())
-            .collect();
-        assert_eq!(local_entries, canonical_entries);
+    pub fn load_as_global_module(&mut self, content: &str) -> Result<(), RhaiError> {
+        let ast = self.compile(content)?;
+        let module = Module::eval_ast_as_new(self.scope.clone(), &ast, &self.engine)
+            .map_err(|e| RhaiError::from_rhai(content, *e))?;
+        let module = Arc::new(module);
+        self.engine.register_global_module(module.clone());
+        self.yolk_file_module = Some(module.clone());
         Ok(())
+    }
+
+    pub fn eval_rhai<T: Variant + Clone>(&mut self, content: &str) -> Result<T, RhaiError> {
+        let ast = self.compile(content)?;
+        self.engine
+            .eval_ast_with_scope(&mut self.scope, &ast)
+            .map_err(|e| RhaiError::from_rhai(content, *e))
+    }
+
+    pub fn exec_rhai(&mut self, content: &str) -> Result<(), RhaiError> {
+        let ast = self.compile(content)?;
+        self.engine
+            .run_ast_with_scope(&mut self.scope, &ast)
+            .map_err(|e| RhaiError::from_rhai(content, *e))
+    }
+
+    pub fn eval_text_transformation(
+        &mut self,
+        text: &str,
+        expr: &str,
+    ) -> Result<String, RhaiError> {
+        let scope_before = self.scope.len();
+        let text = text.to_string();
+        self.engine
+            .register_fn("get_yolk_text", move || text.clone());
+        let result = self.eval_rhai::<String>(expr)?;
+        self.scope.rewind(scope_before);
+        Ok(result.to_string())
+    }
+
+    pub fn set_global<T: Variant + Clone>(&mut self, name: &str, value: T) {
+        self.scope.set_or_push(name, value);
+    }
+
+    pub fn get_global(&self, name: &str) -> Result<Dynamic> {
+        self.scope
+            .get_value(name)
+            .with_context(|| format!("variable {} not found", name))
+    }
+
+    pub fn engine_mut(&mut self) -> &mut Engine {
+        &mut self.engine
+    }
+    pub fn scope_mut(&mut self) -> &mut Scope<'static> {
+        &mut self.scope
+    }
+
+    pub fn yolk_file_module(&self) -> Option<&Arc<Module>> {
+        self.yolk_file_module.as_ref()
+    }
+
+    pub fn call_fn<T: Variant + Clone>(&mut self, ast: &rhai::AST) -> Result<T, RhaiError> {
+        self.engine
+            .call_fn(&mut self.scope, ast, "eggs", ())
+            .map_err(|e| RhaiError::from_rhai(ast.source().unwrap(), *e))
+    }
+
+    #[inline]
+    pub fn register_fn<
+        A: 'static,
+        const N: usize,
+        const X: bool,
+        R: Variant + Clone,
+        const F: bool,
+    >(
+        &mut self,
+        name: impl AsRef<str> + Into<rhai::Identifier>,
+        func: impl RhaiNativeFunc<A, N, X, R, F> + Send + Sync + 'static,
+    ) -> &mut Self {
+        rhai::FuncRegistration::new(name.into()).register_into_engine(self.engine_mut(), func);
+        self
+    }
+
+    fn compile(&mut self, text: &str) -> Result<rhai::AST, RhaiError> {
+        self.engine
+            .compile(text)
+            .map_err(|e| RhaiError::from_rhai_compile(text, e))
     }
 }

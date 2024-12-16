@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use crate::eval_ctx::EvalCtx;
+use crate::script::eval_ctx::EvalCtx;
 use miette::{IntoDiagnostic, Result};
 
 use super::{
@@ -94,8 +94,9 @@ impl<'a> Element<'a> {
             Element::Inline { line, expr, is_if } => match is_if {
                 true => {
                     let eval_result = eval_ctx
-                        .eval_template_lua::<bool>("template", expr.as_str())
-                        .map_err(|e| TemplateError::from_lua_error(e, expr.range()))?;
+                        .eval_rhai::<bool>(expr.as_str())
+                        .map_err(|e| TemplateError::from_rhai(e, expr.range()))?;
+                    // .map_err(|e| TemplateError::from_rhai(e, expr.range()))?;
                     Ok(render_ctx.string_toggled(line.full_line.as_str(), eval_result))
                 }
                 false => Ok(format!(
@@ -117,8 +118,8 @@ impl<'a> Element<'a> {
                     &render_ctx.string_toggled(
                         next_line.as_str(),
                         eval_ctx
-                            .eval_template_lua::<bool>("template", expr.as_str())
-                            .map_err(|e| TemplateError::from_lua_error(e, expr.range()))?
+                            .eval_rhai::<bool>(expr.as_str())
+                            .map_err(|e| TemplateError::from_rhai(e, expr.range()))?
                     )
                 )),
                 false => Ok(format!(
@@ -149,8 +150,8 @@ impl<'a> Element<'a> {
                     // If there isn't, we're on the else block, which should be true iff we haven't had a true block yet.
                     let expr_true = !had_true
                         && eval_ctx
-                            .eval_template_lua::<bool>("template", block.expr.as_str())
-                            .map_err(|e| TemplateError::from_lua_error(e, block.expr.range()))?;
+                            .eval_rhai::<bool>(block.expr.as_str())
+                            .map_err(|e| TemplateError::from_rhai(e, block.expr.range()))?;
                     had_true = had_true || expr_true;
 
                     let rendered_body = render_elements(render_ctx, eval_ctx, &block.body)?;
@@ -197,10 +198,10 @@ fn run_transformation_expr(
 ) -> Result<String, TemplateError> {
     let result = eval_ctx
         .eval_text_transformation(text, expr.as_str())
-        .map_err(|e| TemplateError::from_lua_error(e, expr.range()))?;
+        .map_err(|e| TemplateError::from_rhai(e, expr.range()))?;
     let second_pass = eval_ctx
         .eval_text_transformation(&result, expr.as_str())
-        .map_err(|e| TemplateError::from_lua_error(e, expr.range()))?;
+        .map_err(|e| TemplateError::from_rhai(e, expr.range()))?;
     if result != second_pass {
         println!(
             "Warning: Refusing to apply transformation that is not idempodent: `{}`",
@@ -209,5 +210,94 @@ fn run_transformation_expr(
         Ok(text.to_string())
     } else {
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::util::TestResult;
+
+    use crate::script::eval_ctx::EvalCtx;
+    use crate::templating::document::Document;
+    use crate::yolk::EvalMode;
+
+    #[test]
+    pub fn test_render_inline() -> TestResult {
+        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
+        let doc = Document::parse_string("foo /* {< get_yolk_text().to_upper() >} */\n")?;
+        assert_eq!(
+            "FOO /* {< get_yolk_text().to_upper() >} */\n",
+            doc.render(&mut eval_ctx)?
+        );
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_render_next_line() -> TestResult {
+        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
+        let doc = Document::parse_string("/* {# get_yolk_text().to_upper() #} */\nfoo\n")?;
+        assert_eq!(
+            "/* {# get_yolk_text().to_upper() #} */\nFOO\n",
+            doc.render(&mut eval_ctx)?
+        );
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_multiline_conditional() -> TestResult {
+        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
+        let input_str = indoc::indoc! {r#"
+            /* {% if false %} */
+            foo
+            /* {% elif true %} */
+            bar
+            /* {% else %} */
+            bar
+            /* {% end %} */
+        "#};
+        let doc = Document::parse_string(input_str)?;
+        assert_eq!(
+            indoc::indoc! {r#"
+                /* {% if false %} */
+                /*<yolk> foo*/
+                /* {% elif true %} */
+                bar
+                /* {% else %} */
+                /*<yolk> bar*/
+                /* {% end %} */
+            "#},
+            doc.render(&mut eval_ctx)?
+        );
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_render_replace() -> TestResult {
+        let doc = Document::parse_string(indoc::indoc! {"
+            {# replace_re(`'.*'`, `'new'`) #}
+            foo: 'original'
+        "})?;
+        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
+        assert_eq!(
+            indoc::indoc! {"
+                {# replace_re(`'.*'`, `'new'`) #}
+                foo: 'new'
+            "},
+            doc.render(&mut eval_ctx)?
+        );
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_render_replace_refuse_non_idempodent() -> TestResult {
+        let element =
+            Document::parse_string("{# replace_re(`'.*'`, `a'a'`) #}\nfoo: 'original'\n")?;
+        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
+        assert!(
+            // "{# replace_re(`'.*'`, `a'a'`) #}\nfoo: 'original'\n",
+            element.render(&mut eval_ctx).is_err(),
+            "template executed non-idempodent replace_re expression"
+        );
+        Ok(())
     }
 }

@@ -1,13 +1,13 @@
-use std::path::Path;
-
+use expanduser::expanduser;
 use fs_err::PathExt as _;
 use miette::{Context, IntoDiagnostic, NamedSource, Result};
-use mlua::Value;
+use std::{collections::HashMap, path::Path};
 
 use crate::{
-    eval_ctx::EvalCtx,
-    script::sysinfo::SystemInfo,
-    templating::{document::Document, template_error::TemplateError},
+    eggs_config::EggConfig,
+    script::eval_ctx::EvalCtx,
+    script::{rhai_error::RhaiError, sysinfo::SystemInfo},
+    templating::document::Document,
     util::{self, PathExt as _},
     yolk_paths::{Egg, YolkPaths},
 };
@@ -30,108 +30,122 @@ impl Yolk {
         &self.yolk_paths
     }
 
-    /// Recurse through a given `path`, assumed to be within the given eggs dir,
-    /// and `use` that path.
-    /// This means:
-    /// - If it is a file, symlink.
-    /// - If it is a directory that does not exist in the target location, symlink.
-    /// - If it is a directory that already exists in the target location, recurse into it.
-    fn deploy_recursively(&self, egg_name: &str, path: &impl AsRef<Path>) -> Result<()> {
-        let path = path.as_ref();
-        let path = path.canonical()?;
-        tracing::debug!("use_recursively({}, {})", egg_name, path.display());
-        let path_relative = path
-            .strip_prefix(self.yolk_paths.egg_path(egg_name))
-            .into_diagnostic()?;
-
-        // Ensure that we skip the yolk_templates file, but only when it's a direct child of the egg dir.
-        if path.file_name() == Some("yolk_templates".as_ref())
-            && path.parent().unwrap() == self.yolk_paths.egg_path(egg_name)
-        {
-            return Ok(());
-        }
-
-        let in_home = self.yolk_paths.home_path().join(path_relative);
-        if in_home.exists() {
-            if in_home.is_symlink() && in_home.fs_err_read_link().into_diagnostic()? == path {
-                return Ok(());
-            } else if in_home.is_dir() && path.is_dir() {
-                for entry in path.fs_err_read_dir().into_diagnostic()? {
-                    let entry = entry.into_diagnostic()?;
-                    self.deploy_recursively(egg_name, &entry.path())?;
+    /// Deploy or un-deploy a given [`Egg`]
+    pub fn sync_egg_deployment(&self, egg: &Egg) -> Result<()> {
+        let deployed = egg.is_deployed()?;
+        tracing::trace!(
+            egg.name = egg.name(),
+            egg.deployed = deployed,
+            egg.enabled = egg.config().enabled,
+            "Syncing egg deployment"
+        );
+        if egg.config().enabled && !deployed {
+            tracing::info!("Deploying egg {}", egg.name());
+            let mappings = egg
+                .config()
+                .targets_expanded(self.yolk_paths.home_path(), egg.path())?;
+            let mut did_fail = false;
+            for (in_egg, deployed) in &mappings {
+                if let Err(e) = symlink_recursive(in_egg, &deployed) {
+                    did_fail = true;
+                    tracing::warn!(
+                        "Warning: Failed to deploy {}: {e:?}",
+                        in_egg.to_abbrev_str()
+                    );
                 }
-            } else if !in_home.is_symlink() {
-                miette::bail!("File {} already exists", in_home.display());
-            } else if in_home.is_dir() || path.is_dir() {
-                miette::bail!(
-                    "Conflicting file or directory {} with {}",
-                    path.display(),
-                    in_home.display()
-                );
             }
-        } else {
-            util::create_symlink(&path, &in_home)?;
-            println!("Symlinked {} to {}", path.display(), in_home.display());
-        }
+            debug_assert!(
+                did_fail || egg.is_deployed()?,
+                "Egg::is_deployed should return true after deploying"
+            );
+        } else if !egg.config().enabled && deployed {
+            tracing::debug!("Removing egg {}", egg.name());
+            let mut did_fail = false;
+            let mappings = egg
+                .config()
+                .targets_expanded(self.yolk_paths.home_path(), egg.path())?;
+            for (in_egg, deployed) in &mappings {
+                let source = egg.path().canonical()?.join(in_egg);
+                let target = expanduser(deployed.to_string_lossy()).into_diagnostic()?;
+                let target = if target.is_absolute() {
+                    target
+                } else {
+                    self.paths().home_path().join(target)
+                };
 
+                if let Err(e) = remove_symlink_recursive(&source, &target) {
+                    did_fail = true;
+                    tracing::warn!(
+                        "Warning: Failed to remove deployment of {}: {e:?}",
+                        source.to_abbrev_str()
+                    );
+                }
+            }
+            debug_assert!(
+                did_fail || !egg.is_deployed()?,
+                "Egg::is_deployed should return false after undeploying"
+            );
+        }
         Ok(())
     }
 
-    pub fn deploy_egg(&self, egg_name: &str) -> Result<()> {
-        tracing::info!("Deploying egg {egg_name}");
-        let egg = self.yolk_paths.get_egg(egg_name)?;
-        for entry in egg.entries()? {
-            self.deploy_recursively(egg_name, &entry.path())?;
-        }
-        self.sync_to_mode(EvalMode::Local)?;
-        Ok(())
+    /// fetch the `eggs` variable from a given EvalCtx.
+    pub fn load_egg_configs(&self, eval_ctx: &mut EvalCtx) -> Result<HashMap<String, EggConfig>> {
+        let eggs_map = eval_ctx
+            .yolk_file_module()
+            .ok_or_else(|| {
+                miette::miette!(
+                    "Tried to load egg configs before loading yolk file. This is a bug."
+                )
+            })?
+            .get_var_value::<rhai::Map>("eggs")
+            .ok_or_else(|| miette::miette!("Could not find an `eggs` variable in scope"))?;
+        Ok(eggs_map
+            .into_iter()
+            .map(|(x, v)| Ok((x.into(), EggConfig::from_dynamic(v)?)))
+            .collect::<Result<HashMap<_, _>, RhaiError>>()?)
     }
 
-    /// Add a file or directory to an egg, creating the egg if it does not exist.
-    pub fn add_to_egg(&self, egg_name: &str, path: impl AsRef<Path>) -> Result<()> {
-        let path = path.as_ref();
-        if !path.exists() {
-            miette::bail!(
-                "Failed to add {} into {egg_name}, as the file does not exist",
-                path.display()
-            )
-        }
-        let original_path = path.canonical()?;
-        let relative_to_home = self.make_path_relative_to_home(&original_path)?;
-
-        let egg = self.yolk_paths.get_or_create_egg(egg_name)?;
-        let new_local_path = egg.path().join(relative_to_home);
-        fs_err::create_dir_all(new_local_path.parent().unwrap()).into_diagnostic()?;
-        fs_err::rename(&original_path, &new_local_path).into_diagnostic()?;
-        // TODO: This can be optimized a lot, as we assume we only need to re-use that one entry we just added.
-        // However, we can't just naively create a symlink, as we don't know on that dir level to start symlinking.
-        self.deploy_egg(egg_name)?;
-        Ok(())
-    }
-
+    /// First, sync the deployment of all eggs to the local system.
+    /// Then, update any templated files in the eggs to the given mode.
     pub fn sync_to_mode(&self, mode: EvalMode) -> Result<()> {
-        // TODO: Instead of changing the files in place, evaluate creating a copy of the file structure using hard-links where possible,
-        // and just copying the templated files. That way, we would avoid having to modify the templated files in place,
-        // while still minimizing unnecessary writes or disk usage.
         let mut eval_ctx = self
             .prepare_eval_ctx_for_templates(mode)
             .context("Failed to prepare evaluation context")?;
-        for egg in self.list_eggs()? {
-            let egg = egg?;
-            let tmpl_paths = egg.template_paths()?;
-            for templated_file in tmpl_paths {
-                if templated_file.is_file() {
-                    if let Err(err) = self.sync_template_file(&mut eval_ctx, &templated_file) {
-                        eprintln!(
-                            "Warning: Failed to sync templated file {}: {err:?}",
-                            templated_file.display(),
+
+        let egg_configs = self.load_egg_configs(&mut eval_ctx)?;
+
+        for (name, egg_config) in egg_configs.into_iter() {
+            let egg = match self.yolk_paths.get_egg(&name, egg_config) {
+                Ok(egg) => egg,
+                Err(e) => {
+                    tracing::warn!("Warning: Failed to open egg {name}: {e}");
+                    continue;
+                }
+            };
+            self.sync_egg_deployment(&egg)?;
+            let templates_expanded = match egg.config().templates_globexpanded(egg.path()) {
+                Ok(x) => x,
+                Err(err) => {
+                    tracing::warn!(
+                        "Failed to glob-expand templates for egg {}: {err:?}",
+                        egg.name()
+                    );
+                    continue;
+                }
+            };
+            for tmpl_path in templates_expanded {
+                if tmpl_path.is_file() {
+                    if let Err(err) = self.sync_template_file(&mut eval_ctx, &tmpl_path) {
+                        tracing::warn!(
+                            "Failed to sync templated file {}: {err:?}",
+                            tmpl_path.to_abbrev_str(),
                         );
                     }
-                    tracing::info!("Synced templated file {}", templated_file.display());
-                } else {
-                    println!(
-                        "Warning: {} was specified as templated file, but doesn't exist",
-                        templated_file.display()
+                } else if !tmpl_path.exists() {
+                    tracing::warn!(
+                        "{} was specified as templated file, but doesn't exist",
+                        tmpl_path.to_abbrev_str()
                     );
                 }
             }
@@ -144,37 +158,25 @@ impl Yolk {
             EvalMode::Canonical => SystemInfo::canonical(),
             EvalMode::Local => SystemInfo::generate(),
         };
-        let eval_ctx = EvalCtx::new_in_mode(mode)?;
-        let yolk_file = fs_err::read_to_string(self.yolk_paths.script_path()).into_diagnostic()?;
+        let mut eval_ctx = EvalCtx::new_in_mode(mode)?;
+        let yolk_file =
+            fs_err::read_to_string(self.yolk_paths.yolk_rhai_path()).into_diagnostic()?;
 
-        let globals = eval_ctx.lua().globals();
-        globals.set("SYSTEM", sysinfo).into_diagnostic()?;
-        globals
-            .set("LOCAL", mode == EvalMode::Local)
-            .into_diagnostic()?;
-        eval_ctx.exec_lua("yolk.lua", &yolk_file).map_err(|e| {
+        eval_ctx.set_global("SYSTEM", sysinfo);
+        eval_ctx.set_global("LOCAL", mode == EvalMode::Local);
+        eval_ctx.load_as_global_module(&yolk_file).map_err(|e| {
             miette::Report::from(e)
                 .with_source_code(
-                    NamedSource::new(self.yolk_paths.script_path().to_string_lossy(), yolk_file)
-                        .with_language("lua"),
+                    NamedSource::new(
+                        self.yolk_paths.yolk_rhai_path().to_string_lossy(),
+                        yolk_file,
+                    )
+                    .with_language("Rust"),
                 )
-                .wrap_err("Failed to execute yolk.lua")
+                .wrap_err("Failed to execute yolk.rhai")
         })?;
-        Ok(eval_ctx)
-    }
 
-    /// Evaluate a lua expression as though it was included in a template tag.
-    pub fn eval_template_lua(&self, mode: EvalMode, expr: &str) -> Result<String> {
-        let eval_ctx = self
-            .prepare_eval_ctx_for_templates(mode)
-            .context("Failed to prepare evaluation context")?;
-        tracing::debug!("Evaluating lua expression: {}", expr);
-        eval_ctx
-            .eval_template_lua::<Value>("expr", expr)
-            .map_err(|e| TemplateError::from_lua_error(e, 0..expr.len()))
-            .map_err(|e| miette::Report::from(e).with_source_code(expr.to_string()))?
-            .to_string()
-            .into_diagnostic()
+        Ok(eval_ctx)
     }
 
     /// Evaluate a templated file and return the rendered content.
@@ -195,17 +197,18 @@ impl Yolk {
 
     /// Sync a single template file in place on the filesystem.
     pub fn sync_template_file(&self, eval_ctx: &mut EvalCtx, path: impl AsRef<Path>) -> Result<()> {
-        tracing::info!("Syncing file {}", path.as_ref().display());
-        let content = fs_err::read_to_string(&path).into_diagnostic()?;
+        let path = path.as_ref();
+        tracing::debug!("Syncing file {}", path.to_abbrev_str());
+        let content = fs_err::read_to_string(path).into_diagnostic()?;
         let rendered = self
-            .eval_template(eval_ctx, &path.as_ref().to_string_lossy(), &content)
-            .with_context(|| {
-                format!("Failed to eval template file: {}", path.as_ref().display())
-            })?;
+            .eval_template(eval_ctx, &path.to_string_lossy(), &content)
+            .with_context(|| format!("Failed to eval template file: {}", path.to_abbrev_str()))?;
         if rendered == content {
+            tracing::debug!("No changes needed in {}", path.to_abbrev_str());
             return Ok(());
         }
-        fs_err::write(&path, rendered).into_diagnostic()?;
+        fs_err::write(path, rendered).into_diagnostic()?;
+        tracing::info!("Synced templated file {}", path.to_abbrev_str());
         Ok(())
     }
 
@@ -222,43 +225,109 @@ impl Yolk {
         result
     }
 
-    /// Add a set of paths into the yolk_templates file of their corresponding eggs
-    pub fn add_to_templated_files(&self, paths: &[impl AsRef<Path>]) -> Result<()> {
-        let eggs_dir = self.yolk_paths.eggs_dir_path().canonical()?;
-        for path in paths {
-            let path = path.as_ref();
-            let path = path.canonical()?;
-            let in_eggs = path
-                .strip_prefix(&eggs_dir)
-                .map_err(|_| miette::miette!("File '{}' is not inside an egg", path.display()))?;
-            let egg_name = in_eggs
-                .components()
-                .next()
-                .ok_or(miette::miette!("Empty path"))?
-                .as_os_str()
-                .to_string_lossy();
-            let egg = self.yolk_paths.get_egg(egg_name.as_ref())?;
-            egg.add_to_template_paths(paths)?;
+    pub fn list_eggs(&self) -> Result<Vec<Egg>> {
+        let mut eval_ctx = self.prepare_eval_ctx_for_templates(EvalMode::Local)?;
+        let egg_configs = self.load_egg_configs(&mut eval_ctx)?;
+        egg_configs
+            .into_iter()
+            .map(|(name, config)| self.yolk_paths.get_egg(&name, config))
+            .collect()
+    }
+
+    /// Run the yolk.rhai script, load the egg configs and return the requested egg.
+    pub fn get_egg(&self, egg_name: &str) -> Result<Egg> {
+        let mut eval_ctx = self.prepare_eval_ctx_for_templates(EvalMode::Local)?;
+        let mut egg_configs = self.load_egg_configs(&mut eval_ctx)?;
+        egg_configs
+            .remove(egg_name)
+            .ok_or_else(|| miette::miette!("No egg with name {egg_name}"))
+            .and_then(|config| self.yolk_paths.get_egg(egg_name, config))
+    }
+}
+
+/// Set up a symlink from the given `link_path` to the given `actual_path`, recursively.
+///
+/// Requires both paths to be absolute.
+///
+/// This means:
+/// - If `actual_path` is a file, symlink.
+/// - If `actual_path` is a directory that does not exist in `link_path`, symlink it.
+/// - If `actual_path` is a directory that already exists in `link_path`, recurse into it and `symlink_recursive` `actual_path`s children.
+fn symlink_recursive(actual_path: impl AsRef<Path>, link_path: &impl AsRef<Path>) -> Result<()> {
+    let actual_path = actual_path.as_ref();
+    let link_path = link_path.as_ref();
+    assert!(
+        actual_path.is_absolute(),
+        "source path must be absolute, but was {}",
+        link_path.display()
+    );
+    assert!(
+        link_path.is_absolute(),
+        "target path must be absolute, but was {}",
+        link_path.display()
+    );
+    tracing::debug!(
+        "symlink_recursive({}, {})",
+        actual_path.to_abbrev_str(),
+        link_path.to_abbrev_str()
+    );
+    let actual_path = actual_path.canonical()?;
+
+    if link_path.exists() {
+        if link_path.is_symlink() && link_path.fs_err_read_link().into_diagnostic()? == actual_path
+        {
+            return Ok(());
+        } else if link_path.is_dir() && actual_path.is_dir() {
+            for entry in actual_path.fs_err_read_dir().into_diagnostic()? {
+                let entry = entry.into_diagnostic()?;
+                symlink_recursive(entry.path(), &link_path.join(entry.file_name()))?;
+            }
+        } else if !link_path.is_symlink() {
+            miette::bail!("File {} already exists", link_path.to_abbrev_str());
+        } else if link_path.is_dir() || actual_path.is_dir() {
+            miette::bail!(
+                "Conflicting file or directory {} with {}",
+                actual_path.to_abbrev_str(),
+                link_path.to_abbrev_str()
+            );
         }
-        self.sync_to_mode(EvalMode::Local)?;
-        Ok(())
+    } else {
+        util::create_symlink(&actual_path, link_path)?;
+        tracing::info!(
+            "created symlink {} -> {}",
+            link_path.to_abbrev_str(),
+            actual_path.to_abbrev_str(),
+        );
     }
+    Ok(())
+}
 
-    pub fn list_eggs(&self) -> Result<impl Iterator<Item = Result<Egg>> + '_> {
-        self.yolk_paths.list_eggs()
+fn remove_symlink_recursive(
+    actual_path: impl AsRef<Path>,
+    link_path: &impl AsRef<Path>,
+) -> Result<()> {
+    let actual_path = actual_path.as_ref();
+    let link_path = link_path.as_ref();
+    if link_path.is_symlink() && link_path.canonical()? == actual_path {
+        tracing::info!(
+            "Removing symlink {} -> {}",
+            link_path.to_abbrev_str(),
+            actual_path.to_abbrev_str(),
+        );
+        fs_err::remove_file(link_path).into_diagnostic()?;
+    } else if link_path.is_dir() && actual_path.is_dir() {
+        for entry in actual_path.fs_err_read_dir().into_diagnostic()? {
+            let entry = entry.into_diagnostic()?;
+            remove_symlink_recursive(entry.path(), &link_path.join(entry.file_name()))?;
+        }
+    } else if link_path.exists() {
+        miette::bail!(
+            "Tried to remove deployment of {}, but {} doesn't link to it",
+            actual_path.to_abbrev_str(),
+            link_path.to_abbrev_str()
+        );
     }
-
-    /// Convert a path into a path relative to the home directory
-    fn make_path_relative_to_home<'a>(&self, path: &'a Path) -> Result<&'a Path> {
-        path.strip_prefix(self.yolk_paths.home_path().canonical()?)
-            .map_err(|_| {
-                miette::miette!(
-                    "Path {} is not in the home directory {}",
-                    path.display(),
-                    self.yolk_paths.home_path().display()
-                )
-            })
-    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -269,232 +338,154 @@ pub enum EvalMode {
 
 #[cfg(test)]
 mod test {
-    use std::path::Path;
 
+    use crate::{
+        util::{setup_and_init_test_yolk, TestResult},
+        yolk_paths::Egg,
+    };
     use assert_fs::{
         assert::PathAssert,
         prelude::{FileWriteStr, PathChild, PathCreateDir},
     };
-    use p::path::{exists, is_dir, is_file, is_symlink};
-    use predicates::{self as p, path::FileTypePredicate};
-    use predicates::{
-        boolean::{AndPredicate, NotPredicate},
-        prelude::PredicateBooleanExt,
-    };
-    use testresult::TestResult;
+    use p::path::{exists, is_dir, is_symlink};
+    use predicates::prelude::PredicateBooleanExt;
+    use predicates::{self as p};
+    use test_log::test;
 
-    use crate::yolk_paths::YolkPaths;
+    use crate::eggs_config::EggConfig;
 
-    use super::{EvalMode, Yolk};
+    use super::EvalMode;
 
-    fn is_direct_file(
-    ) -> AndPredicate<FileTypePredicate, NotPredicate<FileTypePredicate, Path>, Path> {
-        is_file().and(is_symlink().not())
-    }
+    // fn is_direct_file(
+    // ) -> AndPredicate<FileTypePredicate, NotPredicate<FileTypePredicate, Path>, Path> {
+    //     is_file().and(is_symlink().not())
+    // }
 
     #[test]
-    fn test_setup() -> TestResult {
-        let home = assert_fs::TempDir::new()?;
-        home.child("config/foo.toml").write_str("")?;
-        let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
-        yolk.init_yolk()?;
+    fn test_deploy_egg_config() -> TestResult {
+        let (home, yolk, eggs) = setup_and_init_test_yolk()?;
+        eggs.child("foo/foo.toml").write_str("")?;
+        eggs.child("foo/thing/thing.toml").write_str("")?;
+        yolk.sync_egg_deployment(&Egg::open(
+            home.to_path_buf(),
+            eggs.child("foo").to_path_buf(),
+            EggConfig::default()
+                .with_target("foo.toml", home.child("foo.toml"))
+                .with_target("thing", home.child("thing")),
+        )?)?;
+        home.child("foo.toml").assert(is_symlink());
+        home.child("thing").assert(is_symlink());
 
-        home.child("yolk/yolk.lua").assert(is_file());
-        home.child("yolk/eggs").assert(is_dir());
+        // Verify stow-style usage works
+        home.child(".config").create_dir_all()?;
+        eggs.child("bar/.config/thing.toml").write_str("")?;
+        yolk.sync_egg_deployment(&Egg::open(
+            home.to_path_buf(),
+            eggs.child("bar").to_path_buf(),
+            EggConfig::new(".", &home),
+        )?)?;
 
-        yolk.add_to_egg("foo", home.child("config/foo.toml"))?;
-
-        home.child("yolk/eggs/foo/config/foo.toml")
-            .assert(is_file());
-        home.child("config/foo.toml").assert(is_symlink());
-
-        fs_err::remove_file(home.child("config/foo.toml"))?;
-        fs_err::remove_dir(home.child("config"))?;
-        home.child("config").assert(exists().not());
-        yolk.deploy_egg("foo")?;
-        home.child("config").assert(is_symlink());
+        home.child(".config").assert(is_dir());
+        home.child(".config/thing.toml").assert(is_symlink());
         Ok(())
     }
 
     #[test]
-    fn test_add_multiple_eggs() -> TestResult {
-        let home = assert_fs::TempDir::new()?;
-        home.child("config/foo.toml").write_str("")?;
-        home.child("config/bar.toml").write_str("")?;
-        let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
-        yolk.init_yolk()?;
+    fn test_undeploy() -> TestResult {
+        let (home, yolk, eggs) = setup_and_init_test_yolk()?;
+        home.child(".config").create_dir_all()?;
+        eggs.child("foo/foo.toml").write_str("")?;
+        eggs.child("bar/.config/thing.toml").write_str("")?;
 
-        yolk.add_to_egg("foo", home.child("config/foo.toml"))?;
-        yolk.add_to_egg("bar", home.child("config/bar.toml"))?;
+        let mut egg = Egg::open(
+            home.to_path_buf(),
+            eggs.child("foo").to_path_buf(),
+            EggConfig::new("foo.toml", home.child("foo.toml")),
+        )?;
 
-        home.child("yolk/eggs/foo/config/foo.toml")
-            .assert(is_file());
-        home.child("yolk/eggs/bar/config/bar.toml")
-            .assert(is_file());
-        home.child("config/foo.toml").assert(is_symlink());
-        home.child("config/bar.toml").assert(is_symlink());
-        Ok(())
-    }
+        yolk.sync_egg_deployment(&egg)?;
+        home.child("foo.toml").assert(is_symlink());
 
-    #[test]
-    fn test_multiple_files_in_same_egg() -> TestResult {
-        let home = assert_fs::TempDir::new()?;
-        home.child("config/foo.toml").write_str("")?;
-        home.child("config/foo2.toml").write_str("")?;
-        let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
-        yolk.init_yolk()?;
+        egg.config_mut().enabled = false;
+        yolk.sync_egg_deployment(&egg)?;
+        home.child("foo.toml").assert(exists().not());
 
-        yolk.add_to_egg("foo", home.child("config/foo.toml"))?;
-        yolk.add_to_egg("foo", home.child("config/foo2.toml"))?;
-
-        home.child("yolk/eggs/foo/config/foo.toml")
-            .assert(is_direct_file());
-        home.child("yolk/eggs/foo/config/foo2.toml")
-            .assert(is_direct_file());
-        home.child("config/foo.toml").assert(is_symlink());
-        home.child("config/foo2.toml").assert(is_symlink());
+        // Verify stow-style usage works
+        home.child(".config").create_dir_all()?;
+        eggs.child("bar/.config/thing.toml").write_str("")?;
+        let mut egg = Egg::open(
+            home.to_path_buf(),
+            eggs.child("bar").to_path_buf(),
+            EggConfig::new(".", &home),
+        )?;
+        yolk.sync_egg_deployment(&egg)?;
+        home.child(".config/thing.toml").assert(is_symlink());
+        egg.config_mut().enabled = false;
+        yolk.sync_egg_deployment(&egg)?;
+        home.child(".config/thing.toml").assert(exists().not());
+        home.child(".config").assert(is_dir());
         Ok(())
     }
 
     #[test]
     fn test_syncing() -> TestResult {
-        let home = assert_fs::TempDir::new()?;
-        // deliberately non-sense state -- both parts need to change at one point, depending on canonical vs local
-        let foo_toml_initial = indoc::indoc! {r#"
-            # {# replace_re(`'.*'`, `'{data.value}'`) #}
-            value = 'foo'
-        "#};
-        home.child("config/foo.toml").write_str(foo_toml_initial)?;
-        let yp = YolkPaths::new(home.join("yolk"), home.to_path_buf());
-        let yolk = Yolk::new(yp);
-        yolk.init_yolk()?;
-        home.child("yolk/yolk.lua").write_str(indoc::indoc! {r#"
-            data = if LOCAL then {value = "local"} else {value = "canonical"}
-        "#})?;
-        yolk.add_to_egg("foo", home.join("config").join("foo.toml"))?;
-        home.child("yolk/eggs/foo/yolk_templates")
-            .write_str("config/foo.toml")?;
-        home.child("config/foo.toml").assert(foo_toml_initial);
+        let (home, yolk, eggs) = setup_and_init_test_yolk()?;
+        let foo_toml_initial = "{# data.value #}\nfoo";
+        home.child("yolk/yolk.rhai").write_str(
+            r#"
+            export const data = if LOCAL { #{value: "local"} } else { #{value: "canonical"} };
+            export let eggs = #{foo: `~`};
+        "#,
+        )?;
+        eggs.child("foo/foo.toml").write_str(foo_toml_initial)?;
         yolk.sync_to_mode(EvalMode::Local)?;
-        home.child("config/foo.toml").assert(indoc::indoc! {r#"
-            # {# replace_re(`'.*'`, `'{data.value}'`) #}
-            value = 'local'
-        "#});
-        yolk.with_canonical_state(|| {
-            home.child("yolk/eggs/foo/config/foo.toml")
-                .assert(indoc::indoc! {r#"
-                    # {# replace_re(`'.*'`, `'{data.value}'`) #}
-                    value = 'canonical'
-                "#});
-            Ok(())
-        })?;
+        // No template set in eggs.rhai, so no templating should happen
+        home.child("foo.toml").assert(is_symlink());
+        eggs.child("foo/foo.toml").assert(foo_toml_initial);
+
+        // Now we make the file a template, so it should be updated
+        home.child("yolk/yolk.rhai").write_str(
+            r#"
+            export const data = if LOCAL {#{value: "local"}} else {#{value: "canonical"}};
+            export let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"]}};
+        "#,
+        )?;
+
+        yolk.sync_to_mode(EvalMode::Local)?;
+        eggs.child("foo/foo.toml").assert("{# data.value #}\nlocal");
 
         // Update the state, to see if applying again just works :tm:
-        home.child("yolk/yolk.lua").write_str(indoc::indoc! {r#"
-            data = if LOCAL then {value = "new local"} else {value = "new canonical"}
-        "#})?;
+        home.child("yolk/yolk.rhai").write_str(
+            r#"
+                export const data = if LOCAL {#{value: "new local"}} else {#{value: "new canonical"}};
+                export let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"]}};
+            "#,
+        )?;
         yolk.sync_to_mode(EvalMode::Local)?;
-        home.child("config/foo.toml").assert(indoc::indoc! {r#"
-            # {# replace_re(`'.*'`, `'{data.value}'`) #}
-            value = 'new local'
-        "#});
+        home.child("foo.toml").assert("{# data.value #}\nnew local");
         yolk.with_canonical_state(|| {
-            home.child("yolk/eggs/foo/config/foo.toml")
-                .assert(indoc::indoc! {r#"
-                # {# replace_re(`'.*'`, `'{data.value}'`) #}
-                value = 'new canonical'
-            "#});
+            eggs.child("foo/foo.toml")
+                .assert("{# data.value #}\nnew canonical");
             Ok(())
         })?;
         Ok(())
     }
 
     #[test]
-    fn test_add_to_templated_files() -> TestResult {
-        let home = assert_fs::TempDir::new()?;
-        home.child("config/foo.toml")
-            .write_str("# {# replace_re(`'.*'`, `bar`) #}\nvalue = 'foo'")?;
-        let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
-        yolk.init_yolk()?;
-        yolk.add_to_egg("foo", home.child("config/foo.toml"))?;
-        yolk.add_to_templated_files(&[home.child("config/foo.toml").to_path_buf()])?;
-        home.child("yolk/eggs/foo/yolk_templates")
-            .assert("config/foo.toml");
-        home.child("yolk_templates").assert(exists().not());
-        yolk.deploy_egg("foo")?;
-        home.child("yolk_templates").assert(exists().not());
-        Ok(())
-    }
-
-    #[test]
-    fn test_add_template_inexistant_egg() -> TestResult {
-        let home = assert_fs::TempDir::new()?;
-        home.child("config/foo.toml")
-            .write_str("# {% replace_re(`'.*'`, `'bar'`) %}\nvalue = 'foo'")?;
-        let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
-        yolk.init_yolk()?;
-        assert!(yolk
-            .add_to_templated_files(&[home.child("config/foo.toml").to_path_buf()])
-            .is_err());
-        home.child("config/foo.toml").assert(is_direct_file());
-        Ok(())
-    }
-
-    #[test]
-    fn test_re_use_egg() -> TestResult {
-        let home = assert_fs::TempDir::new()?;
-        let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
-        yolk.init_yolk()?;
-        home.child("foo.toml").write_str("")?;
-        home.child("test/foo.toml").write_str("")?;
-        yolk.add_to_egg("foo", home.child("foo.toml"))?;
-        yolk.add_to_egg("foo", home.child("test"))?;
-        home.child("yolk/eggs/foo/bar.toml").write_str("")?;
-        home.child("yolk/eggs/foo/test/bar.toml").write_str("")?;
-        yolk.deploy_egg("foo")?;
-        home.child("bar.toml").assert(is_symlink());
-        home.child("test").assert(is_symlink());
-        home.child("test/foo.toml").assert(is_direct_file());
-        home.child("test/bar.toml").assert(is_direct_file());
-        Ok(())
-    }
-
-    #[test]
-    fn test_add_to_existing_egg() -> TestResult {
-        let home = assert_fs::TempDir::new()?;
-        let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
-        yolk.init_yolk()?;
-        home.child("foo_dir").create_dir_all()?;
-        home.child("foo_dir/foo").write_str("")?;
-        yolk.add_to_egg("foo", home.child("foo_dir"))?;
-        home.child("foo_dir").assert(is_symlink());
-        home.child("foo_dir/foo").assert(is_direct_file());
-
-        home.child("foo.toml").write_str("")?;
-        yolk.add_to_egg("foo", home.child("foo.toml"))?;
-        home.child("foo.toml").assert(is_symlink());
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_use_logic() -> TestResult {
-        let home = assert_fs::TempDir::new()?;
-        home.child("existing-dir").create_dir_all()?;
-        let yolk = Yolk::new(YolkPaths::new(home.join("yolk"), home.to_path_buf()));
-        yolk.init_yolk()?;
-        home.child("yolk/eggs/foo/new-dir/foo.toml").write_str("")?;
-        home.child("yolk/eggs/foo/existing-dir/new-subdir/foo.toml")
-            .write_str("")?;
-        home.child("yolk/eggs/foo/existing-dir/new-file.toml")
-            .write_str("")?;
-        yolk.deploy_egg("foo")?;
-        home.child("new-dir").assert(is_symlink());
-        home.child("existing-dir")
-            .assert(is_symlink().not().and(is_dir()));
-        home.child("existing-dir/new-subdir").assert(is_symlink());
-        home.child("existing-dir/new-file.toml")
-            .assert(is_symlink());
+    fn test_access_sysinfo() -> TestResult {
+        let (home, yolk, eggs) = setup_and_init_test_yolk()?;
+        home.child("yolk/yolk.rhai").write_str(
+            r#"
+            export const hostname = SYSTEM.hostname;
+            export let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"]}};
+        "#,
+        )?;
+        eggs.child("foo/foo.toml")
+            .write_str("{< `host=${hostname}|${SYSTEM.hostname}` >}")?;
+        yolk.sync_to_mode(EvalMode::Local)?;
+        eggs.child("foo/foo.toml").assert(
+            "host=canonical-hostname|canonical-hostname{< `host=${hostname}|${SYSTEM.hostname}` >}",
+        );
         Ok(())
     }
 }

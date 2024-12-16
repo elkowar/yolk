@@ -1,13 +1,22 @@
-use std::{collections::HashSet, io::Read as _, path::PathBuf, str::FromStr};
+use std::{
+    collections::HashSet,
+    io::Read as _,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use clap::{Parser, Subcommand};
 use miette::{IntoDiagnostic, Result};
 use notify_debouncer_full::{new_debouncer, DebounceEventResult};
 use owo_colors::OwoColorize as _;
-use script::eval_ctx;
-use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
+use rhai::Dynamic;
+use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _, EnvFilter};
+use util::PathExt;
 use yolk::{EvalMode, Yolk};
 
+mod doc_generator;
+
+pub mod eggs_config;
 pub mod script;
 mod templating;
 #[cfg(test)]
@@ -45,8 +54,6 @@ enum Command {
     ///
     /// This renames `.git` to `.yolk_git` to ensure that git interaction happens through the yolk CLI
     Safeguard,
-    /// Deploy an egg
-    Deploy { name: String },
     /// Evaluate an expression like it would be done in a template
     Eval {
         /// Evaluate in canonical context instead.
@@ -54,13 +61,6 @@ enum Command {
         canonical: bool,
         /// The expression to evaluate
         expr: String,
-    },
-    /// Add a file or directory to an egg in yolk
-    Add {
-        /// The name of the egg
-        name: String,
-        /// The file to add into your egg
-        path: PathBuf,
     },
     /// Re-evaluate all local templates to ensure that they are in a consistent state
     #[clap(alias = "s")]
@@ -75,13 +75,6 @@ enum Command {
         #[clap(allow_hyphen_values = true)]
         command: Vec<String>,
     },
-    /// Make the given file template capable, by adding it to the yolk_templates file
-    #[clap(alias = "mktmpl")]
-    MakeTemplate {
-        /// The files you want to turn into templates
-        #[arg(required = true)]
-        paths: Vec<PathBuf>,
-    },
     /// Evaluate a given templated file, or read a templated string from stdin
     #[clap(name = "eval-template")]
     EvalTemplate {
@@ -93,12 +86,19 @@ enum Command {
     },
     /// List all the eggs in your yolk directory
     List,
-    /// Open your `yolk.lua` or the given egg in your `$EDITOR` of choice
+    /// Open your `yolk.rhai` or the given egg in your `$EDITOR` of choice
     Edit { egg: Option<String> },
+    /// Watch for changes in your templated files and re-sync them when they change.
     Watch {
         #[arg(long)]
         canonical: bool,
+        /// Don't actually update any files, just evaluate the templates and print any errors.
+        #[arg(long)]
+        no_sync: bool,
     },
+
+    #[command(hide(true))]
+    Docs { dir: PathBuf },
 }
 
 pub(crate) fn main() -> Result<()> {
@@ -107,10 +107,21 @@ pub(crate) fn main() -> Result<()> {
     let env_filter = if args.debug {
         tracing_subscriber::EnvFilter::from_str("debug").unwrap()
     } else {
-        tracing_subscriber::EnvFilter::from_default_env()
+        let default = if matches!(args.command, Command::Git { .. }) {
+            EnvFilter::new("yolk=warn")
+        } else {
+            EnvFilter::new("yolk=info")
+        };
+        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or(default)
     };
     tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_target(false)
+                .without_time()
+                .with_ansi(true)
+                .with_level(true),
+        )
         .with(env_filter)
         .init();
 
@@ -134,9 +145,12 @@ fn run_command(args: Args) -> Result<()> {
         Command::Init => yolk.init_yolk()?,
         Command::Safeguard => yolk.paths().safeguard_git_dir()?,
         Command::Status => {
+            // TODO: Add a verification that exactly all the eggs in the eggs dir are defined in the
+            // yolk.rhai file.
+
             yolk.paths().check()?;
             if yolk.paths().active_yolk_git_dir()? == yolk.paths().yolk_default_git_path() {
-                println!("Yolk git is not Safeguarded. It is recommended to run `yolk safeguard`.");
+                println!("Yolk git is not safeguarded. It is recommended to run `yolk safeguard`.");
             }
             yolk.with_canonical_state(|| {
                 yolk.paths()
@@ -146,10 +160,8 @@ fn run_command(args: Args) -> Result<()> {
                     .into_diagnostic()
             })?;
         }
-        Command::Deploy { name: egg } => yolk.deploy_egg(egg)?,
-        Command::Add { name: egg, path } => yolk.add_to_egg(egg, path)?,
         Command::List => {
-            let mut eggs = yolk.list_eggs()?.collect::<Result<Vec<_>>>()?;
+            let mut eggs = yolk.list_eggs()?;
             eggs.sort_by_key(|egg| egg.name().to_string());
             for egg in eggs {
                 let deployed = egg.is_deployed()?;
@@ -166,32 +178,41 @@ fn run_command(args: Args) -> Result<()> {
                 );
             }
         }
-        Command::Sync { canonical } => {
-            let mode = match *canonical {
-                true => EvalMode::Canonical,
-                false => EvalMode::Local,
-            };
-            yolk.sync_to_mode(mode)?
-        }
+        Command::Sync { canonical } => yolk.sync_to_mode(match *canonical {
+            true => EvalMode::Canonical,
+            false => EvalMode::Local,
+        })?,
         Command::Eval { expr, canonical } => {
-            let mode = match *canonical {
+            let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(match *canonical {
                 true => EvalMode::Canonical,
                 false => EvalMode::Local,
-            };
-            println!("{}", yolk.eval_template_lua(mode, expr)?);
+            })?;
+            let result = eval_ctx.eval_rhai::<Dynamic>(expr).map_err(|e| {
+                miette::Report::from(e).with_source_code(
+                    miette::NamedSource::new("<inline>", expr.to_string()).with_language("Rust"),
+                )
+            })?;
+            println!("{result}");
         }
         Command::Git { command } => {
-            yolk.with_canonical_state(|| {
-                yolk.paths()
-                    .start_git_command_builder()?
-                    .args(command)
-                    .status()
-                    .into_diagnostic()?;
-                Ok(())
-            })?;
-        }
-        Command::MakeTemplate { paths } => {
-            yolk.add_to_templated_files(paths)?;
+            let mut cmd = yolk.paths().start_git_command_builder()?;
+            cmd.args(command);
+            // if the command is `git push`, we don't need to enter canonical state
+            // before executing it
+
+            let first_cmd = command.first().map(|x| x.as_ref());
+            if first_cmd == Some("push")
+                || first_cmd == Some("init")
+                || first_cmd == Some("pull")
+                || first_cmd.is_none()
+            {
+                cmd.status().into_diagnostic()?;
+            } else {
+                yolk.with_canonical_state(|| {
+                    cmd.status().into_diagnostic()?;
+                    Ok(())
+                })?;
+            }
         }
         Command::EvalTemplate { path, canonical } => {
             let text = match path {
@@ -204,22 +225,21 @@ fn run_command(args: Args) -> Result<()> {
                     buffer
                 }
             };
-            let mode = match *canonical {
+            let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(match *canonical {
                 true => EvalMode::Canonical,
                 false => EvalMode::Local,
-            };
-            let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(mode)?;
+            })?;
             let result = yolk.eval_template(&mut eval_ctx, "unnamed", &text)?;
             println!("{}", result);
         }
         Command::Edit { egg } => {
             let path = match egg {
                 Some(egg_name) => {
-                    let egg = yolk.paths().get_egg(egg_name)?;
-                    egg.find_first_targetting_symlink()?
+                    let egg = yolk.get_egg(egg_name)?;
+                    egg.find_first_deployed_symlink()?
                         .unwrap_or_else(|| yolk.paths().egg_path(egg_name))
                 }
-                None => yolk.paths().script_path(),
+                None => yolk.paths().yolk_rhai_path(),
             };
 
             if let Some(parent) = path.parent() {
@@ -227,7 +247,8 @@ fn run_command(args: Args) -> Result<()> {
             }
             edit::edit_file(path).into_diagnostic()?;
         }
-        Command::Watch { canonical } => {
+        Command::Watch { canonical, no_sync } => {
+            let no_sync = *no_sync;
             let mode = match *canonical {
                 true => EvalMode::Canonical,
                 false => EvalMode::Local,
@@ -235,12 +256,14 @@ fn run_command(args: Args) -> Result<()> {
 
             let mut dirs_to_watch = HashSet::new();
             let mut files_to_watch = HashSet::new();
-            let script_path = yolk.paths().script_path();
+            let script_path = yolk.paths().yolk_rhai_path();
             files_to_watch.insert(script_path.clone());
 
-            for egg in yolk.paths().list_eggs()? {
-                let egg = egg?;
-                for path in egg.template_paths()? {
+            let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(mode)?;
+            let egg_configs = yolk.load_egg_configs(&mut eval_ctx)?;
+
+            for (egg_name, egg_config) in egg_configs {
+                for path in egg_config.templates_globexpanded(yolk.paths().egg_path(&egg_name))? {
                     if let Some(parent) = path.parent() {
                         dirs_to_watch.insert(parent.to_path_buf());
                     }
@@ -259,6 +282,23 @@ fn run_command(args: Args) -> Result<()> {
                             return;
                         }
                     };
+
+                    let mut on_file_updated = |path: &Path| {
+                        let result = if no_sync {
+                            let Ok(content) = fs_err::read_to_string(path) else {
+                                return;
+                            };
+                            let path = path.to_string_lossy();
+                            yolk.eval_template(&mut eval_ctx, &path, &content)
+                                .map(|_| ())
+                        } else {
+                            yolk.sync_template_file(&mut eval_ctx, path)
+                        };
+                        if let Err(e) = result {
+                            eprintln!("Error: {e:?}");
+                        }
+                    };
+
                     match res {
                         Ok(events) => {
                             let changed = events
@@ -269,15 +309,17 @@ fn run_command(args: Args) -> Result<()> {
                                 })
                                 .flat_map(|x| x.paths.clone().into_iter())
                                 .collect::<HashSet<_>>();
-                            if changed.contains(&yolk.paths().script_path()) {
-                                if let Err(e) = yolk.sync_to_mode(mode) {
+                            if changed.contains(&yolk.paths().yolk_rhai_path()) {
+                                if no_sync {
+                                    for file in files_to_watch.iter() {
+                                        on_file_updated(file);
+                                    }
+                                } else if let Err(e) = yolk.sync_to_mode(mode) {
                                     eprintln!("Error: {e:?}");
                                 }
                             } else {
                                 for path in changed {
-                                    if let Err(e) = yolk.sync_template_file(&mut eval_ctx, path) {
-                                        eprintln!("Error: {e:?}");
-                                    }
+                                    on_file_updated(&path);
                                 }
                             }
                         }
@@ -288,17 +330,25 @@ fn run_command(args: Args) -> Result<()> {
             .into_diagnostic()?;
 
             for dir in dirs_to_watch {
-                tracing::info!("Watching {}", dir.display());
+                tracing::info!("Watching {}", dir.to_abbrev_str());
                 debouncer
                     .watch(&dir, notify::RecursiveMode::Recursive)
                     .into_diagnostic()?;
             }
-            // Watch the yolk dir non-recursively to catch updates to yolk.lua
+            // Watch the yolk dir non-recursively to catch updates to yolk.rhai
             debouncer
                 .watch(&script_path, notify::RecursiveMode::NonRecursive)
                 .into_diagnostic()?;
 
-            loop {}
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+        }
+        Command::Docs { dir } => {
+            let docs = doc_generator::generate_docs(yolk)?;
+            for (name, docs) in docs {
+                fs_err::write(dir.join(format!("{name}.md")), docs).into_diagnostic()?;
+            }
         }
     }
     Ok(())

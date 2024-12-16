@@ -81,7 +81,6 @@ impl CommentStyle {
         }
     }
     pub fn enable_line<'a>(&self, line: &'a str) -> Cow<'a, str> {
-        // TODO: Creating a regex every time here is horrible
         let left = self.left();
         let re = create_regex(format!(
             "{}{}",
@@ -141,7 +140,7 @@ fn create_regex(s: String) -> Result<Regex, regex::Error> {
 
 #[cfg(test)]
 mod test {
-    use testresult::TestResult;
+    use crate::util::TestResult;
 
     use crate::templating::element::Element;
 

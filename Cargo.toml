@@ -15,12 +15,6 @@ name = "yolk"
 path = "src/main.rs"
 
 
-[package.metadata.wix]
-upgrade-guid = "04CA81A1-EF78-4B08-8D76-74A8DB52A323"
-path-guid = "0EBEA995-6928-4AE1-99B4-EF89713778B1"
-license = false
-eula = false
-
 [dependencies]
 assert_fs = "1.1.2"
 assert_matches = "1.5.0"
@@ -34,23 +28,17 @@ fs-err = "3.0.0"
 indoc = "2.0.5"
 inotify = "0.11.0"
 insta = { version = "1.41.1", features = ["yaml"] }
+maplit = "1.0.2"
 miette = { version = "7.4.0", features = ["fancy"] }
-mlua = { version = "0.10.1", features = [
-    "luau",
-    # "lua52",
-    # "vendored",
-    "error-send",
-    "send",
-    "serialize",
-] }
 notify = "7.0.0"
 notify-debouncer-full = "0.4.0"
 owo-colors = { version = "4.1.0", features = ["supports-colors"] }
+rhai = { version = "1.20.0", features = ["std", "sync", "internals"] }
 predicates = "3.1.2"
 regex = "1.11.1"
 serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0.133"
-testresult = "0.4.1"
+expanduser = "1.2.2"
 thiserror = "2.0.3"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
@@ -58,6 +46,14 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 which = "7.0.0"
 whoami = "1.5.2"
 winnow = { version = "0.6.20", features = ["unstable-recover"] }
+glob = "0.3.1"
+test-log = { version = "0.2.16", default-features = false, features = [
+    "color",
+    "trace",
+] }
+
+rhai-autodocs = { version = "0.7.0" }
+# rhai-autodocs = { version = "0.7.0", path = "../../clones/rhai-autodocs" }
 
 [profile.dev.package]
 insta.opt-level = 3
