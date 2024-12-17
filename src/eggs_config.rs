@@ -21,6 +21,7 @@ pub struct EggConfig {
     pub targets: HashMap<PathBuf, PathBuf>,
     pub enabled: bool,
     pub templates: HashSet<PathBuf>,
+    //TODO: Add a "default file" setting, which would be the default file to edit when running yolk edit
 }
 
 impl Default for EggConfig {

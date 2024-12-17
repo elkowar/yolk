@@ -10,7 +10,10 @@ use miette::{IntoDiagnostic, Result};
 use notify_debouncer_full::{new_debouncer, DebounceEventResult};
 use owo_colors::OwoColorize as _;
 use rhai::Dynamic;
-use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _, EnvFilter};
+use tracing_subscriber::{
+    filter, fmt::format::FmtSpan, layer::SubscriberExt as _, util::SubscriberInitExt as _,
+    EnvFilter, Layer,
+};
 use util::PathExt;
 use yolk::{EvalMode, Yolk};
 
@@ -40,8 +43,8 @@ struct Args {
     home_dir: Option<PathBuf>,
 
     /// Enable debug logging
-    #[arg(long, short = 'v', global = true)]
-    debug: bool,
+    #[arg(long, short = 'v', global = true, action = clap::ArgAction::Count)]
+    debug: u8,
 }
 
 #[derive(Debug, Subcommand)]
@@ -104,31 +107,48 @@ enum Command {
 pub(crate) fn main() -> Result<()> {
     let args = Args::parse();
 
-    let env_filter = if args.debug {
-        tracing_subscriber::EnvFilter::from_str("debug").unwrap()
-    } else {
-        let default = if matches!(args.command, Command::Git { .. }) {
-            EnvFilter::new("yolk=warn")
-        } else {
-            EnvFilter::new("yolk=info")
-        };
-        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or(default)
-    };
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_target(false)
-                .without_time()
-                .with_ansi(true)
-                .with_level(true),
-        )
-        .with(env_filter)
-        .init();
-
+    init_logging(&args);
     if let Err(err) = run_command(args) {
         eprintln!("{:?}", err);
     }
     Ok(())
+}
+
+fn init_logging(args: &Args) {
+    let env_filter = match &args.debug {
+        0 if matches!(args.command, Command::Git { .. }) => {
+            EnvFilter::from_str("yolk=warn").unwrap()
+        }
+        0 => EnvFilter::from_str("yolk=info").unwrap(),
+        1 => EnvFilter::from_str("yolk=debug").unwrap(),
+        _ => EnvFilter::from_str("yolk=trace").unwrap(),
+    };
+    let mut format_layer = tracing_subscriber::fmt::layer()
+        .without_time()
+        .with_ansi(true)
+        .with_target(false)
+        .with_level(true);
+    let mut include_span_info = false;
+    if args.debug > 1 {
+        format_layer = format_layer.with_target(true).with_level(true);
+    }
+    if args.debug > 2 {
+        format_layer = format_layer
+            .with_file(true)
+            .with_line_number(true)
+            .with_target(false);
+    }
+    if args.debug > 3 {
+        format_layer = format_layer.with_span_events(FmtSpan::ACTIVE);
+        include_span_info = true;
+    }
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or(env_filter);
+    tracing_subscriber::registry()
+        .with(format_layer.with_filter(filter::filter_fn(move |meta| {
+            !meta.is_span() || include_span_info
+        })))
+        .with(env_filter)
+        .init();
 }
 
 fn run_command(args: Args) -> Result<()> {

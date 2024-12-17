@@ -32,12 +32,12 @@ impl Yolk {
     }
 
     /// Deploy or un-deploy a given [`Egg`]
-    #[tracing::instrument(skip_all, fields(egg = ?egg))]
+    #[tracing::instrument(skip_all, fields(egg = ?egg.name()))]
     pub fn sync_egg_deployment(&self, egg: &Egg) -> Result<()> {
         let deployed = egg
             .is_deployed()
             .with_context(|| format!("Failed to check deployment state for egg {}", egg.name()))?;
-        tracing::trace!(
+        tracing::debug!(
             egg.name = egg.name(),
             egg.deployed = deployed,
             egg.enabled = egg.config().enabled,
@@ -407,7 +407,7 @@ mod test {
     use p::path::{exists, is_dir, is_symlink};
     use predicates::prelude::PredicateBooleanExt;
     use predicates::{self as p};
-    // use test_log::test;
+    use test_log::test;
 
     use crate::eggs_config::EggConfig;
 
@@ -488,11 +488,11 @@ mod test {
     /// When encountering old, dead symlinks into the same egg, deletes those dead symlinks.
     #[test]
     fn test_deploy_after_moving_overrides_old_dead_symlinks() -> TestResult {
-        let subscriber = tracing_subscriber::layer::SubscriberExt::with(
-            tracing_subscriber::Registry::default(),
-            tracing_tree::HierarchicalLayer::new(2),
-        );
-        tracing::subscriber::set_global_default(subscriber).unwrap();
+        // let subscriber = tracing_subscriber::layer::SubscriberExt::with(
+        //     tracing_subscriber::Registry::default(),
+        //     tracing_tree::HierarchicalLayer::new(2),
+        // );
+        // tracing::subscriber::set_global_default(subscriber).unwrap();
 
         let (home, yolk, eggs) = setup_and_init_test_yolk()?;
         // We start out with a stow-style situation, where we have eggs/alacritty/.config/alacritty/alacritty.toml

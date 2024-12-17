@@ -228,6 +228,7 @@ impl Egg {
     /// Iterate over the deployed symlinks of this egg.
     ///
     /// See [`TraverseDeployment`] for more information.
+    #[tracing::instrument(skip_all)]
     pub fn find_deployed_symlinks(&self) -> Result<TraverseDeployment> {
         let targets = self
             .config
@@ -238,6 +239,7 @@ impl Egg {
 
     /// Find the first deployed symlink of a deployment.
     /// Note that this is not sufficient to check if the egg is fully deployed.
+    #[tracing::instrument(skip_all)]
     pub fn find_first_deployed_symlink(&self) -> Result<Option<PathBuf>> {
         match self.find_deployed_symlinks()?.next() {
             Some(Ok(Ok(x))) => Ok(Some(x)),
@@ -271,13 +273,6 @@ pub struct TraverseDeployment {
 impl TraverseDeployment {
     fn new(stack: impl IntoIterator<Item = (PathBuf, PathBuf)>) -> Self {
         let stack: Vec<_> = stack.into_iter().collect();
-        tracing::trace!(
-            "Starting TraverseDeployment with stack {:?}",
-            stack
-                .iter()
-                .map(|x| (x.0.to_abbrev_str(), x.1.to_abbrev_str()))
-                .collect::<Vec<_>>()
-        );
         Self { stack }
     }
 }
@@ -290,23 +285,22 @@ impl Iterator for TraverseDeployment {
         let link = link.normalize();
 
         tracing::trace!(
-            "checking {} -> {}. Stack: {:?}",
-            link.to_abbrev_str(),
-            in_egg.to_abbrev_str(),
-            self.stack
+            stack = ?self
+                .stack
                 .iter()
                 .map(|x| (x.0.to_abbrev_str(), x.1.to_abbrev_str()))
-                .collect::<Vec<_>>()
+                .collect::<Vec<_>>(),
+            "checking for deployment {} -> {}.",
+            link.to_abbrev_str(),
+            in_egg.to_abbrev_str(),
         );
 
         if link.is_symlink() {
-            tracing::trace!("{} is a symlink", link.to_abbrev_str());
             match (
                 in_egg.canonical(),
                 link.fs_err_read_link().into_diagnostic(),
             ) {
                 (Ok(in_egg), Ok(link)) if in_egg.normalize() == link.normalize() => {
-                    tracing::trace!("Symlink matches!");
                     Some(Ok(Ok(link)))
                 }
                 (Ok(in_egg), Ok(_)) => Some(Ok(Err(in_egg))),
