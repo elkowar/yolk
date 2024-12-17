@@ -9,8 +9,13 @@
 a.header {
     color: #f7d654 !important;
 }
-.menu-title {
-    color: #f7d654 !important;
+h1.menu-title {
+    /* color: #f7d654 !important; */
+    color: transparent; /* make the text invisible */
+    user-select: none; /* prevent selection of the text */
+    background: url("https://github.com/elkowar/yolk/raw/main/.github/images/yolk_banner_animated_nobg.svg")
+        center no-repeat;
+    margin: 3px;
 }
 
 .header {

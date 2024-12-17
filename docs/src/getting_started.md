@@ -89,14 +89,14 @@ const themes = #{
         background: "#282828",
         foreground: "#ebdbb2",
     },
-    monochrome: #{
+    mono: #{
         background: "#000000",
         foreground: "#ffffff",
     },
 }
 
 export const data = #{
-    colors = if SYSTEM.hostname == "laptop" { themes.gruvbox } else { themes.monochrome }
+    colors = if SYSTEM.hostname == "laptop" { themes.gruvbox } else { themes.mono }
 }
 ```
 
