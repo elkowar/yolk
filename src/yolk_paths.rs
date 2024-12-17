@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 
-use miette::{IntoDiagnostic, Result};
+use fs_err::PathExt;
+use miette::{Context as _, IntoDiagnostic, Result};
+use normalize_path::NormalizePath;
 
 use crate::{eggs_config::EggConfig, util::PathExt as _};
 
@@ -172,6 +174,7 @@ impl YolkPaths {
     }
 }
 
+#[derive(Debug)]
 pub struct Egg {
     egg_dir: PathBuf,
     config: EggConfig,
@@ -205,7 +208,9 @@ impl Egg {
     /// Check if the egg is _fully_ deployed (-> All contained entries have corresponding symlinks)
     pub fn is_deployed(&self) -> Result<bool> {
         for x in self.find_deployed_symlinks()? {
-            if x?.is_err() {
+            if x.context("Got error while iterating through deployed files or egg")?
+                .is_err()
+            {
                 return Ok(false);
             }
         }
@@ -224,7 +229,10 @@ impl Egg {
     ///
     /// See [`TraverseDeployment`] for more information.
     pub fn find_deployed_symlinks(&self) -> Result<TraverseDeployment> {
-        let targets = self.config.targets_expanded(&self.home_path, self.path())?;
+        let targets = self
+            .config
+            .targets_expanded(&self.home_path, self.path())
+            .context("Failed to expand targets map")?;
         Ok(TraverseDeployment::new(targets))
     }
 
@@ -262,9 +270,15 @@ pub struct TraverseDeployment {
 }
 impl TraverseDeployment {
     fn new(stack: impl IntoIterator<Item = (PathBuf, PathBuf)>) -> Self {
-        Self {
-            stack: stack.into_iter().collect(),
-        }
+        let stack: Vec<_> = stack.into_iter().collect();
+        tracing::trace!(
+            "Starting TraverseDeployment with stack {:?}",
+            stack
+                .iter()
+                .map(|x| (x.0.to_abbrev_str(), x.1.to_abbrev_str()))
+                .collect::<Vec<_>>()
+        );
+        Self { stack }
     }
 }
 
@@ -272,9 +286,29 @@ impl Iterator for TraverseDeployment {
     type Item = miette::Result<Result<PathBuf, PathBuf>>;
     fn next(&mut self) -> Option<miette::Result<Result<PathBuf, PathBuf>>> {
         let (in_egg, link) = self.stack.pop()?;
+        let in_egg = in_egg.normalize();
+        let link = link.normalize();
+
+        tracing::trace!(
+            "checking {} -> {}. Stack: {:?}",
+            link.to_abbrev_str(),
+            in_egg.to_abbrev_str(),
+            self.stack
+                .iter()
+                .map(|x| (x.0.to_abbrev_str(), x.1.to_abbrev_str()))
+                .collect::<Vec<_>>()
+        );
+
         if link.is_symlink() {
-            match (in_egg.canonical(), link.canonical()) {
-                (Ok(in_egg), Ok(link)) if in_egg == link => Some(Ok(Ok(link))),
+            tracing::trace!("{} is a symlink", link.to_abbrev_str());
+            match (
+                in_egg.canonical(),
+                link.fs_err_read_link().into_diagnostic(),
+            ) {
+                (Ok(in_egg), Ok(link)) if in_egg.normalize() == link.normalize() => {
+                    tracing::trace!("Symlink matches!");
+                    Some(Ok(Ok(link)))
+                }
                 (Ok(in_egg), Ok(_)) => Some(Ok(Err(in_egg))),
                 (Err(e), _) | (_, Err(e)) => Some(Err(e)),
             }

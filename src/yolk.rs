@@ -1,6 +1,7 @@
 use expanduser::expanduser;
 use fs_err::PathExt as _;
 use miette::{Context, IntoDiagnostic, NamedSource, Result};
+use normalize_path::NormalizePath;
 use std::{collections::HashMap, path::Path};
 
 use crate::{
@@ -31,8 +32,11 @@ impl Yolk {
     }
 
     /// Deploy or un-deploy a given [`Egg`]
+    #[tracing::instrument(skip_all, fields(egg = ?egg))]
     pub fn sync_egg_deployment(&self, egg: &Egg) -> Result<()> {
-        let deployed = egg.is_deployed()?;
+        let deployed = egg
+            .is_deployed()
+            .with_context(|| format!("Failed to check deployment state for egg {}", egg.name()))?;
         tracing::trace!(
             egg.name = egg.name(),
             egg.deployed = deployed,
@@ -43,10 +47,11 @@ impl Yolk {
             tracing::info!("Deploying egg {}", egg.name());
             let mappings = egg
                 .config()
-                .targets_expanded(self.yolk_paths.home_path(), egg.path())?;
+                .targets_expanded(self.yolk_paths.home_path(), egg.path())
+                .context("Failed to expand targets config for egg")?;
             let mut did_fail = false;
             for (in_egg, deployed) in &mappings {
-                if let Err(e) = symlink_recursive(in_egg, &deployed) {
+                if let Err(e) = symlink_recursive(egg.path(), in_egg, &deployed) {
                     did_fail = true;
                     tracing::warn!(
                         "Warning: Failed to deploy {}: {e:?}",
@@ -246,44 +251,89 @@ impl Yolk {
 }
 
 /// Set up a symlink from the given `link_path` to the given `actual_path`, recursively.
+/// Also takes the `egg_root` dir, to ensure we can safely delete any stale symlinks on the way there.
 ///
-/// Requires both paths to be absolute.
+/// Requires all paths to be absolute.
 ///
 /// This means:
+/// - If `link_path` exists and is a file, abort
+/// - If `link_path` exists and is a symlink into the egg dir, remove the symlink and then continue.
 /// - If `actual_path` is a file, symlink.
 /// - If `actual_path` is a directory that does not exist in `link_path`, symlink it.
 /// - If `actual_path` is a directory that already exists in `link_path`, recurse into it and `symlink_recursive` `actual_path`s children.
-fn symlink_recursive(actual_path: impl AsRef<Path>, link_path: &impl AsRef<Path>) -> Result<()> {
-    let actual_path = actual_path.as_ref();
-    let link_path = link_path.as_ref();
+fn symlink_recursive(
+    egg_root: impl AsRef<Path>,
+    actual_path: impl AsRef<Path>,
+    link_path: &impl AsRef<Path>,
+) -> Result<()> {
+    let actual_path = actual_path.as_ref().normalize();
+    let link_path = link_path.as_ref().normalize();
+    let egg_root = egg_root.as_ref().normalize();
     assert!(
-        actual_path.is_absolute(),
-        "source path must be absolute, but was {}",
+        link_path.is_absolute(),
+        "link_ path must be absolute, but was {}",
         link_path.display()
     );
     assert!(
-        link_path.is_absolute(),
-        "target path must be absolute, but was {}",
-        link_path.display()
+        actual_path.is_absolute(),
+        "actual_path must be absolute, but was {}",
+        actual_path.display()
+    );
+    assert!(
+        actual_path.starts_with(&egg_root),
+        "actual_path must be inside egg_root: {} not in {}",
+        actual_path.display(),
+        egg_root.display(),
     );
     tracing::debug!(
         "symlink_recursive({}, {})",
         actual_path.to_abbrev_str(),
         link_path.to_abbrev_str()
     );
+
     let actual_path = actual_path.canonical()?;
 
-    if link_path.exists() {
-        if link_path.is_symlink() && link_path.fs_err_read_link().into_diagnostic()? == actual_path
-        {
+    tracing::info!("Checking {}", link_path.to_abbrev_str());
+    if link_path.is_symlink() {
+        let link_target = link_path.fs_err_read_link().into_diagnostic()?;
+        tracing::info!(
+            "link_path exists as symlink at {} -> {}",
+            link_path.to_abbrev_str(),
+            link_target.to_abbrev_str()
+        );
+        if link_target == actual_path {
             return Ok(());
-        } else if link_path.is_dir() && actual_path.is_dir() {
+        } else if link_target.exists() {
+            miette::bail!(
+                "Failed to create symlink {} -> {}, as a file already exists there",
+                link_path.to_abbrev_str(),
+                actual_path.to_abbrev_str(),
+            );
+        } else if link_target.starts_with(&egg_root) {
+            tracing::info!(
+                "Removing dead symlink {} -> {}",
+                link_path.to_abbrev_str(),
+                link_target.to_abbrev_str()
+            );
+            fs_err::remove_file(&link_path).into_diagnostic()?;
+            // After we've removed that file, creating the symlink later will succeed!
+        } else {
+            miette::bail!(
+                "Encountered dead symlink, but it doesn't target the egg dir: {}",
+                link_path.to_abbrev_str(),
+            );
+        }
+    } else if link_path.exists() {
+        tracing::info!(
+            "link_path exists as non-symlink {}",
+            link_path.to_abbrev_str(),
+        );
+        if link_path.is_dir() && actual_path.is_dir() {
             for entry in actual_path.fs_err_read_dir().into_diagnostic()? {
                 let entry = entry.into_diagnostic()?;
-                symlink_recursive(entry.path(), &link_path.join(entry.file_name()))?;
+                symlink_recursive(&egg_root, entry.path(), &link_path.join(entry.file_name()))?;
             }
-        } else if !link_path.is_symlink() {
-            miette::bail!("File {} already exists", link_path.to_abbrev_str());
+            return Ok(());
         } else if link_path.is_dir() || actual_path.is_dir() {
             miette::bail!(
                 "Conflicting file or directory {} with {}",
@@ -292,16 +342,21 @@ fn symlink_recursive(actual_path: impl AsRef<Path>, link_path: &impl AsRef<Path>
             );
         }
     } else {
-        util::create_symlink(&actual_path, link_path)?;
-        tracing::info!(
-            "created symlink {} -> {}",
-            link_path.to_abbrev_str(),
-            actual_path.to_abbrev_str(),
-        );
+        tracing::info!("Link path doesn't exist yet: {}", link_path.to_abbrev_str());
     }
+    util::create_symlink(&actual_path, &link_path)?;
+    tracing::info!(
+        "created symlink {} -> {}",
+        link_path.to_abbrev_str(),
+        actual_path.to_abbrev_str(),
+    );
     Ok(())
 }
 
+#[tracing::instrument(skip(actual_path, link_path), fields(
+    actual_path = actual_path.as_ref().to_abbrev_str(),
+    link_path = link_path.as_ref().to_abbrev_str()
+))]
 fn remove_symlink_recursive(
     actual_path: impl AsRef<Path>,
     link_path: &impl AsRef<Path>,
@@ -339,6 +394,8 @@ pub enum EvalMode {
 #[cfg(test)]
 mod test {
 
+    use std::path::PathBuf;
+
     use crate::{
         util::{setup_and_init_test_yolk, TestResult},
         yolk_paths::Egg,
@@ -350,7 +407,7 @@ mod test {
     use p::path::{exists, is_dir, is_symlink};
     use predicates::prelude::PredicateBooleanExt;
     use predicates::{self as p};
-    use test_log::test;
+    // use test_log::test;
 
     use crate::eggs_config::EggConfig;
 
@@ -424,6 +481,50 @@ mod test {
         yolk.sync_egg_deployment(&egg)?;
         home.child(".config/thing.toml").assert(exists().not());
         home.child(".config").assert(is_dir());
+        Ok(())
+    }
+
+    /// Test that sync_egg_deployment after moving something in the egg dir and changing the deployment configuration,
+    /// When encountering old, dead symlinks into the same egg, deletes those dead symlinks.
+    #[test]
+    fn test_deploy_after_moving_overrides_old_dead_symlinks() -> TestResult {
+        let subscriber = tracing_subscriber::layer::SubscriberExt::with(
+            tracing_subscriber::Registry::default(),
+            tracing_tree::HierarchicalLayer::new(2),
+        );
+        tracing::subscriber::set_global_default(subscriber).unwrap();
+
+        let (home, yolk, eggs) = setup_and_init_test_yolk()?;
+        // We start out with a stow-style situation, where we have eggs/alacritty/.config/alacritty/alacritty.toml
+        home.child(".config").create_dir_all()?;
+        eggs.child("alacritty/.config/alacritty/alacritty.toml")
+            .write_str("")?;
+        let mut egg = Egg::open(
+            home.to_path_buf(),
+            eggs.child("alacritty").to_path_buf(),
+            EggConfig::new(".", &home),
+        )?;
+        yolk.sync_egg_deployment(&egg)?;
+        home.child(".config/alacritty").assert(is_symlink());
+
+        // now we want to change to a simpler structure, where we explicitly declare the target dir for the files.
+        // the user first moves the files inside the egg dir
+        fs_err::rename(
+            eggs.child("alacritty/.config/alacritty/alacritty.toml"),
+            eggs.child("alacritty/alacritty.toml"),
+        )?;
+        // deletes the now empty .config structure
+        fs_err::remove_dir(eggs.child("alacritty/.config/alacritty/"))?;
+        fs_err::remove_dir(eggs.child("alacritty/.config/"))?;
+
+        // He now updates his egg configuration to make the alacritty egg dir deploy to .config/alacritty
+        egg.config_mut().targets = maplit::hashmap! {
+            PathBuf::from(".") => PathBuf::from(".config/alacritty/")
+        };
+        // And syncs
+        yolk.sync_egg_deployment(&egg)?;
+
+        home.child(".config/alacritty").assert(is_symlink());
         Ok(())
     }
 

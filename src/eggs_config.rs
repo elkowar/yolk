@@ -34,11 +34,11 @@ impl Default for EggConfig {
 }
 
 impl EggConfig {
-    pub fn new(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Self {
+    pub fn new(in_egg: impl AsRef<Path>, deployed_to: impl AsRef<Path>) -> Self {
         EggConfig {
             enabled: true,
             targets: maplit::hashmap! {
-                from.as_ref().to_path_buf() => to.as_ref().to_path_buf()
+                in_egg.as_ref().to_path_buf() => deployed_to.as_ref().to_path_buf()
             },
             templates: HashSet::new(),
         }
@@ -54,9 +54,11 @@ impl EggConfig {
     }
 
     /// Add a new target from a path inside the egg dir to the path it should be deployed as.
-    pub fn with_target(mut self, from: impl AsRef<Path>, to: impl AsRef<Path>) -> Self {
-        self.targets
-            .insert(from.as_ref().to_path_buf(), to.as_ref().to_path_buf());
+    pub fn with_target(mut self, in_egg: impl AsRef<Path>, deploy_to: impl AsRef<Path>) -> Self {
+        self.targets.insert(
+            in_egg.as_ref().to_path_buf(),
+            deploy_to.as_ref().to_path_buf(),
+        );
         self
     }
 
