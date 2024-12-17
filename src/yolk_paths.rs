@@ -307,6 +307,7 @@ impl Iterator for TraverseDeployment {
                 (Err(e), _) | (_, Err(e)) => Some(Err(e)),
             }
         } else if link.is_dir() && in_egg.is_dir() {
+            cov_mark::hit!(traverse_dir_recursive);
             for in_egg_entry in fs_err::read_dir(&in_egg).ok()? {
                 let in_egg_entry = match in_egg_entry {
                     Ok(x) => x,
@@ -355,6 +356,7 @@ mod test {
 
     #[test]
     pub fn test_is_deployed_2() -> TestResult {
+        cov_mark::check_count!(traverse_dir_recursive, 0);
         let (home, yolk, eggs) = setup_and_init_test_yolk()?;
         eggs.child("foo/foo.toml").write_str("")?;
         eggs.child("foo/thing/thing.toml").write_str("")?;
@@ -362,7 +364,6 @@ mod test {
             home.to_path_buf(),
             eggs.child("foo").to_path_buf(),
             EggConfig::default().with_target("foo.toml", home.child("foo.toml")),
-            // .with_target("thing", home.child("thing")),
         )?;
         yolk.sync_egg_deployment(&egg)?;
         assert!(egg.is_deployed()?);
@@ -371,6 +372,7 @@ mod test {
 
     #[test]
     pub fn test_is_deployed_single_dir() -> TestResult {
+        cov_mark::check_count!(traverse_dir_recursive, 0);
         let (home, yolk, eggs) = setup_and_init_test_yolk()?;
 
         let test_egg_dir = eggs.child("test_egg");
@@ -391,6 +393,7 @@ mod test {
 
     #[test]
     pub fn test_is_deployed() -> TestResult {
+        cov_mark::check!(traverse_dir_recursive);
         let (home, yolk, eggs) = setup_and_init_test_yolk()?;
         let test_egg_dir = eggs.child("test_egg");
 

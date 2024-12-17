@@ -52,6 +52,7 @@ impl Yolk {
             for (in_egg, deployed) in &mappings {
                 match egg.config().strategy {
                     crate::eggs_config::DeploymentStrategy::Merge => {
+                        cov_mark::hit!(deploy_merge);
                         if let Err(e) = symlink_recursive(egg.path(), in_egg, &deployed) {
                             did_fail = true;
                             tracing::warn!(
@@ -61,6 +62,7 @@ impl Yolk {
                         }
                     }
                     crate::eggs_config::DeploymentStrategy::Put => {
+                        cov_mark::hit!(deploy_put);
                         let deployed = if deployed.is_absolute() {
                             &deployed
                         } else {
@@ -80,6 +82,7 @@ impl Yolk {
 
                         if let Err(e) = util::create_symlink(in_egg, &deployed) {
                             did_fail = true;
+                            cov_mark::hit!(deploy_put_symlink_failed);
                             tracing::warn!(
                                 "Warning: Failed to deploy {}: {e:?}",
                                 in_egg.to_abbrev_str()
@@ -93,6 +96,7 @@ impl Yolk {
                 "Egg::is_deployed should return true after deploying"
             );
         } else if !egg.config().enabled && deployed {
+            cov_mark::hit!(undeploy);
             tracing::debug!("Removing egg {}", egg.name());
             let mut did_fail = false;
             let mappings = egg
@@ -321,10 +325,10 @@ fn symlink_recursive(
 
     let actual_path = actual_path.canonical()?;
 
-    tracing::info!("Checking {}", link_path.to_abbrev_str());
+    tracing::trace!("Checking {}", link_path.to_abbrev_str());
     if link_path.is_symlink() {
         let link_target = link_path.fs_err_read_link().into_diagnostic()?;
-        tracing::info!(
+        tracing::trace!(
             "link_path exists as symlink at {} -> {}",
             link_path.to_abbrev_str(),
             link_target.to_abbrev_str()
@@ -344,6 +348,7 @@ fn symlink_recursive(
                 link_target.to_abbrev_str()
             );
             fs_err::remove_file(&link_path).into_diagnostic()?;
+            cov_mark::hit!(remove_dead_symlink);
             // After we've removed that file, creating the symlink later will succeed!
         } else {
             miette::bail!(
@@ -352,7 +357,7 @@ fn symlink_recursive(
             );
         }
     } else if link_path.exists() {
-        tracing::info!(
+        tracing::trace!(
             "link_path exists as non-symlink {}",
             link_path.to_abbrev_str(),
         );
@@ -369,8 +374,6 @@ fn symlink_recursive(
                 link_path.to_abbrev_str()
             );
         }
-    } else {
-        tracing::info!("Link path doesn't exist yet: {}", link_path.to_abbrev_str());
     }
     util::create_symlink(&actual_path, &link_path)?;
     tracing::info!(
@@ -449,6 +452,7 @@ mod test {
 
     #[test]
     fn test_deploy_egg_config() -> TestResult {
+        cov_mark::check_count!(deploy_merge, 1);
         let (home, yolk, eggs) = setup_and_init_test_yolk()?;
         eggs.child("foo/foo.toml").write_str("")?;
         eggs.child("foo/thing/thing.toml").write_str("")?;
@@ -478,6 +482,8 @@ mod test {
 
     #[test]
     fn test_deploy_put_mode() -> TestResult {
+        cov_mark::check_count!(deploy_put, 2);
+        cov_mark::check_count!(deploy_put_symlink_failed, 0);
         let (home, yolk, eggs) = setup_and_init_test_yolk()?;
         eggs.child("foo/foo.toml").write_str("")?;
         eggs.child("foo/thing/thing.toml").write_str("")?;
@@ -496,6 +502,8 @@ mod test {
 
     #[test]
     fn test_deploy_put_mode_fails_with_stowy_usage() -> TestResult {
+        cov_mark::check_count!(deploy_put, 1);
+        cov_mark::check_count!(deploy_put_symlink_failed, 1);
         let (home, yolk, eggs) = setup_and_init_test_yolk()?;
         home.child(".config").create_dir_all()?;
         eggs.child("bar/.config/thing.toml").write_str("")?;
@@ -511,6 +519,8 @@ mod test {
 
     #[test]
     fn test_deploy_put_creates_parent_dir() -> TestResult {
+        cov_mark::check_count!(deploy_put, 1);
+        cov_mark::check_count!(deploy_put_symlink_failed, 0);
         let (home, yolk, eggs) = setup_and_init_test_yolk()?;
         eggs.child("foo/foo.toml").write_str("")?;
         yolk.sync_egg_deployment(&Egg::open(
@@ -525,6 +535,7 @@ mod test {
 
     #[test]
     fn test_undeploy() -> TestResult {
+        cov_mark::check!(undeploy);
         let (home, yolk, eggs) = setup_and_init_test_yolk()?;
         home.child(".config").create_dir_all()?;
         eggs.child("foo/foo.toml").write_str("")?;
@@ -564,11 +575,7 @@ mod test {
     /// When encountering old, dead symlinks into the same egg, deletes those dead symlinks.
     #[test]
     fn test_deploy_after_moving_overrides_old_dead_symlinks() -> TestResult {
-        // let subscriber = tracing_subscriber::layer::SubscriberExt::with(
-        //     tracing_subscriber::Registry::default(),
-        //     tracing_tree::HierarchicalLayer::new(2),
-        // );
-        // tracing::subscriber::set_global_default(subscriber).unwrap();
+        cov_mark::check_count!(remove_dead_symlink, 1);
 
         let (home, yolk, eggs) = setup_and_init_test_yolk()?;
         // We start out with a stow-style situation, where we have eggs/alacritty/.config/alacritty/alacritty.toml
@@ -608,12 +615,10 @@ mod test {
     fn test_syncing() -> TestResult {
         let (home, yolk, eggs) = setup_and_init_test_yolk()?;
         let foo_toml_initial = "{# data.value #}\nfoo";
-        home.child("yolk/yolk.rhai").write_str(
-            r#"
+        home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
             export const data = if LOCAL { #{value: "local"} } else { #{value: "canonical"} };
             export let eggs = #{foo: #{ targets: `~`, strategy: "merge"}};
-        "#,
-        )?;
+        "#})?;
         eggs.child("foo/foo.toml").write_str(foo_toml_initial)?;
         yolk.sync_to_mode(EvalMode::Local)?;
         // No template set in eggs.rhai, so no templating should happen
@@ -621,23 +626,19 @@ mod test {
         eggs.child("foo/foo.toml").assert(foo_toml_initial);
 
         // Now we make the file a template, so it should be updated
-        home.child("yolk/yolk.rhai").write_str(
-            r#"
+        home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
             export const data = if LOCAL {#{value: "local"}} else {#{value: "canonical"}};
             export let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"], strategy: "merge"}};
-        "#,
-        )?;
+        "#})?;
 
         yolk.sync_to_mode(EvalMode::Local)?;
         eggs.child("foo/foo.toml").assert("{# data.value #}\nlocal");
 
         // Update the state, to see if applying again just works :tm:
-        home.child("yolk/yolk.rhai").write_str(
-            r#"
-                export const data = if LOCAL {#{value: "new local"}} else {#{value: "new canonical"}};
-                export let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"], strategy: "merge"}};
-            "#,
-        )?;
+        home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
+            export const data = if LOCAL {#{value: "new local"}} else {#{value: "new canonical"}};
+            export let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"], strategy: "merge"}};
+        "#})?;
         yolk.sync_to_mode(EvalMode::Local)?;
         home.child("foo.toml").assert("{# data.value #}\nnew local");
         yolk.with_canonical_state(|| {
