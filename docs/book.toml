@@ -9,3 +9,8 @@ theme = "theme"
 default-theme = "dark"
 preferred-dark-theme = "theme"
 additional-js = ["./theme/tabs.js"]
+
+
+smart-punctuation = true
+git-repository-url = "https://github.com/elkowar/yolk"
+edit-url-template = "https://github.com/elkowar/yolk/edit/main/docs/{path}"
