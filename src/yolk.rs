@@ -67,6 +67,17 @@ impl Yolk {
                             &self.paths().home_path().join(deployed)
                         };
                         let deployed = deployed.normalize();
+
+                        if let Some(parent) = deployed.parent() {
+                            if let Err(e) = fs_err::create_dir_all(parent) {
+                                did_fail = true;
+                                tracing::warn!(
+                                    "Warning: Failed to create parent dir for deployment of {}: {e:?}",
+                                    in_egg.to_abbrev_str()
+                                );
+                            }
+                        }
+
                         if let Err(e) = util::create_symlink(in_egg, &deployed) {
                             did_fail = true;
                             tracing::warn!(
@@ -480,8 +491,12 @@ mod test {
         )?)?;
         home.child("foo.toml").assert(is_symlink());
         home.child("thing").assert(is_symlink());
+        Ok(())
+    }
 
-        // Verify stow-style usage fails here
+    #[test]
+    fn test_deploy_put_mode_fails_with_stowy_usage() -> TestResult {
+        let (home, yolk, eggs) = setup_and_init_test_yolk()?;
         home.child(".config").create_dir_all()?;
         eggs.child("bar/.config/thing.toml").write_str("")?;
         yolk.sync_egg_deployment(&Egg::open(
@@ -491,6 +506,20 @@ mod test {
         )?)?;
         home.child(".config").assert(is_dir());
         home.child(".config/thing.toml").assert(exists().not());
+        Ok(())
+    }
+
+    #[test]
+    fn test_deploy_put_creates_parent_dir() -> TestResult {
+        let (home, yolk, eggs) = setup_and_init_test_yolk()?;
+        eggs.child("foo/foo.toml").write_str("")?;
+        yolk.sync_egg_deployment(&Egg::open(
+            home.to_path_buf(),
+            eggs.child("foo").to_path_buf(),
+            EggConfig::new_put("foo.toml", home.child("a/a/a/foo.toml")),
+        )?)?;
+        home.child("a/a/a").assert(is_dir().and(is_symlink().not()));
+        home.child("a/a/a/foo.toml").assert(is_symlink());
         Ok(())
     }
 
