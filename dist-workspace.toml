@@ -3,7 +3,8 @@ members = ["cargo:."]
 
 [dist]
 global-artifacts-jobs = ["./build-man"]
-# github-build-setup = "build-setup.yml"
+display-name = "yolk"
+#github-build-setup = "build-setup.yml"
 cargo-dist-version = "0.26.1"
 # pr-run-mode = "upload"
 pr-run-mode = "plan"
