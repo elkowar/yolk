@@ -3,7 +3,7 @@ use miette::Result;
 
 use super::{
     document::RenderContext,
-    parser::{self, Sp, TaggedLine},
+    parser::{Sp, TaggedLine},
     template_error::TemplateError,
 };
 
@@ -58,8 +58,8 @@ pub enum Element<'a> {
 impl<'a> Element<'a> {
     #[cfg(test)]
     pub fn try_from_str(s: &'a str) -> Result<Self> {
+        use crate::templating::parser;
         use miette::IntoDiagnostic as _;
-
         parser::parse_element(s).into_diagnostic()
     }
 

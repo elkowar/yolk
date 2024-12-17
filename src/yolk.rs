@@ -1,12 +1,11 @@
 use fs_err::PathExt as _;
-use miette::{Context, IntoDiagnostic, NamedSource, Result};
+use miette::{Context, IntoDiagnostic, NamedSource, Result, Severity};
 use normalize_path::NormalizePath;
 use std::{collections::HashMap, path::Path};
 
 use crate::{
-    eggs_config::EggConfig,
-    script::eval_ctx::EvalCtx,
-    script::{rhai_error::RhaiError, sysinfo::SystemInfo},
+    eggs_config::{DeploymentStrategy, EggConfig},
+    script::{eval_ctx::EvalCtx, rhai_error::RhaiError, sysinfo::SystemInfo},
     templating::document::Document,
     util::{self, PathExt as _},
     yolk_paths::{Egg, YolkPaths},
@@ -50,45 +49,34 @@ impl Yolk {
                 .context("Failed to expand targets config for egg")?;
             let mut did_fail = false;
             for (in_egg, deployed) in &mappings {
-                match egg.config().strategy {
-                    crate::eggs_config::DeploymentStrategy::Merge => {
-                        cov_mark::hit!(deploy_merge);
-                        if let Err(e) = symlink_recursive(egg.path(), in_egg, &deployed) {
-                            did_fail = true;
-                            tracing::warn!(
-                                "Warning: Failed to deploy {}: {e:?}",
-                                in_egg.to_abbrev_str()
-                            );
+                let deploy_mapping = || -> miette::Result<()> {
+                    match egg.config().strategy {
+                        DeploymentStrategy::Merge => {
+                            cov_mark::hit!(deploy_merge);
+                            symlink_recursive(egg.path(), in_egg, &deployed)?;
                         }
-                    }
-                    crate::eggs_config::DeploymentStrategy::Put => {
-                        cov_mark::hit!(deploy_put);
-                        let deployed = if deployed.is_absolute() {
-                            &deployed
-                        } else {
-                            &self.paths().home_path().join(deployed)
-                        };
-                        let deployed = deployed.normalize();
-
-                        if let Some(parent) = deployed.parent() {
-                            if let Err(e) = fs_err::create_dir_all(parent) {
-                                did_fail = true;
-                                tracing::warn!(
-                                    "Warning: Failed to create parent dir for deployment of {}: {e:?}",
-                                    in_egg.to_abbrev_str()
-                                );
+                        DeploymentStrategy::Put => {
+                            cov_mark::hit!(deploy_put);
+                            if let Some(parent) = deployed.parent() {
+                                fs_err::create_dir_all(parent).map_err(|e| {
+                                    miette::miette!(
+                                        severity = Severity::Warning,
+                                        "Warning: Failed to create parent dir for deployment of {}: {e:?}",
+                                        in_egg.to_abbrev_str()
+                                    )
+                                })?;
                             }
-                        }
-
-                        if let Err(e) = util::create_symlink(in_egg, &deployed) {
-                            did_fail = true;
-                            cov_mark::hit!(deploy_put_symlink_failed);
-                            tracing::warn!(
-                                "Warning: Failed to deploy {}: {e:?}",
-                                in_egg.to_abbrev_str()
-                            );
+                            util::create_symlink(in_egg, &deployed)?;
                         }
                     }
+                    Result::Ok(())
+                };
+                if let Err(e) = deploy_mapping() {
+                    tracing::warn!(
+                        "Warning: Failed to deploy {}: {e:?}",
+                        in_egg.to_abbrev_str()
+                    );
+                    did_fail = true;
                 }
             }
             debug_assert!(
@@ -103,13 +91,6 @@ impl Yolk {
                 .config()
                 .targets_expanded(self.yolk_paths.home_path(), egg.path())?;
             for (in_egg, deployed) in &mappings {
-                let deployed = deployed.normalize();
-                let deployed = if deployed.is_absolute() {
-                    &deployed
-                } else {
-                    &self.paths().home_path().join(deployed)
-                };
-
                 if let Err(e) = remove_symlink_recursive(&in_egg, &deployed) {
                     did_fail = true;
                     tracing::warn!(
@@ -130,11 +111,7 @@ impl Yolk {
     pub fn load_egg_configs(&self, eval_ctx: &mut EvalCtx) -> Result<HashMap<String, EggConfig>> {
         let eggs_map = eval_ctx
             .yolk_file_module()
-            .ok_or_else(|| {
-                miette::miette!(
-                    "Tried to load egg configs before loading yolk file. This is a bug."
-                )
-            })?
+            .expect("Tried to load egg configs before loading yolk file. This is a bug.")
             .get_var_value::<rhai::Map>("eggs")
             .ok_or_else(|| miette::miette!("Could not find an `eggs` variable in scope"))?;
         Ok(eggs_map
@@ -153,38 +130,30 @@ impl Yolk {
         let egg_configs = self.load_egg_configs(&mut eval_ctx)?;
 
         for (name, egg_config) in egg_configs.into_iter() {
-            let egg = match self.yolk_paths.get_egg(&name, egg_config) {
-                Ok(egg) => egg,
-                Err(e) => {
-                    tracing::warn!("Warning: Failed to open egg {name}: {e}");
-                    continue;
-                }
-            };
-            self.sync_egg_deployment(&egg)?;
-            let templates_expanded = match egg.config().templates_globexpanded(egg.path()) {
-                Ok(x) => x,
-                Err(err) => {
-                    tracing::warn!(
-                        "Failed to glob-expand templates for egg {}: {err:?}",
-                        egg.name()
-                    );
-                    continue;
-                }
-            };
-            for tmpl_path in templates_expanded {
-                if tmpl_path.is_file() {
-                    if let Err(err) = self.sync_template_file(&mut eval_ctx, &tmpl_path) {
-                        tracing::warn!(
-                            "Failed to sync templated file {}: {err:?}",
-                            tmpl_path.to_abbrev_str(),
-                        );
-                    }
-                } else if !tmpl_path.exists() {
-                    tracing::warn!(
-                        "{} was specified as templated file, but doesn't exist",
-                        tmpl_path.to_abbrev_str()
-                    );
-                }
+            if let Err(e) = self.sync_egg_to_mode(&mut eval_ctx, &name, egg_config) {
+                tracing::warn!("Warning: Failed to sync egg {name}: {e:?}");
+            }
+        }
+        Ok(())
+    }
+
+    fn sync_egg_to_mode(
+        &self,
+        eval_ctx: &mut EvalCtx,
+        name: &str,
+        egg_config: EggConfig,
+    ) -> Result<()> {
+        let egg = self.yolk_paths.get_egg(name, egg_config)?;
+        self.sync_egg_deployment(&egg)?;
+        let templates_expanded = egg.config().templates_globexpanded(egg.path())?;
+        for tmpl_path in templates_expanded {
+            if tmpl_path.is_file() {
+                self.sync_template_file(eval_ctx, &tmpl_path)?;
+            } else if !tmpl_path.exists() {
+                tracing::warn!(
+                    "{} was specified as templated file, but doesn't exist",
+                    tmpl_path.to_abbrev_str()
+                );
             }
         }
         Ok(())
@@ -482,8 +451,8 @@ mod test {
 
     #[test]
     fn test_deploy_put_mode() -> TestResult {
-        cov_mark::check_count!(deploy_put, 2);
         cov_mark::check_count!(deploy_put_symlink_failed, 0);
+        cov_mark::check_count!(deploy_put, 2);
         let (home, yolk, eggs) = setup_and_init_test_yolk()?;
         eggs.child("foo/foo.toml").write_str("")?;
         eggs.child("foo/thing/thing.toml").write_str("")?;
@@ -503,7 +472,6 @@ mod test {
     #[test]
     fn test_deploy_put_mode_fails_with_stowy_usage() -> TestResult {
         cov_mark::check_count!(deploy_put, 1);
-        cov_mark::check_count!(deploy_put_symlink_failed, 1);
         let (home, yolk, eggs) = setup_and_init_test_yolk()?;
         home.child(".config").create_dir_all()?;
         eggs.child("bar/.config/thing.toml").write_str("")?;

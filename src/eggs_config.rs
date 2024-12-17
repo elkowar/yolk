@@ -1,4 +1,5 @@
 use expanduser::expanduser;
+use normalize_path::NormalizePath;
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
@@ -134,7 +135,7 @@ impl EggConfig {
                 } else {
                     home.as_ref().join(target)
                 };
-                Ok((source, target))
+                Ok((source.normalize(), target.normalize()))
             })
             .collect()
     }
