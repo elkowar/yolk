@@ -252,21 +252,28 @@ fn run_command(args: Args) -> Result<()> {
             let result = yolk.eval_template(&mut eval_ctx, "unnamed", &text)?;
             println!("{}", result);
         }
-        Command::Edit { egg } => {
-            let path = match egg {
+
+        Command::Edit { egg: egg_name } => {
+            match egg_name {
                 Some(egg_name) => {
                     let egg = yolk.get_egg(egg_name)?;
-                    egg.find_first_deployed_symlink()?
-                        .unwrap_or_else(|| yolk.paths().egg_path(egg_name))
+                    let cd_path = egg
+                        .find_first_deployed_symlink()?
+                        .unwrap_or_else(|| yolk.paths().egg_path(egg_name));
+                    let _ = std::env::set_current_dir(yolk.paths().root_path());
+                    if let Some(ref main_file) = egg.config().main_file {
+                        edit::edit_file(egg.path().join(main_file)).into_diagnostic()?;
+                    } else {
+                        edit::edit_file(cd_path).into_diagnostic()?;
+                    }
                 }
-                None => yolk.paths().yolk_rhai_path(),
+                None => {
+                    let _ = std::env::set_current_dir(yolk.paths().root_path());
+                    edit::edit_file(yolk.paths().yolk_rhai_path()).into_diagnostic()?;
+                }
             };
-
-            if let Some(parent) = path.parent() {
-                let _ = std::env::set_current_dir(parent);
-            }
-            edit::edit_file(path).into_diagnostic()?;
         }
+
         Command::Watch { canonical, no_sync } => {
             let no_sync = *no_sync;
             let mode = match *canonical {

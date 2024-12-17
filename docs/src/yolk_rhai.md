@@ -29,6 +29,7 @@ export let eggs = #{
             ".zshrc": "~/.config/zsh/.zshrc",
             ".zshenv": "~/.zshenv",
         },
+        main_file: ".zshrc"
     },
     nvim: #{
         targets: "~/.config/nvim",
@@ -51,6 +52,10 @@ or an object.
 
 If it's an object, it can contain the following fields:
 
+#### `enabled`
+a boolean, describing whether this egg should be deployed or not.
+This is useful if you only want to deploy an egg on some systems, or depending on some other condition.
+
 #### `targets`
 Either the path where to deploy the egg, or an object with mappings from file inside the egg directory to the target path.
 
@@ -65,10 +70,8 @@ A list of files that should be treated as templates.
 This list can contain shell-style glob patterns, so `*.lua` will expand to all lua files in the egg directory.
 Files that are not listed here will not be edited by yolk during `yolk sync`!
 
-#### `enabled`
-a boolean, describing whether this egg should be deployed or not.
-This is useful if you only want to deploy an egg on some systems, or depending on some other condition.
-
+#### `main_file`
+A path, relative to the egg directory, that will be opened when you run `yolk edit <eggname>`.
 
 
 

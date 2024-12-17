@@ -21,7 +21,8 @@ pub struct EggConfig {
     pub targets: HashMap<PathBuf, PathBuf>,
     pub enabled: bool,
     pub templates: HashSet<PathBuf>,
-    //TODO: Add a "default file" setting, which would be the default file to edit when running yolk edit
+    /// The "main" file of this egg -- currently used to determine which path should be opened by `yolk edit`.
+    pub main_file: Option<PathBuf>,
 }
 
 impl Default for EggConfig {
@@ -30,18 +31,21 @@ impl Default for EggConfig {
             enabled: true,
             targets: HashMap::new(),
             templates: HashSet::new(),
+            main_file: None,
         }
     }
 }
 
 impl EggConfig {
     pub fn new(in_egg: impl AsRef<Path>, deployed_to: impl AsRef<Path>) -> Self {
+        let in_egg = in_egg.as_ref();
         EggConfig {
             enabled: true,
             targets: maplit::hashmap! {
-                in_egg.as_ref().to_path_buf() => deployed_to.as_ref().to_path_buf()
+                in_egg.to_path_buf() => deployed_to.as_ref().to_path_buf()
             },
             templates: HashSet::new(),
+            main_file: None,
         }
     }
     pub fn with_enabled(mut self, enabled: bool) -> Self {
@@ -107,6 +111,7 @@ impl EggConfig {
                     PathBuf::from(".") => PathBuf::from(&*target_path)
                 },
                 templates: HashSet::new(),
+                main_file: None,
             });
         }
         let Ok(map) = value.as_map_ref() else {
@@ -133,6 +138,16 @@ impl EggConfig {
                 .collect::<Result<_, _>>()?
         } else {
             return Err(rhai_error!("egg `targets` must be a string or a map"));
+        };
+
+        let main_file = match map.get("main_file") {
+            Some(path) => Some(
+                path.as_immutable_string_ref()
+                    .map_err(|e| rhai_error!("main_file must be a path, but got {e}"))?
+                    .to_string()
+                    .into(),
+            ),
+            None => None,
         };
 
         let templates =
@@ -164,6 +179,7 @@ impl EggConfig {
             targets,
             enabled,
             templates,
+            main_file,
         })
     }
 }
@@ -188,6 +204,7 @@ mod test {
                 enabled: false,
                 targets: #{ "foo": "~/bar" },
                 templates: ["foo"]
+                main_file: "foo
             }
         "#})?;
         assert_eq!(
@@ -199,7 +216,8 @@ mod test {
                 },
                 templates: maplit::hashset! {
                     PathBuf::from("foo")
-                }
+                },
+                main_file: Some(PathBuf::from("foo")),
             }
         );
         Ok(())
@@ -216,6 +234,7 @@ mod test {
                     PathBuf::from(".") => PathBuf::from("~/bar")
                 },
                 templates: HashSet::new(),
+                main_file: None,
             }
         );
         Ok(())
@@ -232,6 +251,7 @@ mod test {
                     PathBuf::from(".") => PathBuf::from("~/bar")
                 },
                 templates: HashSet::new(),
+                main_file: None,
             }
         );
         Ok(())
