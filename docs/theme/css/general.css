@@ -1,5 +1,114 @@
 /* Base styles and content styles */
 
+/* my stuff */
+
+.content a,
+#searchresults a {
+    color: #fd8041 !important;
+}
+a.header {
+    color: #f7d654 !important;
+}
+.menu-title {
+    color: #f7d654 !important;
+}
+
+.header {
+    font-family: "Quicksand", sans-serif;
+}
+
+hr {
+    border: unset;
+    border-top: 1px solid #555555;
+}
+
+.rhai-doc .doc-block {
+    background-color: #181818;
+    margin-bottom: 22px;
+    padding: 16px;
+
+    h2 {
+        margin-block-start: unset;
+        margin-block-end: unset;
+    }
+
+    .doc-content {
+        /* margin-left: 1em; */
+
+        h4 {
+            margin-block-start: 21px;
+        }
+    }
+}
+
+/* Inline code */
+*:not(pre) code.hljs {
+    padding-top: 2px;
+    padding-bottom: 2px;
+    background-color: #191919;
+    border-radius: 5px;
+}
+
+/* Code block */
+pre code.hljs {
+    padding: 0.8em !important;
+    background-color: #212121;
+    border-radius: 5px;
+    box-shadow: 0 0 7px 0 rgba(0, 0, 0, 0.1);
+}
+
+/* From rhai_autodocs example dir */
+
+.func-name {
+    /* override mdbook default margin for h2/h3 */
+    margin-top: 0em;
+}
+
+/* Annotations for a diagram or a snippet */
+.ann {
+    text-align: center;
+    font-size: 0.8em;
+    font-style: italic;
+}
+
+/* custom css for the rust SectionFormat::Tabs option */
+/* NOTE: variables used here are from mdbook's css */
+
+.tab {
+    overflow: hidden;
+    border-left: 1px solid var(--theme-hover);
+    border-right: 1px solid var(--theme-hover);
+}
+
+.tab button {
+    color: var(--icons);
+    background-color: var(--theme-hover);
+    float: left;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    padding: 14px 16px;
+    transition: 0.3s;
+}
+
+.tab button:hover {
+    color: var(--icons-hover);
+    background-color: var(--theme-hover);
+}
+
+.tab button.active {
+    background-color: var(--theme-bg);
+}
+
+.tabcontent {
+    display: none;
+    padding: 6px 12px;
+    border: 1px solid var(--theme-hover);
+    border-top: none;
+}
+
+/*default stuff */
+
 :root {
     /* Browser default font-size is 16px, this way 1 rem = 10px */
     font-size: 62.5%;
@@ -37,18 +146,39 @@ main {
 }
 
 /* Don't change font size in headers. */
-h1 code, h2 code, h3 code, h4 code, h5 code, h6 code {
+h1 code,
+h2 code,
+h3 code,
+h4 code,
+h5 code,
+h6 code {
     font-size: unset;
 }
 
-.left { float: left; }
-.right { float: right; }
-.boring { opacity: 0.6; }
-.hide-boring .boring { display: none; }
-.hidden { display: none !important; }
+.left {
+    float: left;
+}
+.right {
+    float: right;
+}
+.boring {
+    opacity: 0.6;
+}
+.hide-boring .boring {
+    display: none;
+}
+.hidden {
+    display: none !important;
+}
 
-h2, h3 { margin-block-start: 2.5em; }
-h4, h5 { margin-block-start: 2em; }
+h2,
+h3 {
+    margin-block-start: 2.5em;
+}
+h4,
+h5 {
+    margin-block-start: 2em;
+}
 
 .header + .header h3,
 .header + .header h4,
@@ -80,7 +210,9 @@ h6:target::before {
 .page {
     outline: 0;
     padding: 0 var(--page-padding);
-    margin-block-start: calc(0px - var(--menu-bar-height)); /* Compensate for the #menu-bar-hover-placeholder */
+    margin-block-start: calc(
+        0px - var(--menu-bar-height)
+    ); /* Compensate for the #menu-bar-hover-placeholder */
 }
 .page-wrapper {
     box-sizing: border-box;
@@ -88,10 +220,14 @@ h6:target::before {
 }
 .no-js .page-wrapper,
 .js:not(.sidebar-resizing) .page-wrapper {
-    transition: margin-left 0.3s ease, transform 0.3s ease; /* Animation: slide away */
+    transition:
+        margin-left 0.3s ease,
+        transform 0.3s ease; /* Animation: slide away */
 }
-[dir=rtl] .js:not(.sidebar-resizing) .page-wrapper {
-    transition: margin-right 0.3s ease, transform 0.3s ease; /* Animation: slide away */
+[dir="rtl"] .js:not(.sidebar-resizing) .page-wrapper {
+    transition:
+        margin-right 0.3s ease,
+        transform 0.3s ease; /* Animation: slide away */
 }
 
 .content {
@@ -103,12 +239,25 @@ h6:target::before {
     margin-inline-end: auto;
     max-width: var(--content-max-width);
 }
-.content p { line-height: 1.45em; }
-.content ol { line-height: 1.45em; }
-.content ul { line-height: 1.45em; }
-.content a { text-decoration: none; }
-.content a:hover { text-decoration: underline; }
-.content img, .content video { max-width: 100%; }
+.content p {
+    line-height: 1.45em;
+}
+.content ol {
+    line-height: 1.45em;
+}
+.content ul {
+    line-height: 1.45em;
+}
+.content a {
+    text-decoration: none;
+}
+.content a:hover {
+    text-decoration: underline;
+}
+.content img,
+.content video {
+    max-width: 100%;
+}
 .content .header:link,
 .content .header:visited {
     color: var(--fg);
@@ -144,14 +293,13 @@ table tbody tr:nth-child(2n) {
     background: var(--table-alternate-bg);
 }
 
-
 blockquote {
     margin: 20px 0;
     padding: 0 20px;
     color: var(--fg);
     background-color: var(--quote-bg);
-    border-block-start: .1em solid var(--quote-border);
-    border-block-end: .1em solid var(--quote-border);
+    border-block-start: 0.1em solid var(--quote-border);
+    border-block-end: 0.1em solid var(--quote-border);
 }
 
 .warning {
@@ -217,7 +365,9 @@ sup {
     visibility: hidden;
     color: #fff;
     background-color: #333;
-    transform: translateX(-50%); /* Center by moving tooltip 50% of its width left */
+    transform: translateX(
+        -50%
+    ); /* Center by moving tooltip 50% of its width left */
     left: -8px; /* Half of the width of the icon */
     top: -35px;
     font-size: 0.8em;

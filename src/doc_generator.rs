@@ -77,14 +77,16 @@ fn render_docs(docs: &Documentation) -> HashMap<String, String> {
     }
 
     let mut mine = format!(
-        "{}\n\n---\n\n**namespace**: `{}`\n\n---\n\n",
+        "<div class='rhai-doc'>\n\n{}\n\n---\n\n**namespace**: `{}`\n\n---\n\n",
         docs.documentation,
         docs.namespace.trim_start_matches("global/")
     );
 
     for item in &docs.items {
-        mine.push_str(&format!("{}\n---\n", render_item_docs(item)))
+        mine.push_str(&format!("\n\n{}\n\n", render_item_docs(item)))
     }
+    mine.push_str("\n\n</div>");
+
     map.insert(docs.name.to_string(), mine);
 
     map
@@ -116,16 +118,24 @@ fn render_item_docs(item: &Item) -> String {
                 .collect::<Vec<String>>()
                 .join("\n");
             indoc::formatdoc! {r#"
+                    <div class='doc-block'>
+
                     ## {name}
+
+                    <div class='doc-content'>
 
                     ```rust,ignore
                     {}
                     ```
 
                     {}
+
+                    </div>
+                    </div>
                 "#,
                 metadata.iter().map(|x| x.signature.to_string()).collect::<Vec<String>>().join("\n"),
-                docs.lines().map(|x| format!("> {x}")).collect::<Vec<_>>().join("\n"),
+                docs
+                // docs.lines().map(|x| format!("> {x}")).collect::<Vec<_>>().join("\n"),
             }
         }
         // TODO: render these, once we have some
