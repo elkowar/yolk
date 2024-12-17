@@ -73,10 +73,3 @@ impl SystemInfo {
         }
     }
 }
-
-#[allow(unused)]
-fn default_yolk_dir() -> PathBuf {
-    dirs::config_dir()
-        .expect("No config dir found")
-        .join("yolk")
-}

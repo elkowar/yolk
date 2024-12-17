@@ -1,12 +1,8 @@
 use std::sync::Arc;
 
-use miette::Context;
-
 use miette::Result;
-use rhai::Dynamic;
 use rhai::Engine;
 use rhai::Module;
-use rhai::RhaiNativeFunc;
 use rhai::Scope;
 use rhai::Variant;
 
@@ -76,13 +72,6 @@ impl EvalCtx {
             .map_err(|e| RhaiError::from_rhai(content, *e))
     }
 
-    pub fn exec_rhai(&mut self, content: &str) -> Result<(), RhaiError> {
-        let ast = self.compile(content)?;
-        self.engine
-            .run_ast_with_scope(&mut self.scope, &ast)
-            .map_err(|e| RhaiError::from_rhai(content, *e))
-    }
-
     pub fn eval_text_transformation(
         &mut self,
         text: &str,
@@ -101,43 +90,12 @@ impl EvalCtx {
         self.scope.set_or_push(name, value);
     }
 
-    pub fn get_global(&self, name: &str) -> Result<Dynamic> {
-        self.scope
-            .get_value(name)
-            .with_context(|| format!("variable {} not found", name))
-    }
-
     pub fn engine_mut(&mut self) -> &mut Engine {
         &mut self.engine
-    }
-    pub fn scope_mut(&mut self) -> &mut Scope<'static> {
-        &mut self.scope
     }
 
     pub fn yolk_file_module(&self) -> Option<&Arc<Module>> {
         self.yolk_file_module.as_ref()
-    }
-
-    pub fn call_fn<T: Variant + Clone>(&mut self, ast: &rhai::AST) -> Result<T, RhaiError> {
-        self.engine
-            .call_fn(&mut self.scope, ast, "eggs", ())
-            .map_err(|e| RhaiError::from_rhai(ast.source().unwrap(), *e))
-    }
-
-    #[inline]
-    pub fn register_fn<
-        A: 'static,
-        const N: usize,
-        const X: bool,
-        R: Variant + Clone,
-        const F: bool,
-    >(
-        &mut self,
-        name: impl AsRef<str> + Into<rhai::Identifier>,
-        func: impl RhaiNativeFunc<A, N, X, R, F> + Send + Sync + 'static,
-    ) -> &mut Self {
-        rhai::FuncRegistration::new(name.into()).register_into_engine(self.engine_mut(), func);
-        self
     }
 
     fn compile(&mut self, text: &str) -> Result<rhai::AST, RhaiError> {

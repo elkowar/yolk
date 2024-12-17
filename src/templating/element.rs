@@ -1,7 +1,5 @@
-use std::ops::Range;
-
 use crate::script::eval_ctx::EvalCtx;
-use miette::{IntoDiagnostic, Result};
+use miette::Result;
 
 use super::{
     document::RenderContext,
@@ -58,30 +56,11 @@ pub enum Element<'a> {
 }
 
 impl<'a> Element<'a> {
-    #[allow(unused)]
+    #[cfg(test)]
     pub fn try_from_str(s: &'a str) -> Result<Self> {
-        parser::parse_element(s).into_diagnostic()
-    }
+        use miette::IntoDiagnostic as _;
 
-    #[allow(unused)]
-    pub fn span(&self) -> Range<usize> {
-        match self {
-            Element::Plain(s) => s.range(),
-            Element::Inline { line, .. } => line.full_line.range(),
-            Element::NextLine {
-                tagged_line,
-                next_line,
-                ..
-            } => tagged_line.full_line.range().start..next_line.range().end,
-            Element::MultiLine { block, end } => {
-                block.tagged_line.full_line.range().start..end.full_line.range().end
-            }
-            Element::Conditional { blocks, end, .. } => {
-                blocks.first().map_or(end.full_line.range(), |block| {
-                    block.tagged_line.full_line.range().start..end.full_line.range().end
-                })
-            }
-        }
+        parser::parse_element(s).into_diagnostic()
     }
 
     pub fn render(
@@ -96,7 +75,6 @@ impl<'a> Element<'a> {
                     let eval_result = eval_ctx
                         .eval_rhai::<bool>(expr.as_str())
                         .map_err(|e| TemplateError::from_rhai(e, expr.range()))?;
-                    // .map_err(|e| TemplateError::from_rhai(e, expr.range()))?;
                     Ok(render_ctx.string_toggled(line.full_line.as_str(), eval_result))
                 }
                 false => Ok(format!(
@@ -203,6 +181,7 @@ fn run_transformation_expr(
         .eval_text_transformation(&result, expr.as_str())
         .map_err(|e| TemplateError::from_rhai(e, expr.range()))?;
     if result != second_pass {
+        cov_mark::hit!(refuse_nonidempodent_transformation);
         println!(
             "Warning: Refusing to apply transformation that is not idempodent: `{}`",
             expr.as_str()
@@ -238,6 +217,26 @@ mod test {
         let doc = Document::parse_string("/* {# get_yolk_text().to_upper() #} */\nfoo\n")?;
         assert_eq!(
             "/* {# get_yolk_text().to_upper() #} */\nFOO\n",
+            doc.render(&mut eval_ctx)?
+        );
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_multiline() -> TestResult {
+        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
+        let input_str = indoc::indoc! {r#"
+            /* {% get_yolk_text().to_upper() %} */
+            foo
+            /* {% end %} */
+        "#};
+        let doc = Document::parse_string(input_str)?;
+        assert_eq!(
+            indoc::indoc! {r#"
+                /* {% get_yolk_text().to_upper() %} */
+                FOO
+                /* {% end %} */
+            "#},
             doc.render(&mut eval_ctx)?
         );
         Ok(())
@@ -290,12 +289,13 @@ mod test {
 
     #[test]
     pub fn test_render_replace_refuse_non_idempodent() -> TestResult {
-        let element =
-            Document::parse_string("{# replace_re(`'.*'`, `a'a'`) #}\nfoo: 'original'\n")?;
+        cov_mark::check!(refuse_nonidempodent_transformation);
+        let original_content = "{# `${get_yolk_text()}X` #}\nfoo: 'original'\n";
+        let element = Document::parse_string(original_content)?;
         let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
-        assert!(
-            // "{# replace_re(`'.*'`, `a'a'`) #}\nfoo: 'original'\n",
-            element.render(&mut eval_ctx).is_err(),
+        assert_eq!(
+            original_content,
+            element.render(&mut eval_ctx)?,
             "template executed non-idempodent replace_re expression"
         );
         Ok(())
