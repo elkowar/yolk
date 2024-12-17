@@ -42,6 +42,11 @@ export let eggs = #{
         enabled: SYSTEM.hostname == "cool-desktop",
     },
     alacritty: "~/.config/alacritty",
+    // This uses the `merge` deployment strategy, which
+    // will merge the directory structures during deployment,
+    // allowing a stow-style pattern
+    // of mirroring your home directory structure in your egg dir
+    zed: { targets: "~", strategy: "merge" }
 }
 ```
 
@@ -61,7 +66,13 @@ Either the path where to deploy the egg, or an object with mappings from file in
 
 Providing the string `"~/.config/foot"` is a short for `#{ ".": "~/.config/foot"}`.
 
-Note that these directories get merged recursively.
+#### `strategy`
+Either `"put"` or `"merge"`. Defaults to `put`.
+
+- In **put** mode, yolk will create a symlink for each mapping from egg directory entry to target path.
+If a directory or file already exists, Yolk will refuse to create the symlink.
+
+- In **merge** mode, yolk will merge the directory structures during deployment.
 This means, if you want to use a stow-style approach, and have the egg directory mirror your home directory structure, you can use
 `"~"` (or `#{".": "~"}`) as the targets value.
 
@@ -69,6 +80,7 @@ This means, if you want to use a stow-style approach, and have the egg directory
 A list of files that should be treated as templates.
 This list can contain shell-style glob patterns, so `*.lua` will expand to all lua files in the egg directory.
 Files that are not listed here will not be edited by yolk during `yolk sync`!
+
 
 #### `main_file`
 A path, relative to the egg directory, that will be opened when you run `yolk edit <eggname>`.

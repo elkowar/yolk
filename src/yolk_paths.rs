@@ -379,7 +379,7 @@ mod test {
         let egg = Egg::open(
             home.to_path_buf(),
             test_egg_dir.to_path_buf(),
-            EggConfig::new(".", home.child("target")),
+            EggConfig::new_merge(".", home.child("target")),
         )?;
         assert!(!(egg.is_deployed()?));
         yolk.sync_egg_deployment(&egg)?;
@@ -409,7 +409,7 @@ mod test {
         let egg = Egg::open(
             home.to_path_buf(),
             test_egg_dir.to_path_buf(),
-            EggConfig::new(".", &home),
+            EggConfig::new_merge(".", &home),
         )?;
         assert!(!(egg.is_deployed()?));
         yolk.sync_egg_deployment(&egg)?;

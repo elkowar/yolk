@@ -2,6 +2,7 @@ use expanduser::expanduser;
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use miette::{miette, IntoDiagnostic as _};
@@ -15,6 +16,33 @@ macro_rules! rhai_error {
     };
 }
 
+/// How the contents of an egg should be deployed.
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
+pub enum DeploymentStrategy {
+    /// Recursively traverse the directory structure until a directory / file doesn't exist yet, then symlink there.
+    /// This allows stow-like behavior.
+    Merge,
+    /// Simply deploy to the given target, or fail.
+    #[default]
+    Put,
+}
+
+impl FromStr for DeploymentStrategy {
+    type Err = miette::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "merge" => Ok(DeploymentStrategy::Merge),
+            "put" => Ok(DeploymentStrategy::Put),
+            _ => miette::bail!(
+                help = "strategy must be one of 'merge' or 'put'",
+                "Invalid deployment strategy {}",
+                s
+            ),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct EggConfig {
     /// The targets map is a map from `path-relative-to-egg-dir` -> `path-where-it-should-go`.
@@ -23,6 +51,7 @@ pub struct EggConfig {
     pub templates: HashSet<PathBuf>,
     /// The "main" file of this egg -- currently used to determine which path should be opened by `yolk edit`.
     pub main_file: Option<PathBuf>,
+    pub strategy: DeploymentStrategy,
 }
 
 impl Default for EggConfig {
@@ -32,12 +61,13 @@ impl Default for EggConfig {
             targets: HashMap::new(),
             templates: HashSet::new(),
             main_file: None,
+            strategy: Default::default(),
         }
     }
 }
 
 impl EggConfig {
-    pub fn new(in_egg: impl AsRef<Path>, deployed_to: impl AsRef<Path>) -> Self {
+    pub fn new_merge(in_egg: impl AsRef<Path>, deployed_to: impl AsRef<Path>) -> Self {
         let in_egg = in_egg.as_ref();
         EggConfig {
             enabled: true,
@@ -46,6 +76,19 @@ impl EggConfig {
             },
             templates: HashSet::new(),
             main_file: None,
+            strategy: DeploymentStrategy::Merge,
+        }
+    }
+    pub fn new_put(in_egg: impl AsRef<Path>, deployed_to: impl AsRef<Path>) -> Self {
+        let in_egg = in_egg.as_ref();
+        EggConfig {
+            enabled: true,
+            targets: maplit::hashmap! {
+                in_egg.to_path_buf() => deployed_to.as_ref().to_path_buf()
+            },
+            templates: HashSet::new(),
+            main_file: None,
+            strategy: DeploymentStrategy::Put,
         }
     }
     pub fn with_enabled(mut self, enabled: bool) -> Self {
@@ -55,6 +98,11 @@ impl EggConfig {
 
     pub fn with_template(mut self, template: impl AsRef<Path>) -> Self {
         self.templates.insert(template.as_ref().to_path_buf());
+        self
+    }
+
+    pub fn with_strategy(mut self, strategy: DeploymentStrategy) -> Self {
+        self.strategy = strategy;
         self
     }
 
@@ -112,6 +160,7 @@ impl EggConfig {
                 },
                 templates: HashSet::new(),
                 main_file: None,
+                strategy: Default::default(),
             });
         }
         let Ok(map) = value.as_map_ref() else {
@@ -150,6 +199,13 @@ impl EggConfig {
             None => None,
         };
 
+        let strategy = match map.get("strategy") {
+            Some(strategy) => {
+                DeploymentStrategy::from_str(&strategy.to_string()).map_err(RhaiError::Other)?
+            }
+            None => DeploymentStrategy::default(),
+        };
+
         let templates =
             if let Some(templates) = map.get("templates") {
                 templates
@@ -180,6 +236,7 @@ impl EggConfig {
             enabled,
             templates,
             main_file,
+            strategy,
         })
     }
 }
@@ -205,6 +262,7 @@ mod test {
                 targets: #{ "foo": "~/bar" },
                 templates: ["foo"],
                 main_file: "foo",
+                strategy: "merge",
             }
         "#})?;
         assert_eq!(
@@ -218,6 +276,7 @@ mod test {
                     PathBuf::from("foo")
                 },
                 main_file: Some(PathBuf::from("foo")),
+                strategy: crate::eggs_config::DeploymentStrategy::Merge,
             }
         );
         Ok(())
@@ -235,6 +294,7 @@ mod test {
                 },
                 templates: HashSet::new(),
                 main_file: None,
+                strategy: Default::default(),
             }
         );
         Ok(())
@@ -252,6 +312,7 @@ mod test {
                 },
                 templates: HashSet::new(),
                 main_file: None,
+                strategy: Default::default(),
             }
         );
         Ok(())
@@ -260,7 +321,7 @@ mod test {
     #[test]
     fn test_template_globbed() -> TestResult {
         let home = TempDir::new().into_diagnostic()?;
-        let config = EggConfig::new(home.to_str().unwrap(), ".")
+        let config = EggConfig::new_merge(home.to_str().unwrap(), ".")
             .with_template("foo")
             .with_template("**/*.foo");
         home.child("foo").write_str("a")?;

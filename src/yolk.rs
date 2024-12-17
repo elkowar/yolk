@@ -1,4 +1,3 @@
-use expanduser::expanduser;
 use fs_err::PathExt as _;
 use miette::{Context, IntoDiagnostic, NamedSource, Result};
 use normalize_path::NormalizePath;
@@ -51,12 +50,31 @@ impl Yolk {
                 .context("Failed to expand targets config for egg")?;
             let mut did_fail = false;
             for (in_egg, deployed) in &mappings {
-                if let Err(e) = symlink_recursive(egg.path(), in_egg, &deployed) {
-                    did_fail = true;
-                    tracing::warn!(
-                        "Warning: Failed to deploy {}: {e:?}",
-                        in_egg.to_abbrev_str()
-                    );
+                match egg.config().strategy {
+                    crate::eggs_config::DeploymentStrategy::Merge => {
+                        if let Err(e) = symlink_recursive(egg.path(), in_egg, &deployed) {
+                            did_fail = true;
+                            tracing::warn!(
+                                "Warning: Failed to deploy {}: {e:?}",
+                                in_egg.to_abbrev_str()
+                            );
+                        }
+                    }
+                    crate::eggs_config::DeploymentStrategy::Put => {
+                        let deployed = if deployed.is_absolute() {
+                            &deployed
+                        } else {
+                            &self.paths().home_path().join(deployed)
+                        };
+                        let deployed = deployed.normalize();
+                        if let Err(e) = util::create_symlink(in_egg, &deployed) {
+                            did_fail = true;
+                            tracing::warn!(
+                                "Warning: Failed to deploy {}: {e:?}",
+                                in_egg.to_abbrev_str()
+                            );
+                        }
+                    }
                 }
             }
             debug_assert!(
@@ -70,19 +88,18 @@ impl Yolk {
                 .config()
                 .targets_expanded(self.yolk_paths.home_path(), egg.path())?;
             for (in_egg, deployed) in &mappings {
-                let source = egg.path().canonical()?.join(in_egg);
-                let target = expanduser(deployed.to_string_lossy()).into_diagnostic()?;
-                let target = if target.is_absolute() {
-                    target
+                let deployed = deployed.normalize();
+                let deployed = if deployed.is_absolute() {
+                    &deployed
                 } else {
-                    self.paths().home_path().join(target)
+                    &self.paths().home_path().join(deployed)
                 };
 
-                if let Err(e) = remove_symlink_recursive(&source, &target) {
+                if let Err(e) = remove_symlink_recursive(&in_egg, &deployed) {
                     did_fail = true;
                     tracing::warn!(
                         "Warning: Failed to remove deployment of {}: {e:?}",
-                        source.to_abbrev_str()
+                        in_egg.to_abbrev_str()
                     );
                 }
             }
@@ -397,6 +414,7 @@ mod test {
     use std::path::PathBuf;
 
     use crate::{
+        eggs_config::DeploymentStrategy,
         util::{setup_and_init_test_yolk, TestResult},
         yolk_paths::Egg,
     };
@@ -439,11 +457,40 @@ mod test {
         yolk.sync_egg_deployment(&Egg::open(
             home.to_path_buf(),
             eggs.child("bar").to_path_buf(),
-            EggConfig::new(".", &home),
+            EggConfig::new_merge(".", &home),
         )?)?;
 
         home.child(".config").assert(is_dir());
         home.child(".config/thing.toml").assert(is_symlink());
+        Ok(())
+    }
+
+    #[test]
+    fn test_deploy_put_mode() -> TestResult {
+        let (home, yolk, eggs) = setup_and_init_test_yolk()?;
+        eggs.child("foo/foo.toml").write_str("")?;
+        eggs.child("foo/thing/thing.toml").write_str("")?;
+        yolk.sync_egg_deployment(&Egg::open(
+            home.to_path_buf(),
+            eggs.child("foo").to_path_buf(),
+            EggConfig::default()
+                .with_target("foo.toml", home.child("foo.toml"))
+                .with_target("thing", home.child("thing"))
+                .with_strategy(DeploymentStrategy::Put),
+        )?)?;
+        home.child("foo.toml").assert(is_symlink());
+        home.child("thing").assert(is_symlink());
+
+        // Verify stow-style usage fails here
+        home.child(".config").create_dir_all()?;
+        eggs.child("bar/.config/thing.toml").write_str("")?;
+        yolk.sync_egg_deployment(&Egg::open(
+            home.to_path_buf(),
+            eggs.child("bar").to_path_buf(),
+            EggConfig::new_put(".", &home),
+        )?)?;
+        home.child(".config").assert(is_dir());
+        home.child(".config/thing.toml").assert(exists().not());
         Ok(())
     }
 
@@ -457,7 +504,7 @@ mod test {
         let mut egg = Egg::open(
             home.to_path_buf(),
             eggs.child("foo").to_path_buf(),
-            EggConfig::new("foo.toml", home.child("foo.toml")),
+            EggConfig::new_merge("foo.toml", home.child("foo.toml")),
         )?;
 
         yolk.sync_egg_deployment(&egg)?;
@@ -473,7 +520,7 @@ mod test {
         let mut egg = Egg::open(
             home.to_path_buf(),
             eggs.child("bar").to_path_buf(),
-            EggConfig::new(".", &home),
+            EggConfig::new_merge(".", &home),
         )?;
         yolk.sync_egg_deployment(&egg)?;
         home.child(".config/thing.toml").assert(is_symlink());
@@ -502,7 +549,7 @@ mod test {
         let mut egg = Egg::open(
             home.to_path_buf(),
             eggs.child("alacritty").to_path_buf(),
-            EggConfig::new(".", &home),
+            EggConfig::new_merge(".", &home),
         )?;
         yolk.sync_egg_deployment(&egg)?;
         home.child(".config/alacritty").assert(is_symlink());
@@ -535,7 +582,7 @@ mod test {
         home.child("yolk/yolk.rhai").write_str(
             r#"
             export const data = if LOCAL { #{value: "local"} } else { #{value: "canonical"} };
-            export let eggs = #{foo: `~`};
+            export let eggs = #{foo: #{ targets: `~`, strategy: "merge"}};
         "#,
         )?;
         eggs.child("foo/foo.toml").write_str(foo_toml_initial)?;
@@ -548,7 +595,7 @@ mod test {
         home.child("yolk/yolk.rhai").write_str(
             r#"
             export const data = if LOCAL {#{value: "local"}} else {#{value: "canonical"}};
-            export let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"]}};
+            export let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"], strategy: "merge"}};
         "#,
         )?;
 
@@ -559,7 +606,7 @@ mod test {
         home.child("yolk/yolk.rhai").write_str(
             r#"
                 export const data = if LOCAL {#{value: "new local"}} else {#{value: "new canonical"}};
-                export let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"]}};
+                export let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"], strategy: "merge"}};
             "#,
         )?;
         yolk.sync_to_mode(EvalMode::Local)?;
