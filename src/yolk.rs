@@ -36,7 +36,6 @@ impl Yolk {
             .is_deployed()
             .with_context(|| format!("Failed to check deployment state for egg {}", egg.name()))?;
         tracing::debug!(
-            egg.name = egg.name(),
             egg.deployed = deployed,
             egg.enabled = egg.config().enabled,
             "Syncing egg deployment"
@@ -66,7 +65,7 @@ impl Yolk {
                                     )
                                 })?;
                             }
-                            util::create_symlink(in_egg, &deployed)?;
+                            util::create_symlink(in_egg, deployed)?;
                         }
                     }
                     Result::Ok(())
@@ -91,7 +90,7 @@ impl Yolk {
                 .config()
                 .targets_expanded(self.yolk_paths.home_path(), egg.path())?;
             for (in_egg, deployed) in &mappings {
-                if let Err(e) = remove_symlink_recursive(&in_egg, &deployed) {
+                if let Err(e) = remove_symlink_recursive(in_egg, &deployed) {
                     did_fail = true;
                     tracing::warn!(
                         "Warning: Failed to remove deployment of {}: {e:?}",

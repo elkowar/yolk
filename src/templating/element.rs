@@ -56,7 +56,7 @@ pub enum Element<'a> {
 }
 
 impl<'a> Element<'a> {
-    #[cfg(test)]
+    #[allow(unused)]
     pub fn try_from_str(s: &'a str) -> Result<Self> {
         use crate::templating::parser;
         use miette::IntoDiagnostic as _;

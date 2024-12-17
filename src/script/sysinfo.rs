@@ -50,7 +50,7 @@ impl SystemInfo {
                 cache_dir: dirs::cache_dir().unwrap_or_else(|| "unknown".into()),
                 config_dir: dirs::config_dir().unwrap_or_else(|| "unknown".into()),
                 home_dir: dirs::home_dir().unwrap_or_else(|| "unknown".into()),
-                yolk_dir: default_yolk_dir(),
+                yolk_dir: crate::yolk_paths::default_yolk_dir(),
             },
         }
     }
