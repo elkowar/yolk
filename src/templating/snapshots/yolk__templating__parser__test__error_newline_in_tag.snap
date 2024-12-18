@@ -1,6 +1,6 @@
 ---
 source: src/templating/parser.rs
-expression: "render_error(parse_document(\"{<if>}\").unwrap_err())"
+expression: "render_error(parse_document(\"{<foo\\nbar>}\").unwrap_err())"
 snapshot_kind: text
 ---
   × Failed to parse yolk template file
@@ -8,7 +8,9 @@ snapshot_kind: text
 Error: 
   × Failed to parse tag
    ╭─[file:1:1]
- 1 │ {<if>}
-   · ──┬─
+ 1 │ {<foo
+   · ──┬──
    ·   ╰── tag
+ 2 │ bar>}
    ╰────
+  help: Line endings are forbidden within tags

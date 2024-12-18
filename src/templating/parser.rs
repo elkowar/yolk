@@ -1,3 +1,7 @@
+//! The parser for yolk templates
+//!
+//! A lot of the structure, especially with regards to error handling, is heavily inspired by the v2_parser in <https://github.com/kdl-org/kdl-rs>.
+
 use std::ops::Range;
 
 use winnow::{
@@ -6,15 +10,14 @@ use winnow::{
         alt, cut_err, delimited, eof, fail, not, opt, peek, preceded, repeat, repeat_till,
         terminated, trace,
     },
-    error::StrContext,
     stream::{Location, Recoverable, Stream},
     token::{any, literal},
     Located, Parser, RecoverableParser,
 };
 
 use super::{
-    element::{Block, Element},
-    parse_error::{YolkParseError, YolkParseFailure},
+    element::{Block, Element, TaggedLine},
+    parse_error::{cx, YolkParseError, YolkParseFailure},
 };
 
 // type Input<'a> = winnow::Located<&'a str>;
@@ -48,7 +51,6 @@ impl<T> Sp<T> {
         &self.content
     }
 
-    #[allow(unused)]
     pub fn range(&self) -> Range<usize> {
         self.range.clone()
     }
@@ -56,14 +58,6 @@ impl<T> Sp<T> {
     pub fn map<U, F: FnOnce(T) -> U>(self, f: F) -> Sp<U> {
         Sp::new(self.range, f(self.content))
     }
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub struct TaggedLine<'a> {
-    pub left: &'a str,
-    pub tag: &'a str,
-    pub right: &'a str,
-    pub full_line: Sp<&'a str>,
 }
 
 pub fn parse_document(s: &str) -> Result<Vec<Element<'_>>, YolkParseFailure> {
@@ -92,12 +86,12 @@ pub fn try_parse<'a, P: Parser<Input<'a>, T, YolkParseError>, T>(
 fn p_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     trace("peek any", peek(any)).parse_next(input)?;
     alt((
-        p_inline_element.context(lbl("inline element")),
-        p_nextline_element.context(lbl("nextline element")),
-        p_conditional_element.context(lbl("conditional element")),
-        p_multiline_element.context(lbl("multiline element")),
-        p_plain_line_element.context(lbl("plain line")),
-        fail.context(lbl("valid element")),
+        p_inline_element,
+        p_nextline_element,
+        p_conditional_element,
+        p_multiline_element,
+        p_plain_line_element,
+        fail.context(cx().msg("Encountered invalid element").lbl("element")),
     ))
     .parse_next(input)
 }
@@ -126,9 +120,20 @@ fn p_plain_line_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
 }
 
 fn p_regular_tag_inner(end: &str) -> impl winnow::Parser<Input<'_>, &'_ str, YolkParseError> {
-    let p =
-        repeat_till(1.., (not(line_ending), not(end), any), peek(end)).map(|(_, _): ((), _)| ());
-    cut_err(p.context(lbl("expression")).take())
+    let p = repeat_till(
+        1..,
+        (
+            not(line_ending).context(cx().hlp("Line endings are forbidden within tags")),
+            not(end),
+            any,
+        ),
+        peek(end),
+    )
+    .map(|(_, _): ((), _)| ());
+    cut_err(
+        p.context(cx().msg("Failed to parse expression").lbl("expression"))
+            .take(),
+    )
 }
 
 /// p_tag := <start> <p_inner> <end>
@@ -142,7 +147,7 @@ fn p_tag<'a, T>(
         delimited(wss, p_inner.with_span(), wss),
         cut_err(end),
     ))
-    .context(lbl("tag"))
+    .context(cx().msg("Failed to parse tag").lbl("tag"))
     .map(|(s, span)| Sp::new(span, s))
 }
 
@@ -170,7 +175,13 @@ fn p_tag_line<'a, T>(
         true => Box::new(line_ending.map(Some)),
         false => Box::new(opt(line_ending)),
     };
-    let right_p = cut_err((till_line_ending, line_end.context(lbl("newline"))).take());
+    let right_p = cut_err(
+        (
+            till_line_ending,
+            line_end.context(cx().msg("Expected newline")),
+        )
+            .take(),
+    );
     (left_p, tag_p, right_p)
         .with_spanned()
         .map(|((left, (inner_res, tag), right), full_line)| {
@@ -192,13 +203,8 @@ fn p_nextline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
         opt((literal("if"), wsp)).map(|x| x.is_some()),
         p_regular_tag_inner("#}"),
     );
-    let (tagged_line, expr) = p_tag_line("{#", p_inner, "#}", true)
-        .context("line with a next-line tag")
-        .parse_next(input)?;
-    let next_line = till_line_ending
-        .context("Another line")
-        .spanned()
-        .parse_next(input)?;
+    let (tagged_line, expr) = p_tag_line("{#", p_inner, "#}", true).parse_next(input)?;
+    let next_line = till_line_ending.spanned().parse_next(input)?;
     Ok(Element::NextLine {
         tagged_line,
         is_if: expr.content().0,
@@ -214,7 +220,7 @@ fn p_inline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
         opt((literal("if"), wsp)).map(|x| x.is_some()),
         p_regular_tag_inner(">}"),
     )
-        .context(lbl("tag-inner"));
+        .context(cx().msg("Failed to parse tag inner").lbl("here"));
     let (tagged_line, expr) = p_tag_line("{<", cut_err(p_inner), ">}", false).parse_next(input)?;
     Ok(Element::Inline {
         line: tagged_line,
@@ -230,16 +236,14 @@ fn p_inline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
 fn p_multiline_body<'a>(
     p_end_tag_inner: impl winnow::Parser<Input<'a>, &'a str, YolkParseError>,
 ) -> impl Parser<Input<'a>, Vec<Element<'a>>, YolkParseError> {
-    let end_tag_line = peek(p_tag_line("{%", p_end_tag_inner, "%}", false)).context("end of block");
+    let end_tag_line = peek(p_tag_line("{%", p_end_tag_inner, "%}", false));
     repeat_till(0.., p_element, end_tag_line)
-        .context(lbl("end of block"))
+        .context(
+            cx().msg("Expected block to end here")
+                .lbl("block end")
+                .hlp("Did you forget an `{% end %}` tag?"),
+        )
         .map(|(elements, _)| elements)
-    // .resume_after(
-    //     (repeat_till(0.., any, peek(p_tag_line("{%", "end", "%}", false))))
-    //         .map(|((), _)| ())
-    //         .void(),
-    // )
-    // .map(|x| x.unwrap_or_default())
 }
 
 /// Parses a regular multiline block start tag (no if, elif, else, end), then parses a [`p_multiline_body`], then a regular end tag.
@@ -256,8 +260,14 @@ fn p_multiline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     )
     .parse_next(input)?;
     let body = cut_err(p_multiline_body("end")).parse_next(input)?;
-    let (end, _) =
-        cut_err(p_tag_line("{%", "end", "%}", false).context("end tag")).parse_next(input)?;
+    let (end, _) = cut_err(
+        p_tag_line("{%", "end", "%}", false).context(
+            cx().msg("Expected block to end here")
+                .lbl("block end")
+                .hlp("Did you forget an `{% end %}` tag?"),
+        ),
+    )
+    .parse_next(input)?;
 
     Ok(Element::MultiLine {
         block: Block {
@@ -312,15 +322,21 @@ fn p_conditional_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
         ))),
     );
     let p_else = p_block(
-        p_tag_line("{%", "else".void(), "%}", true).context("else tag"),
+        p_tag_line("{%", "else".void(), "%}", true)
+            .context(cx().msg("Failed to parse else tag").lbl("else tag")),
         p_multiline_body("end"),
     );
     let p_end = p_tag_line("{%", "end", "%}", false);
     let (if_body, elif_bodies, else_block, end_line): (_, Vec<_>, Option<Block<'a, _>>, _) = (
-        p_if.context(lbl("if block")),
-        cut_err(repeat(0.., p_elif.context(lbl("elif block")))),
-        cut_err(opt(p_else.context(lbl("else block")))),
-        cut_err(p_end.context(lbl("end tag"))),
+        p_if.context(cx().msg("Failed to parse if block").lbl("if block")),
+        cut_err(repeat(
+            0..,
+            p_elif.context(cx().msg("Failed to parse elif block").lbl("elif block")),
+        )),
+        cut_err(opt(p_else.context(
+            cx().msg("Failed to parse else block").lbl("else block"),
+        ))),
+        cut_err(p_end.context(cx().msg("Failed to parse end tag").lbl("end tag"))),
     )
         .parse_next(input)?;
 
@@ -342,21 +358,9 @@ fn wsp(input: &mut Input<'_>) -> PResult<()> {
     winnow::ascii::space0.void().parse_next(input)
 }
 
-/// Create a context string
-fn lbl(s: &'static str) -> &'static str {
-    s
-    // StrContext::Label(s)
-}
-/// Create a [`StrContext::Expected`] with a [`winnow::error::StrContextValue::Description`].
-#[allow(unused)]
-fn exp(s: &'static str) -> StrContext {
-    StrContext::Expected(winnow::error::StrContextValue::Description(s))
-}
-
 #[cfg(test)]
 fn new_input(s: &str) -> Input<'_> {
     use winnow::{stream::Recoverable, Located};
-    // Located::new(s)
     Recoverable::new(Located::new(s))
 }
 
@@ -401,7 +405,7 @@ mod test {
 
     #[test]
     fn test_inline_tag() -> TestResult {
-        assert_debug_snapshot!(p_inline_element.parse(new_input("foo /* {< test >} */"))?);
+        assert_debug_snapshot!(p_inline_element.parse(new_input("foo /* {< test >} */")));
         Ok(())
     }
 
@@ -512,5 +516,10 @@ mod test {
     #[test]
     fn test_error_empty_tag() {
         insta::assert_snapshot!(render_error(parse_document("{%%}").unwrap_err()));
+    }
+
+    #[test]
+    fn test_error_newline_in_tag() {
+        insta::assert_snapshot!(render_error(parse_document("{<foo\nbar>}").unwrap_err()));
     }
 }

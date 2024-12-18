@@ -6,9 +6,9 @@ snapshot_kind: text
   × Failed to parse yolk template file
 
 Error: 
-  × Expected newline.
-   ╭─[file:1:5]
+  × Expected newline
+   ╭─[file:1:1]
  1 │ {#f#}
-   ·     ┬
-   ·     ╰── here
+   · ──┬──
+   ·   ╰── here
    ╰────
