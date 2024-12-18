@@ -1,7 +1,7 @@
 use crate::script::eval_ctx::EvalCtx;
 use miette::Result;
 
-use super::{comment_style::CommentStyle, parser::Sp, template_error::TemplateError};
+use super::{comment_style::CommentStyle, error::TemplateError, parser::Sp};
 
 /// A single, full line with a tag in it. Contains the span of the entire line.
 #[derive(Debug, Eq, PartialEq)]
@@ -194,115 +194,5 @@ fn run_transformation_expr(
         Ok(text.to_string())
     } else {
         Ok(result)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use crate::util::TestResult;
-
-    use crate::script::eval_ctx::EvalCtx;
-    use crate::templating::document::Document;
-    use crate::yolk::EvalMode;
-
-    #[test]
-    pub fn test_render_inline() -> TestResult {
-        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
-        let doc = Document::parse_string("foo /* {< get_yolk_text().to_upper() >} */\n")?;
-        assert_eq!(
-            "FOO /* {< get_yolk_text().to_upper() >} */\n",
-            doc.render(&mut eval_ctx)?
-        );
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_render_next_line() -> TestResult {
-        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
-        let doc = Document::parse_string("/* {# get_yolk_text().to_upper() #} */\nfoo\n")?;
-        assert_eq!(
-            "/* {# get_yolk_text().to_upper() #} */\nFOO\n",
-            doc.render(&mut eval_ctx)?
-        );
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_multiline() -> TestResult {
-        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
-        let input_str = indoc::indoc! {r#"
-            /* {% get_yolk_text().to_upper() %} */
-            foo
-            /* {% end %} */
-        "#};
-        let doc = Document::parse_string(input_str)?;
-        assert_eq!(
-            indoc::indoc! {r#"
-                /* {% get_yolk_text().to_upper() %} */
-                FOO
-                /* {% end %} */
-            "#},
-            doc.render(&mut eval_ctx)?
-        );
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_multiline_conditional() -> TestResult {
-        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
-        let input_str = indoc::indoc! {r#"
-            /* {% if false %} */
-            foo
-            /* {% elif true %} */
-            bar
-            /* {% else %} */
-            bar
-            /* {% end %} */
-        "#};
-        let doc = Document::parse_string(input_str)?;
-        assert_eq!(
-            indoc::indoc! {r#"
-                /* {% if false %} */
-                /*<yolk> foo*/
-                /* {% elif true %} */
-                bar
-                /* {% else %} */
-                /*<yolk> bar*/
-                /* {% end %} */
-            "#},
-            doc.render(&mut eval_ctx)?
-        );
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_render_replace() -> TestResult {
-        let doc = Document::parse_string(indoc::indoc! {"
-            {# replace_re(`'.*'`, `'new'`) #}
-            foo: 'original'
-        "})?;
-        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
-        assert_eq!(
-            indoc::indoc! {"
-                {# replace_re(`'.*'`, `'new'`) #}
-                foo: 'new'
-            "},
-            doc.render(&mut eval_ctx)?
-        );
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_render_replace_refuse_non_idempodent() -> TestResult {
-        cov_mark::check!(refuse_nonidempodent_transformation);
-        let original_content = "{# `${get_yolk_text()}X` #}\nfoo: 'original'\n";
-        let element = Document::parse_string(original_content)?;
-        let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
-        assert_eq!(
-            original_content,
-            element.render(&mut eval_ctx)?,
-            "template executed non-idempodent replace_re expression"
-        );
-        Ok(())
     }
 }

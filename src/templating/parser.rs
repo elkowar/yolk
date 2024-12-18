@@ -17,7 +17,7 @@ use winnow::{
 
 use super::{
     element::{Block, Element, TaggedLine},
-    parse_error::{cx, YolkParseError, YolkParseFailure},
+    error::{cx, YolkParseError, YolkParseFailure},
 };
 
 // type Input<'a> = winnow::Located<&'a str>;

@@ -535,127 +535,131 @@ mod test {
         eval_ctx.eval_rhai::<String>(code).into_diagnostic()
     }
 
-    #[test]
-    pub fn test_regex_captures() -> TestResult {
-        assert_eq!(
-            Some(vec![
-                "<aaaXb>".to_string(),
-                "aaa".to_string(),
-                "b".to_string()
-            ]),
-            run_expr::<Option<Vec<String>>>("regex_captures(`<(.*)X(.)>`, `foo <aaaXb> bar`)")?
-        );
-        assert_eq!(
-            None,
-            run_expr::<Option<Vec<String>>>("regex_captures(`<(.*)X(.)>`, `asdf`)")?
-        );
+    use rstest::rstest;
+
+    #[rstest]
+    #[case::match_found(Some(vec![
+        "<aaaXb>".to_string(),
+        "aaa".to_string(),
+        "b".to_string()
+    ]), "regex_captures(`<(.*)X(.)>`, `foo <aaaXb> bar`)")]
+    #[case::no_match(None, "regex_captures(`<(.*)X(.)>`, `asdf`)")]
+    pub fn test_regex_captures(
+        #[case] expected: Option<Vec<String>>,
+        #[case] expr: &str,
+    ) -> TestResult {
+        assert_eq!(expected, run_expr::<Option<Vec<String>>>(expr)?);
         Ok(())
     }
 
-    // #[test]
-    // pub fn test_to_json() -> TestResult {
-    //     assert_eq!(
-    //         r#"{"a":2,"b":[1,2,3]}"#,
-    //         run_lua::<String>("to_json(#{a: 2, b: [1, 2, 3]})")?,
-    //     );
-    //     assert_eq!(
-    //         r#"{ 1, 2 }"#,
-    //         run_lua::<String>(r#"inspect.inspect(from_json('[1, 2]'))"#)?,
-    //     );
-    //     Ok(())
-    // }
-
-    #[test]
-    pub fn test_replace() -> TestResult {
-        assert_eq!(
-            "foo:'xxx'",
-            run_tag_expr("foo:'aaa'", "replace_re(`'.*'`, `'xxx'`)")?
-        );
-        assert!(
-            run_tag_expr("foo:'aaa'", "replace_re(`'.*'`, `xxx`)").is_err(),
-            "replace performed non-reversible replacement",
-        );
+    #[rstest]
+    #[case::replace("foo:'aaa'", "replace_re(`'.*'`, `'xxx'`)", "foo:'xxx'")]
+    #[case::non_reversible("foo:'aaa'", "replace_re(`'.*'`, `xxx`)", "foo:'aaa'")]
+    pub fn test_replace(
+        #[case] input: &str,
+        #[case] expr: &str,
+        #[case] expected: &str,
+    ) -> TestResult {
+        if expected == input {
+            assert!(
+                run_tag_expr(input, expr).is_err(),
+                "replace performed non-reversible replacement",
+            );
+        } else {
+            assert_eq!(expected, run_tag_expr(input, expr)?);
+        }
         Ok(())
     }
 
-    #[test]
-    pub fn test_replace_in() -> TestResult {
-        assert_eq!(
-            "foo:'xxx'",
-            run_tag_expr("foo:'aaa'", "replace_in(`'`, `xxx`)")?
-        );
-        assert!(
-            run_tag_expr("foo:'aaa'", "replace_in(`'`, `x'xx`)").is_err(),
-            "replace performed non-reversible replacement",
-        );
+    #[rstest]
+    #[case::replace("foo:'aaa'", "replace_in(`'`, `xxx`)", "foo:'xxx'")]
+    #[case::non_reversible("foo:'aaa'", "replace_in(`'`, `x'xx`)", "foo:'aaa'")]
+    pub fn test_replace_in(
+        #[case] input: &str,
+        #[case] expr: &str,
+        #[case] expected: &str,
+    ) -> TestResult {
+        if expected == input {
+            assert!(
+                run_tag_expr(input, expr).is_err(),
+                "replace performed non-reversible replacement",
+            );
+        } else {
+            assert_eq!(expected, run_tag_expr(input, expr)?);
+        }
         Ok(())
     }
 
-    #[test]
-    pub fn test_replace_color() -> TestResult {
-        assert_eq!(
-            "foo: #00ff00",
-            run_tag_expr("foo: #ff0000", "replace_color(`#00ff00`)")?,
-        );
-        assert_eq!(
-            "foo: #00ff0000",
-            run_tag_expr("foo: #ff0000", "replace_color(`#00ff0000`)")?,
-        );
-        assert!(
-            run_tag_expr("foo: #ff0000", "replace_color(`00ff00`)").is_err(),
-            "replace_color performed non-reversible replacement",
-        );
-        assert!(
-            run_tag_expr("foo: #ff0000", "replace_color(`bad color`)").is_err(),
-            "replace_color performed non-reversible replacement",
-        );
+    #[rstest]
+    #[case::replace("foo: #ff0000", "replace_color(`#00ff00`)", "foo: #00ff00")]
+    #[case::replace_alpha("foo: #ff0000", "replace_color(`#00ff0000`)", "foo: #00ff0000")]
+    #[case::non_reversible_no_hash("foo: #ff0000", "replace_color(`00ff00`)", "foo: #ff0000")]
+    #[case::non_reversible_bad_color("foo: #ff0000", "replace_color(`bad color`)", "foo: #ff0000")]
+    pub fn test_replace_color(
+        #[case] input: &str,
+        #[case] expr: &str,
+        #[case] expected: &str,
+    ) -> TestResult {
+        if expected == input {
+            assert!(
+                run_tag_expr(input, expr).is_err(),
+                "replace_color performed non-reversible replacement",
+            );
+        } else {
+            assert_eq!(expected, run_tag_expr(input, expr)?);
+        }
         Ok(())
     }
 
-    #[test]
-    pub fn test_replace_quoted() -> TestResult {
-        assert_eq!(
-            "foo: 'new'",
-            run_tag_expr("foo: 'old'", "replace_quoted(`new`)")?,
-        );
-        assert_eq!(
-            "foo: \"new\"",
-            run_tag_expr("foo: \"old\"", "replace_quoted(`new`)")?,
-        );
-        assert_eq!(
-            "foo: `new`",
-            run_tag_expr("foo: `old`", "replace_quoted(`new`)")?,
-        );
+    #[rstest]
+    #[case::single_quote("foo: 'old'", "replace_quoted(`new`)", "foo: 'new'")]
+    #[case::double_quote("foo: \"old\"", "replace_quoted(`new`)", "foo: \"new\"")]
+    #[case::backtick("foo: `old`", "replace_quoted(`new`)", "foo: `new`")]
+    pub fn test_replace_quoted(
+        #[case] input: &str,
+        #[case] expr: &str,
+        #[case] expected: &str,
+    ) -> TestResult {
+        assert_eq!(expected, run_tag_expr(input, expr)?);
         Ok(())
     }
 
-    #[test]
-    pub fn test_replace_value() -> TestResult {
-        assert_eq!(
-            "foo: xxx # baz",
-            run_tag_expr("foo: bar # baz", "replace_value(`xxx`)")?,
-        );
-        assert!(
-            run_tag_expr("foo: bar # baz", "replace_value(`x xx`)").is_err(),
-            "replace_value performed non-reversible replacement",
-        );
+    #[rstest]
+    #[case::replace("foo: bar # baz", "replace_value(`xxx`)", "foo: xxx # baz")]
+    #[case::non_reversible("foo: bar # baz", "replace_value(`x xx`)", "foo: bar # baz")]
+    pub fn test_replace_value(
+        #[case] input: &str,
+        #[case] expr: &str,
+        #[case] expected: &str,
+    ) -> TestResult {
+        if expected == input {
+            assert!(
+                run_tag_expr(input, expr).is_err(),
+                "replace_value performed non-reversible replacement",
+            );
+        } else {
+            assert_eq!(expected, run_tag_expr(input, expr)?);
+        }
         Ok(())
     }
 
-    #[test]
-    pub fn test_replace_number() -> TestResult {
-        assert_eq!(
-            "foo 999 bar",
-            run_tag_expr("foo 123 bar", "replace_number(999)")?,
-        );
-        assert_eq!(
-            "foo 99.9 bar",
-            run_tag_expr("foo 1.23 bar", "replace_number(99.9)")?,
-        );
-        assert!(
-            run_tag_expr("foo 99.9 bar", "replace_number(`hi`)").is_err(),
-            "replace_value performed non-reversible replacement",
-        );
+    #[rstest]
+    #[case::integer("foo 123 bar", "replace_number(999)", "foo 999 bar")]
+    #[case::float("foo 1.23 bar", "replace_number(99.9)", "foo 99.9 bar")]
+    #[case::non_reversible("foo 99.9 bar", "replace_number(`hi`)", "foo 99.9 bar")]
+    pub fn test_replace_number(
+        #[case] input: &str,
+        #[case] expr: &str,
+        #[case] expected: &str,
+    ) -> TestResult {
+        if expected == input {
+            assert!(
+                run_tag_expr(input, expr).is_err(),
+                "replace_number performed non-reversible replacement",
+            );
+        } else {
+            assert_eq!(expected, run_tag_expr(input, expr)?);
+        }
         Ok(())
     }
 }

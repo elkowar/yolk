@@ -252,12 +252,15 @@ mod test {
     };
     use maplit::hashset;
     use miette::IntoDiagnostic as _;
+    use pretty_assertions::assert_eq;
 
     use crate::{eggs_config::EggConfig, util::TestResult};
 
-    #[test]
-    fn test_read_verbose_eggs_config() -> TestResult {
-        let result = rhai::Engine::new().eval(indoc::indoc! {r#"
+    use rstest::rstest;
+
+    #[rstest]
+    #[case(
+        indoc::indoc! {r#"
             #{
                 enabled: false,
                 targets: #{ "foo": "~/bar" },
@@ -265,57 +268,46 @@ mod test {
                 main_file: "foo",
                 strategy: "merge",
             }
-        "#})?;
-        assert_eq!(
-            EggConfig::from_dynamic(result)?,
-            EggConfig {
-                enabled: false,
-                targets: maplit::hashmap! {
-                    PathBuf::from("foo") => PathBuf::from("~/bar")
-                },
-                templates: maplit::hashset! {
-                    PathBuf::from("foo")
-                },
-                main_file: Some(PathBuf::from("foo")),
-                strategy: crate::eggs_config::DeploymentStrategy::Merge,
-            }
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_read_simple_eggs_config() -> TestResult {
-        let result = rhai::Engine::new().eval(r#"#{ targets: "~/bar" }"#)?;
-        assert_eq!(
-            EggConfig::from_dynamic(result).unwrap(),
-            EggConfig {
-                enabled: true,
-                targets: maplit::hashmap! {
-                    PathBuf::from(".") => PathBuf::from("~/bar")
-                },
-                templates: HashSet::new(),
-                main_file: None,
-                strategy: Default::default(),
-            }
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_read_minimal_eggs_config() -> TestResult {
-        let result = rhai::Engine::new().eval(r#""~/bar""#)?;
-        assert_eq!(
-            EggConfig::from_dynamic(result)?,
-            EggConfig {
-                enabled: true,
-                targets: maplit::hashmap! {
-                    PathBuf::from(".") => PathBuf::from("~/bar")
-                },
-                templates: HashSet::new(),
-                main_file: None,
-                strategy: Default::default(),
-            }
-        );
+        "#},
+        EggConfig {
+            enabled: false,
+            targets: maplit::hashmap! {
+                PathBuf::from("foo") => PathBuf::from("~/bar")
+            },
+            templates: maplit::hashset! {
+                PathBuf::from("foo")
+            },
+            main_file: Some(PathBuf::from("foo")),
+            strategy: crate::eggs_config::DeploymentStrategy::Merge,
+        }
+    )]
+    #[case(
+        r#"#{ targets: "~/bar" }"#,
+        EggConfig {
+            enabled: true,
+            targets: maplit::hashmap! {
+                PathBuf::from(".") => PathBuf::from("~/bar")
+            },
+            templates: HashSet::new(),
+            main_file: None,
+            strategy: Default::default(),
+        }
+    )]
+    #[case(
+        r#""~/bar""#,
+        EggConfig {
+            enabled: true,
+            targets: maplit::hashmap! {
+                PathBuf::from(".") => PathBuf::from("~/bar")
+            },
+            templates: HashSet::new(),
+            main_file: None,
+            strategy: Default::default(),
+        }
+    )]
+    fn test_read_eggs_config(#[case] input: &str, #[case] expected: EggConfig) -> TestResult {
+        let result = rhai::Engine::new().eval(input)?;
+        assert_eq!(EggConfig::from_dynamic(result)?, expected);
         Ok(())
     }
 

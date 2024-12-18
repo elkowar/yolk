@@ -22,8 +22,6 @@ mod doc_generator;
 pub mod eggs_config;
 pub mod script;
 mod templating;
-#[cfg(test)]
-pub mod test;
 mod util;
 mod yolk;
 mod yolk_paths;

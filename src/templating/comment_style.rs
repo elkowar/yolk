@@ -162,59 +162,55 @@ mod test {
 
     use super::CommentStyle;
 
-    #[track_caller]
-    fn assert_roundtrip_works(start: &str, expected_disabled: &str, comment_style: CommentStyle) {
+    use pretty_assertions::assert_eq;
+    use rstest::rstest;
+
+    #[rstest]
+    #[case("  foo", "  #<yolk> foo", CommentStyle::prefix("#"))]
+    #[case("  foo", "  /*<yolk> foo*/", CommentStyle::circumfix("/*", "*/"))]
+    #[case("foo", "#<yolk> foo", CommentStyle::prefix("#"))]
+    #[case("foo", "/*<yolk> foo*/", CommentStyle::circumfix("/*", "*/"))]
+    fn test_disable_enable_roundtrip(
+        #[case] start: &str,
+        #[case] expected_disabled: &str,
+        #[case] comment_style: CommentStyle,
+    ) {
         let disabled = comment_style.disable_line(start);
         let enabled = comment_style.enable_line(disabled.as_ref());
         assert_eq!(expected_disabled, disabled);
         assert_eq!(start, enabled);
     }
 
-    #[test]
-    pub fn test_disable_enable_roundtrip() {
-        // This roundtrip (disable -> enable) should _always_ be identity
-        assert_roundtrip_works("  foo", "  #<yolk> foo", CommentStyle::prefix("#"));
-
-        assert_roundtrip_works(
-            "  foo",
-            "  /*<yolk> foo*/",
-            CommentStyle::circumfix("/*", "*/"),
-        );
+    #[rstest]
+    #[case(CommentStyle::prefix("#"), "\tfoo")]
+    #[case(CommentStyle::prefix("#"), "foo  ")]
+    #[case(CommentStyle::circumfix("/*", "*/"), "  foo  ")]
+    fn test_enable_idempotent(#[case] comment_style: CommentStyle, #[case] line: &str) {
+        let enabled = comment_style.enable_line(line);
+        let enabled_again = comment_style.enable_line(enabled.as_ref());
+        assert_eq!(enabled, enabled_again);
     }
 
-    #[test]
-    pub fn test_enable_idempodent() {
-        let assert_idempotent = |comment_style: CommentStyle, line: &str| {
-            let enabled = comment_style.enable_line(line);
-            let enabled_again = comment_style.enable_line(enabled.as_ref());
-            assert_eq!(enabled, enabled_again);
-        };
-        assert_idempotent(CommentStyle::prefix("#"), "\tfoo");
-        assert_idempotent(CommentStyle::prefix("#"), "foo  ");
-        assert_idempotent(CommentStyle::circumfix("/*", "*/"), "  foo  ");
+    #[rstest]
+    #[case(CommentStyle::prefix("#"), "\tfoo")]
+    #[case(CommentStyle::prefix("#"), "foo  ")]
+    #[case(CommentStyle::circumfix("/*", "*/"), "  foo  ")]
+    fn test_disable_idempotent(#[case] comment_style: CommentStyle, #[case] line: &str) {
+        let disabled = comment_style.disable_line(line);
+        let disabled_again = comment_style.disable_line(disabled.as_ref());
+        assert_eq!(disabled, disabled_again);
     }
 
-    #[test]
-    pub fn test_disable_idempodent() {
-        let assert_idempotent = |comment_style: CommentStyle, line: &str| {
-            let disabled = comment_style.disable_line(line);
-            let disabled_again = comment_style.disable_line(disabled.as_ref());
-            assert_eq!(disabled, disabled_again);
-        };
-        assert_idempotent(CommentStyle::prefix("#"), "\tfoo");
-        assert_idempotent(CommentStyle::prefix("#"), "foo  ");
-        assert_idempotent(CommentStyle::circumfix("/*", "*/"), "  foo  ");
-    }
-
-    #[test]
-    pub fn test_infer_comment_syntax() -> TestResult {
+    #[rstest]
+    #[case("# {< foo >}", Some(CommentStyle::prefix("#")))]
+    #[case("/* {< foo >} */", Some(CommentStyle::circumfix("/*", "*/")))]
+    fn test_infer_comment_syntax(
+        #[case] input: &str,
+        #[case] expected: Option<CommentStyle>,
+    ) -> TestResult {
         assert_eq!(
-            CommentStyle::try_infer(&Element::try_from_str("# {< foo >}")?),
-            Some(CommentStyle::prefix("#"))
-        );
-        assert_eq!(
-            CommentStyle::try_infer(&Element::try_from_str("/* {< foo >} */")?),
-            Some(CommentStyle::circumfix("/*", "*/"))
+            CommentStyle::try_infer(&Element::try_from_str(input)?),
+            expected
         );
         Ok(())
     }
