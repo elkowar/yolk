@@ -29,10 +29,7 @@ impl Default for Document<'_> {
 
 impl<'a> Document<'a> {
     pub fn render(&self, eval_ctx: &mut EvalCtx) -> Result<String> {
-        let ctx = RenderContext {
-            comment_style: self.comment_style.clone(),
-        };
-        let output = render_elements(&ctx, eval_ctx, &self.elements)
+        let output = render_elements(&self.comment_style, eval_ctx, &self.elements)
             .map_err(|e| e.into_report(&self.source_name, self.source))?;
         Ok(output)
     }
@@ -53,54 +50,5 @@ impl<'a> Document<'a> {
             source: s,
             source_name: name.to_string(),
         })
-    }
-
-    #[allow(unused)]
-    pub fn elements(&self) -> &[element::Element<'a>] {
-        &self.elements
-    }
-    #[allow(unused)]
-    pub fn comment_style(&self) -> &CommentStyle {
-        &self.comment_style
-    }
-}
-
-pub struct RenderContext {
-    pub(crate) comment_style: CommentStyle,
-}
-
-impl Default for RenderContext {
-    fn default() -> Self {
-        Self {
-            comment_style: CommentStyle::Prefix("#".to_string()),
-        }
-    }
-}
-
-impl RenderContext {
-    #[allow(unused)]
-    pub fn new(comment_style: CommentStyle) -> Self {
-        Self { comment_style }
-    }
-
-    pub fn string_toggled(&self, s: &str, enable: bool) -> String {
-        if enable {
-            self.enabled_str(s)
-        } else {
-            self.disabled_str(s)
-        }
-    }
-
-    pub fn enabled_str(&self, s: &str) -> String {
-        s.split('\n')
-            .map(|x| self.comment_style.enable_line(x))
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-    pub fn disabled_str(&self, s: &str) -> String {
-        s.split('\n')
-            .map(|x| self.comment_style.disable_line(x))
-            .collect::<Vec<_>>()
-            .join("\n")
     }
 }

@@ -1,7 +1,7 @@
 use crate::script::eval_ctx::EvalCtx;
 use miette::Result;
 
-use super::{document::RenderContext, parser::Sp, template_error::TemplateError};
+use super::{comment_style::CommentStyle, parser::Sp, template_error::TemplateError};
 
 /// A single, full line with a tag in it. Contains the span of the entire line.
 #[derive(Debug, Eq, PartialEq)]
@@ -70,7 +70,7 @@ impl<'a> Element<'a> {
 
     pub fn render(
         &self,
-        render_ctx: &RenderContext,
+        comment_style: &CommentStyle,
         eval_ctx: &mut EvalCtx,
     ) -> Result<String, TemplateError> {
         match self {
@@ -80,7 +80,7 @@ impl<'a> Element<'a> {
                     let eval_result = eval_ctx
                         .eval_rhai::<bool>(expr.as_str())
                         .map_err(|e| TemplateError::from_rhai(e, expr.range()))?;
-                    Ok(render_ctx.string_toggled(line.full_line.as_str(), eval_result))
+                    Ok(comment_style.toggle_string(line.full_line.as_str(), eval_result))
                 }
                 false => Ok(format!(
                     "{}{}{}",
@@ -98,7 +98,7 @@ impl<'a> Element<'a> {
                 true => Ok(format!(
                     "{}{}",
                     line.full_line.as_str(),
-                    &render_ctx.string_toggled(
+                    &comment_style.toggle_string(
                         next_line.as_str(),
                         eval_ctx
                             .eval_rhai::<bool>(expr.as_str())
@@ -112,7 +112,7 @@ impl<'a> Element<'a> {
                 )),
             },
             Element::MultiLine { block, end } => {
-                let rendered_body = render_elements(render_ctx, eval_ctx, &block.body)?;
+                let rendered_body = render_elements(comment_style, eval_ctx, &block.body)?;
                 Ok(format!(
                     "{}{}{}",
                     block.tagged_line.full_line.as_str(),
@@ -137,15 +137,15 @@ impl<'a> Element<'a> {
                             .map_err(|e| TemplateError::from_rhai(e, block.expr.range()))?;
                     had_true = had_true || expr_true;
 
-                    let rendered_body = render_elements(render_ctx, eval_ctx, &block.body)?;
+                    let rendered_body = render_elements(comment_style, eval_ctx, &block.body)?;
                     output.push_str(block.tagged_line.full_line.as_str());
-                    output.push_str(&render_ctx.string_toggled(&rendered_body, expr_true));
+                    output.push_str(&comment_style.toggle_string(&rendered_body, expr_true));
                 }
                 if let Some(block) = else_block {
                     let expr_true = !had_true;
-                    let rendered_body = render_elements(render_ctx, eval_ctx, &block.body)?;
+                    let rendered_body = render_elements(comment_style, eval_ctx, &block.body)?;
                     output.push_str(block.tagged_line.full_line.as_str());
-                    output.push_str(&render_ctx.string_toggled(&rendered_body, expr_true));
+                    output.push_str(&comment_style.toggle_string(&rendered_body, expr_true));
                 }
                 output.push_str(end.full_line.as_str());
                 Ok(output)
@@ -155,14 +155,14 @@ impl<'a> Element<'a> {
 }
 
 pub fn render_elements(
-    render_ctx: &RenderContext,
+    comment_style: &CommentStyle,
     eval_ctx: &mut EvalCtx,
     elements: &[Element<'_>],
 ) -> Result<String, TemplateError> {
     let mut errs = Vec::new();
     let mut output = String::new();
     for element in elements {
-        match element.render(render_ctx, eval_ctx) {
+        match element.render(comment_style, eval_ctx) {
             Ok(rendered) => output.push_str(&rendered),
             Err(e) => errs.push(e),
         }

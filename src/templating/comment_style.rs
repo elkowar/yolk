@@ -80,6 +80,22 @@ impl CommentStyle {
             CommentStyle::Circumfix(left, _) => left,
         }
     }
+
+    pub fn toggle_string(&self, s: &str, enable: bool) -> String {
+        s.split('\n')
+            .map(|x| self.toggle_line(x, enable))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    pub fn toggle_line<'a>(&self, line: &'a str, enable: bool) -> Cow<'a, str> {
+        if enable {
+            self.enable_line(line)
+        } else {
+            self.disable_line(line)
+        }
+    }
+
     pub fn enable_line<'a>(&self, line: &'a str) -> Cow<'a, str> {
         let left = self.left();
         let re = create_regex(format!(
