@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.13](https://github.com/elkowar/yolk/compare/v0.0.12...v0.0.13) - 2024-12-18
+
+### Added
+
+- [**breaking**] Add explicit deployment strategies, default to put
+- add main_file config for smarter yolk edit command
+- Add more flexible loglevel configuration
+
+### Fixed
+
+- Yolk not removing dead symlinks when deploying eggs
+
 ## [0.0.12](https://github.com/elkowar/yolk/compare/v0.0.11...v0.0.12) - 2024-12-16
 
 ### Added
