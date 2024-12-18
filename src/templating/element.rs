@@ -1,11 +1,16 @@
 use crate::script::eval_ctx::EvalCtx;
 use miette::Result;
 
-use super::{
-    document::RenderContext,
-    parser::{Sp, TaggedLine},
-    template_error::TemplateError,
-};
+use super::{document::RenderContext, parser::Sp, template_error::TemplateError};
+
+/// A single, full line with a tag in it. Contains the span of the entire line.
+#[derive(Debug, Eq, PartialEq)]
+pub struct TaggedLine<'a> {
+    pub left: &'a str,
+    pub tag: &'a str,
+    pub right: &'a str,
+    pub full_line: Sp<&'a str>,
+}
 
 /// The starting line and body of a block, such as a multiline tag or part of a conditional.
 ///
