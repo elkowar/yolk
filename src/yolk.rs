@@ -1,5 +1,5 @@
 use fs_err::PathExt as _;
-use miette::{Context, IntoDiagnostic, NamedSource, Result, Severity};
+use miette::{Context, IntoDiagnostic, Result, Severity};
 use normalize_path::NormalizePath;
 use std::{collections::HashMap, path::Path};
 
@@ -170,15 +170,11 @@ impl Yolk {
         eval_ctx.set_global("SYSTEM", sysinfo);
         eval_ctx.set_global("LOCAL", mode == EvalMode::Local);
         eval_ctx.load_as_global_module(&yolk_file).map_err(|e| {
-            miette::Report::from(e)
-                .with_source_code(
-                    NamedSource::new(
-                        self.yolk_paths.yolk_rhai_path().to_string_lossy(),
-                        yolk_file,
-                    )
-                    .with_language("Rust"),
-                )
-                .wrap_err("Failed to execute yolk.rhai")
+            e.into_report(
+                self.yolk_paths.yolk_rhai_path().to_string_lossy(),
+                yolk_file,
+            )
+            .wrap_err("Failed to execute yolk.rhai")
         })?;
 
         Ok(eval_ctx)

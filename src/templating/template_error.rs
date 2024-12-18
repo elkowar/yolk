@@ -1,4 +1,4 @@
-use miette::SourceSpan;
+use miette::{NamedSource, SourceSpan};
 
 use crate::script::rhai_error::RhaiError;
 
@@ -32,5 +32,11 @@ impl TemplateError {
                 error_span: None,
             },
         }
+    }
+
+    /// Convert this error into a [`miette::Report`] with the given name and source code attached.
+    pub fn into_report(self, name: impl ToString, source: impl ToString) -> miette::Report {
+        miette::Report::from(self)
+            .with_source_code(NamedSource::new(name.to_string(), source.to_string()))
     }
 }

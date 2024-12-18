@@ -207,11 +207,9 @@ fn run_command(args: Args) -> Result<()> {
                 true => EvalMode::Canonical,
                 false => EvalMode::Local,
             })?;
-            let result = eval_ctx.eval_rhai::<Dynamic>(expr).map_err(|e| {
-                miette::Report::from(e).with_source_code(
-                    miette::NamedSource::new("<inline>", expr.to_string()).with_language("Rust"),
-                )
-            })?;
+            let result = eval_ctx
+                .eval_rhai::<Dynamic>(expr)
+                .map_err(|e| e.into_report("<inline>", expr))?;
             println!("{result}");
         }
         Command::Git { command } => {

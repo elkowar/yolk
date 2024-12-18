@@ -67,4 +67,11 @@ impl RhaiError {
             origin: Box::new(RhaiError::RhaiError(err)),
         }
     }
+
+    /// Convert this error into a [`miette::Report`] with the given name and source code attached as a rust source.
+    pub fn into_report(self, name: impl ToString, source: impl ToString) -> miette::Report {
+        miette::Report::from(self).with_source_code(
+            miette::NamedSource::new(name.to_string(), source.to_string()).with_language("Rust"),
+        )
+    }
 }

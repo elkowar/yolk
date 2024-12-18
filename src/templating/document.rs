@@ -13,7 +13,7 @@ pub struct Document<'a> {
     comment_style: CommentStyle,
     elements: Vec<element::Element<'a>>,
     source: &'a str,
-    source_name: Option<String>,
+    source_name: String,
 }
 
 impl Default for Document<'_> {
@@ -21,7 +21,7 @@ impl Default for Document<'_> {
         Self {
             comment_style: CommentStyle::Prefix("#".to_string()),
             elements: Vec::new(),
-            source_name: None,
+            source_name: "unnamed".to_string(),
             source: "",
         }
     }
@@ -32,14 +32,8 @@ impl<'a> Document<'a> {
         let ctx = RenderContext {
             comment_style: self.comment_style.clone(),
         };
-        let output = render_elements(&ctx, eval_ctx, &self.elements).map_err(|e| {
-            miette::Report::from(e).with_source_code(NamedSource::new(
-                self.source_name
-                    .clone()
-                    .unwrap_or_else(|| "unnamed".to_string()),
-                self.source.to_string(),
-            ))
-        })?;
+        let output = render_elements(&ctx, eval_ctx, &self.elements)
+            .map_err(|e| e.into_report(&self.source_name, self.source))?;
         Ok(output)
     }
 
@@ -57,7 +51,7 @@ impl<'a> Document<'a> {
             elements,
             comment_style,
             source: s,
-            source_name: Some(name.to_string()),
+            source_name: name.to_string(),
         })
     }
 
