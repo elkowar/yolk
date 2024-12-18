@@ -68,30 +68,22 @@ impl Default for EggConfig {
 }
 
 impl EggConfig {
+    pub fn new(in_egg: impl AsRef<Path>, deployed_to: impl AsRef<Path>) -> Self {
+        let in_egg = in_egg.as_ref();
+        EggConfig {
+            enabled: true,
+            targets: maplit::hashmap! {
+                in_egg.to_path_buf() => deployed_to.as_ref().to_path_buf()
+            },
+            templates: HashSet::new(),
+            main_file: None,
+            strategy: DeploymentStrategy::default(),
+        }
+    }
     pub fn new_merge(in_egg: impl AsRef<Path>, deployed_to: impl AsRef<Path>) -> Self {
-        let in_egg = in_egg.as_ref();
-        EggConfig {
-            enabled: true,
-            targets: maplit::hashmap! {
-                in_egg.to_path_buf() => deployed_to.as_ref().to_path_buf()
-            },
-            templates: HashSet::new(),
-            main_file: None,
-            strategy: DeploymentStrategy::Merge,
-        }
+        Self::new(in_egg, deployed_to).with_strategy(DeploymentStrategy::Merge)
     }
-    pub fn new_put(in_egg: impl AsRef<Path>, deployed_to: impl AsRef<Path>) -> Self {
-        let in_egg = in_egg.as_ref();
-        EggConfig {
-            enabled: true,
-            targets: maplit::hashmap! {
-                in_egg.to_path_buf() => deployed_to.as_ref().to_path_buf()
-            },
-            templates: HashSet::new(),
-            main_file: None,
-            strategy: DeploymentStrategy::Put,
-        }
-    }
+
     pub fn with_enabled(mut self, enabled: bool) -> Self {
         self.enabled = enabled;
         self
@@ -104,6 +96,11 @@ impl EggConfig {
 
     pub fn with_strategy(mut self, strategy: DeploymentStrategy) -> Self {
         self.strategy = strategy;
+        self
+    }
+
+    pub fn with_main_file(mut self, main_file: impl AsRef<Path>) -> Self {
+        self.main_file = Some(main_file.as_ref().to_path_buf());
         self
     }
 
@@ -154,15 +151,7 @@ impl EggConfig {
 
     pub fn from_dynamic(value: Dynamic) -> Result<Self, RhaiError> {
         if let Ok(target_path) = value.clone().into_string() {
-            return Ok(EggConfig {
-                enabled: true,
-                targets: maplit::hashmap! {
-                    PathBuf::from(".") => PathBuf::from(&*target_path)
-                },
-                templates: HashSet::new(),
-                main_file: None,
-                strategy: Default::default(),
-            });
+            return Ok(EggConfig::new(".", target_path));
         }
         let Ok(map) = value.as_map_ref() else {
             return Err(rhai_error!("egg value must be a string or a map"));
@@ -223,15 +212,12 @@ impl EggConfig {
                 HashSet::new()
             };
 
-        let enabled = map
-            .get("enabled")
-            .map(|x| {
-                x.as_bool()
-                    .map_err(|t| rhai_error!("`enabled` must be a list, but got {t}"))
-            })
-            .transpose()?
-            .unwrap_or(true);
-
+        let enabled = if let Some(x) = map.get("enabled") {
+            x.as_bool()
+                .map_err(|t| rhai_error!("`enabled` must be a list, but got {t}"))?
+        } else {
+            true
+        };
         Ok(EggConfig {
             targets,
             enabled,
@@ -244,7 +230,7 @@ impl EggConfig {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashSet, path::PathBuf};
+    use std::collections::HashSet;
 
     use assert_fs::{
         prelude::{FileWriteStr as _, PathChild as _},
@@ -254,7 +240,10 @@ mod test {
     use miette::IntoDiagnostic as _;
     use pretty_assertions::assert_eq;
 
-    use crate::{eggs_config::EggConfig, util::TestResult};
+    use crate::{
+        eggs_config::{DeploymentStrategy, EggConfig},
+        util::TestResult,
+    };
 
     use rstest::rstest;
 
@@ -269,42 +258,14 @@ mod test {
                 strategy: "merge",
             }
         "#},
-        EggConfig {
-            enabled: false,
-            targets: maplit::hashmap! {
-                PathBuf::from("foo") => PathBuf::from("~/bar")
-            },
-            templates: maplit::hashset! {
-                PathBuf::from("foo")
-            },
-            main_file: Some(PathBuf::from("foo")),
-            strategy: crate::eggs_config::DeploymentStrategy::Merge,
-        }
+        EggConfig::new_merge("foo", "~/bar")
+            .with_enabled(false)
+            .with_template("foo")
+            .with_strategy(DeploymentStrategy::Merge)
+            .with_main_file("foo")
     )]
-    #[case(
-        r#"#{ targets: "~/bar" }"#,
-        EggConfig {
-            enabled: true,
-            targets: maplit::hashmap! {
-                PathBuf::from(".") => PathBuf::from("~/bar")
-            },
-            templates: HashSet::new(),
-            main_file: None,
-            strategy: Default::default(),
-        }
-    )]
-    #[case(
-        r#""~/bar""#,
-        EggConfig {
-            enabled: true,
-            targets: maplit::hashmap! {
-                PathBuf::from(".") => PathBuf::from("~/bar")
-            },
-            templates: HashSet::new(),
-            main_file: None,
-            strategy: Default::default(),
-        }
-    )]
+    #[case(r#"#{ targets: "~/bar" }"#, EggConfig::new(".", "~/bar"))]
+    #[case(r#""~/bar""#, EggConfig::new(".", "~/bar"))]
     fn test_read_eggs_config(#[case] input: &str, #[case] expected: EggConfig) -> TestResult {
         let result = rhai::Engine::new().eval(input)?;
         assert_eq!(EggConfig::from_dynamic(result)?, expected);

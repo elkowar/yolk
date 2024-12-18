@@ -88,3 +88,15 @@ pub fn setup_and_init_test_yolk() -> miette::Result<(
     yolk.init_yolk()?;
     Ok((home, yolk, eggs))
 }
+
+#[cfg(test)]
+pub fn render_error(e: impl miette::Diagnostic) -> String {
+    use miette::GraphicalReportHandler;
+
+    let mut out = String::new();
+    GraphicalReportHandler::new()
+        .with_theme(miette::GraphicalTheme::unicode_nocolor())
+        .render_report(&mut out, &e)
+        .unwrap();
+    out
+}

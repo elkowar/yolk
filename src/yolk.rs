@@ -393,13 +393,14 @@ mod test {
 
     use crate::{
         eggs_config::DeploymentStrategy,
-        util::{setup_and_init_test_yolk, TestResult},
+        util::{create_regex, render_error, setup_and_init_test_yolk, TestResult},
         yolk_paths::Egg,
     };
     use assert_fs::{
         assert::PathAssert,
         prelude::{FileWriteStr, PathChild, PathCreateDir},
     };
+    use miette::ErrorHook;
     use p::path::{exists, is_dir, is_symlink};
     use predicates::prelude::PredicateBooleanExt;
     use predicates::{self as p};
@@ -474,7 +475,7 @@ mod test {
         yolk.sync_egg_deployment(&Egg::open(
             home.to_path_buf(),
             eggs.child("bar").to_path_buf(),
-            EggConfig::new_put(".", &home),
+            EggConfig::new(".", &home),
         )?)?;
         home.child(".config").assert(is_dir());
         home.child(".config/thing.toml").assert(exists().not());
@@ -490,7 +491,7 @@ mod test {
         yolk.sync_egg_deployment(&Egg::open(
             home.to_path_buf(),
             eggs.child("foo").to_path_buf(),
-            EggConfig::new_put("foo.toml", home.child("a/a/a/foo.toml")),
+            EggConfig::new("foo.toml", home.child("a/a/a/foo.toml")),
         )?)?;
         home.child("a/a/a").assert(is_dir().and(is_symlink().not()));
         home.child("a/a/a/foo.toml").assert(is_symlink());
@@ -642,6 +643,26 @@ mod test {
             "TEST{< scream() >}",
             yolk.eval_template(&mut eval_ctx, "", "test{< scream() >}")?
         );
+
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_syntax_error_in_yolk_rhai() -> TestResult {
+        miette::set_hook(Box::new(|_| {
+            Box::new(miette::MietteHandlerOpts::new().color(false).build())
+        }))?;
+        let (home, yolk, _) = setup_and_init_test_yolk()?;
+        home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
+            fn foo(
+        "#})?;
+        insta::assert_snapshot!(yolk
+            .prepare_eval_ctx_for_templates(crate::yolk::EvalMode::Local)
+            .map_err(|e| create_regex(r"\[.*.rhai:\d+:\d+]")
+                .unwrap()
+                .replace(&format!("{:?}", e), "[no-filename-in-test]")
+                .to_string())
+            .unwrap_err());
 
         Ok(())
     }
