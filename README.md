@@ -4,11 +4,6 @@
 # Yolk – Painfree Templated Dotfile Management
 
 
-![Static Badge](https://img.shields.io/badge/homepage-yellow?style=for-the-badge&link=https%3A%2F%2Felkowar.github.io%2Fyolk)
-![Crates.io Version](https://img.shields.io/crates/v/yolk-dots?style=for-the-badge)
-![GitHub Release](https://img.shields.io/github/v/release/elkowar/yolk?display_name=release&style=for-the-badge)
-![GitHub License](https://img.shields.io/github/license/ElKowar/yolk?style=for-the-badge)
-
 </div>
 
 Yolk is a dotfile management tool with a unique spin on templating,
