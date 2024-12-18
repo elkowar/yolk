@@ -42,6 +42,8 @@ pub fn eval_ctx() -> EvalCtx {
     indoc!{r#"
             /* {% if false %} */
             foo
+            /* {% elif false %} */
+            foo
             /* {% elif true %} */
             bar
             /* {% else %} */
@@ -50,6 +52,8 @@ pub fn eval_ctx() -> EvalCtx {
         "#},
     indoc!{r#"
             /* {% if false %} */
+            /*<yolk> foo*/
+            /* {% elif false %} */
             /*<yolk> foo*/
             /* {% elif true %} */
             bar

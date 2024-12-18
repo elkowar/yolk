@@ -44,7 +44,7 @@ impl RhaiError {
             let offset_start = source_code
                 .split_inclusive('\n')
                 .take(line_nr - 1)
-                .map(|x| x.len())
+                .map(|x| dbg!(x).len())
                 .sum::<usize>();
             span = if let Some(within_line) = position.position() {
                 offset_start + within_line..offset_start + within_line + 1
@@ -61,6 +61,9 @@ impl RhaiError {
                     .count();
                 offset_start + indent..offset_end
             };
+        }
+        if span.start >= source_code.len() {
+            span = source_code.len() - 1..source_code.len();
         }
         Self::SourceError {
             span,

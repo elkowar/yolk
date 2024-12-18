@@ -383,9 +383,8 @@ impl<T: Parser<I, O, E> + Sized, I: Stream + Location, O, E> ParserExt<I, O, E> 
 
 #[cfg(test)]
 mod test {
-    use crate::util::TestResult;
+    use crate::util::{render_error, TestResult};
     use insta::assert_debug_snapshot;
-    use miette::GraphicalReportHandler;
     use winnow::Parser as _;
 
     use crate::templating::parser::{
@@ -393,15 +392,6 @@ mod test {
     };
 
     use super::{new_input, p_inline_element, p_tag_line};
-
-    fn render_error(e: impl miette::Diagnostic) -> String {
-        let mut out = String::new();
-        GraphicalReportHandler::new()
-            .with_theme(miette::GraphicalTheme::unicode_nocolor())
-            .render_report(&mut out, &e)
-            .unwrap();
-        out
-    }
 
     #[test]
     fn test_inline_tag() -> TestResult {

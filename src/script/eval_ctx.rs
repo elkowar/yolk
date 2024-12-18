@@ -13,6 +13,7 @@ use super::stdlib;
 
 pub const YOLK_TEXT_NAME: &str = "YOLK_TEXT";
 
+#[derive(Debug)]
 pub struct EvalCtx {
     engine: Engine,
     scope: Scope<'static>,
