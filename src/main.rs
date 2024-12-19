@@ -17,6 +17,7 @@ use tracing_subscriber::{
 use util::PathExt;
 use yolk::{EvalMode, Yolk};
 
+#[cfg(feature = "docgen")]
 mod doc_generator;
 
 pub mod eggs_config;
@@ -98,6 +99,7 @@ enum Command {
         no_sync: bool,
     },
 
+    #[cfg(feature = "docgen")]
     #[command(hide(true))]
     Docs { dir: PathBuf },
 }
@@ -371,6 +373,7 @@ fn run_command(args: Args) -> Result<()> {
                 std::thread::sleep(std::time::Duration::from_secs(1));
             }
         }
+        #[cfg(feature = "docgen")]
         Command::Docs { dir } => {
             let docs = doc_generator::generate_docs(yolk)?;
             for (name, docs) in docs {
