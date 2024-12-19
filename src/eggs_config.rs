@@ -150,8 +150,8 @@ impl EggConfig {
     }
 
     pub fn from_dynamic(value: Dynamic) -> Result<Self, RhaiError> {
-        if let Ok(target_path) = value.clone().into_string() {
-            return Ok(EggConfig::new(".", target_path));
+        if let Ok(target_path) = value.as_immutable_string_ref() {
+            return Ok(EggConfig::new(".", target_path.to_string()));
         }
         let Ok(map) = value.as_map_ref() else {
             return Err(rhai_error!("egg value must be a string or a map"));
@@ -160,8 +160,8 @@ impl EggConfig {
             .get("targets")
             .ok_or_else(|| rhai_error!("egg table must contain a 'target' key"))?;
 
-        let targets = if let Ok(targets) = targets.clone().into_immutable_string() {
-            maplit::hashmap! { PathBuf::from(".") => PathBuf::from(&*targets) }
+        let targets = if let Ok(targets) = targets.as_immutable_string_ref() {
+            maplit::hashmap! { PathBuf::from(".") => PathBuf::from(targets.to_string()) }
         } else if let Ok(targets) = targets.as_map_ref() {
             targets
                 .clone()

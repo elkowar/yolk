@@ -28,6 +28,14 @@ impl Default for CommentStyle {
     }
 }
 
+// TODO: Technically, a lot of this could already be done in the parser
+// We could parse the indent, and yolk-comment-start and end stuff during the main parsing phase already
+// That would allow us to avoid having to regex here, which would potentially be noticably more performant,
+// and maybe even more elegant.
+// However, that would require the parser to be a lot more complex,
+// as well as requiring us to add a lot more information into the parsed data structure.
+// The performance benefits are likely more than negligible, so not worth it for now.
+
 impl CommentStyle {
     /// Try to infer the CommentStyle from a line
     pub fn try_infer(element: &Element<'_>) -> Option<Self> {
@@ -88,6 +96,7 @@ impl CommentStyle {
     }
 
     pub fn toggle_string(&self, s: &str, enable: bool) -> String {
+        // TODO: Technically this could return Cow<'_, str> instead, but that's hard
         s.split('\n')
             .map(|x| self.toggle_line(x, enable))
             .collect::<Vec<_>>()
