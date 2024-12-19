@@ -417,8 +417,7 @@ mod test {
     // }
 
     #[test]
-    fn test_deploy_egg_config() -> TestResult {
-        cov_mark::check_count!(deploy_merge, 1);
+    fn test_deploy_egg_put_mode() -> TestResult {
         let (home, yolk, eggs) = setup_and_init_test_yolk()?;
         eggs.child("foo/foo.toml").write_str("")?;
         eggs.child("foo/thing/thing.toml").write_str("")?;
@@ -426,13 +425,19 @@ mod test {
             home.to_path_buf(),
             eggs.child("foo").to_path_buf(),
             EggConfig::default()
+                .with_strategy(DeploymentStrategy::Put)
                 .with_target("foo.toml", home.child("foo.toml"))
                 .with_target("thing", home.child("thing")),
         )?)?;
         home.child("foo.toml").assert(is_symlink());
         home.child("thing").assert(is_symlink());
+        Ok(())
+    }
 
-        // Verify stow-style usage works
+    #[test]
+    fn test_deploy_merge_mode() -> TestResult {
+        cov_mark::check_count!(deploy_merge, 1);
+        let (home, yolk, eggs) = setup_and_init_test_yolk()?;
         home.child(".config").create_dir_all()?;
         eggs.child("bar/.config/thing.toml").write_str("")?;
         yolk.sync_egg_deployment(&Egg::open(
