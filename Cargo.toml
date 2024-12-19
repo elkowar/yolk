@@ -35,7 +35,6 @@ rhai = { version = "1.20.0", features = [
     "std",
     "sync",
     "internals",
-    "metadata",
     "no_custom_syntax",
 ] }
 
@@ -72,7 +71,7 @@ inherits = "release"
 lto = "thin"
 
 [features]
-docgen = ["rhai-autodocs"]
+docgen = ["rhai-autodocs", "rhai/metadata"]
 
 # [workspace.metadata.dist.dependencies.apt]
 # "musl-tools" = "*"

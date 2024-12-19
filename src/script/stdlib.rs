@@ -522,6 +522,22 @@ fn create_regex(s: &str) -> RhaiFnResult<Regex> {
     Ok(crate::util::create_regex(s).map_err(|e| e.to_string())?)
 }
 
+#[cfg(not(feature = "docgen"))]
+#[extend::ext]
+impl FuncRegistration {
+    fn with_comments(self, _: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
+        self
+    }
+    fn with_params_info(self, _: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
+        self
+    }
+}
+#[cfg(not(feature = "docgen"))]
+#[extend::ext]
+impl Module {
+    fn set_doc(&mut self, _: &str) {}
+}
+
 #[cfg(test)]
 mod test {
     use crate::util::TestResult;
