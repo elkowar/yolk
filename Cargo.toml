@@ -52,7 +52,10 @@ pretty_assertions = "1.4.1"
 rstest = { version = "0.23.0", default-features = false }
 # tracing-tree = "0.4.0"
 assert_fs = "1.1.2"
-insta = { version = "1.41.1", features = ["yaml"] }
+insta = { version = "1.41.1", default-features = false, features = [
+    "colors",
+    "redactions",
+] }
 predicates = "3.1.2"
 test-log = { version = "0.2.16", default-features = false, features = [
     "color",

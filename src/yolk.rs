@@ -1,4 +1,5 @@
 use fs_err::PathExt as _;
+use miette::miette;
 use miette::{Context, IntoDiagnostic, Result, Severity};
 use normalize_path::NormalizePath;
 use std::{
@@ -13,6 +14,27 @@ use crate::{
     util::{self, PathExt as _},
     yolk_paths::{Egg, YolkPaths},
 };
+
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("multiple thing went wrong")]
+#[diagnostic()]
+pub struct MultiError {
+    #[related]
+    errors: Vec<miette::Report>,
+}
+
+impl MultiError {
+    pub fn new(message: impl Into<String>, errors: Vec<miette::Report>) -> Self {
+        Self { errors }
+    }
+}
+impl From<miette::Report> for MultiError {
+    fn from(report: miette::Report) -> Self {
+        Self {
+            errors: vec![report],
+        }
+    }
+}
 
 pub struct Yolk {
     yolk_paths: YolkPaths,
@@ -34,7 +56,7 @@ impl Yolk {
 
     /// Deploy or un-deploy a given [`Egg`]
     #[tracing::instrument(skip_all, fields(egg = ?egg.name()))]
-    pub fn sync_egg_deployment(&self, egg: &Egg) -> Result<()> {
+    pub fn sync_egg_deployment(&self, egg: &Egg) -> Result<(), MultiError> {
         let deployed = egg
             .is_deployed()
             .with_context(|| format!("Failed to check deployment state for egg {}", egg.name()))?;
@@ -49,7 +71,7 @@ impl Yolk {
                 .config()
                 .targets_expanded(self.yolk_paths.home_path(), egg.path())
                 .context("Failed to expand targets config for egg")?;
-            let mut did_fail = false;
+            let mut errs = Vec::new();
             for (in_egg, deployed) in &mappings {
                 let deploy_mapping = || -> miette::Result<()> {
                     match egg.config().strategy {
@@ -61,7 +83,7 @@ impl Yolk {
                             cov_mark::hit!(deploy_put);
                             if let Some(parent) = deployed.parent() {
                                 fs_err::create_dir_all(parent).map_err(|e| {
-                                    miette::miette!(
+                                    miette!(
                                         severity = Severity::Warning,
                                         "Warning: Failed to create parent dir for deployment of {}: {e:?}",
                                         in_egg.to_abbrev_str()
@@ -74,39 +96,55 @@ impl Yolk {
                     Result::Ok(())
                 };
                 if let Err(e) = deploy_mapping() {
-                    tracing::warn!(
-                        "Warning: Failed to deploy {}: {e:?}",
+                    errs.push(miette!(
+                        severity = Severity::Warning,
+                        "Failed to deploy {}: {e:?}",
                         in_egg.to_abbrev_str()
-                    );
-                    did_fail = true;
+                    ));
                 }
             }
-            debug_assert!(
-                did_fail || egg.is_deployed()?,
-                "Egg::is_deployed should return true after deploying"
-            );
+            if errs.is_empty() {
+                debug_assert!(
+                    !errs.is_empty() || egg.is_deployed()?,
+                    "Egg::is_deployed should return true after deploying"
+                );
+                Ok(())
+            } else {
+                Err(MultiError::new(
+                    format!("Failed to deploy egg {}", egg.name()),
+                    errs,
+                ))
+            }
         } else if !egg.config().enabled && deployed {
             cov_mark::hit!(undeploy);
             tracing::debug!("Removing egg {}", egg.name());
-            let mut did_fail = false;
+            let mut errs = Vec::new();
             let mappings = egg
                 .config()
                 .targets_expanded(self.yolk_paths.home_path(), egg.path())?;
             for (in_egg, deployed) in &mappings {
                 if let Err(e) = remove_symlink_recursive(in_egg, &deployed) {
-                    did_fail = true;
-                    tracing::warn!(
-                        "Warning: Failed to remove deployment of {}: {e:?}",
+                    errs.push(miette!(
+                        "Failed to remove deployment of {}: {e:?}",
                         in_egg.to_abbrev_str()
-                    );
+                    ));
                 }
             }
-            debug_assert!(
-                did_fail || !egg.is_deployed()?,
-                "Egg::is_deployed should return false after undeploying"
-            );
+            if errs.is_empty() {
+                debug_assert!(
+                    !errs.is_empty() || !egg.is_deployed()?,
+                    "Egg::is_deployed should return false after undeploying"
+                );
+                Ok(())
+            } else {
+                Err(MultiError::new(
+                    format!("Failed to deploy egg {}", egg.name()),
+                    errs,
+                ))
+            }
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 
     /// fetch the `eggs` variable from a given EvalCtx.
@@ -115,7 +153,7 @@ impl Yolk {
             .yolk_file_module()
             .expect("Tried to load egg configs before loading yolk file. This is a bug.")
             .get_var_value::<rhai::Map>("eggs")
-            .ok_or_else(|| miette::miette!("Could not find an `eggs` variable in scope"))?;
+            .ok_or_else(|| miette!("Could not find an `eggs` variable in scope"))?;
         Ok(eggs_map
             .into_iter()
             .map(|(x, v)| Ok((x.into(), EggConfig::from_dynamic(v)?)))
@@ -124,19 +162,27 @@ impl Yolk {
 
     /// First, sync the deployment of all eggs to the local system.
     /// Then, update any templated files in the eggs to the given mode.
-    pub fn sync_to_mode(&self, mode: EvalMode) -> Result<()> {
+    pub fn sync_to_mode(&self, mode: EvalMode) -> Result<(), MultiError> {
         let mut eval_ctx = self
             .prepare_eval_ctx_for_templates(mode)
             .context("Failed to prepare evaluation context")?;
 
+        let mut errs = Vec::new();
         let egg_configs = self.load_egg_configs(&mut eval_ctx)?;
 
         for (name, egg_config) in egg_configs.into_iter() {
-            if let Err(e) = self.sync_egg_to_mode(&mut eval_ctx, &name, egg_config) {
-                tracing::warn!("Warning: Failed to sync egg {name}: {e:?}");
+            if let Err(e) = self
+                .sync_egg_to_mode(&mut eval_ctx, &name, egg_config)
+                .wrap_err_with(|| format!("Failed to sync egg `{name}`"))
+            {
+                errs.push(e);
             }
         }
-        Ok(())
+        if errs.is_empty() {
+            Ok(())
+        } else {
+            Err(MultiError::new("Failed to sync some eggs", errs))
+        }
     }
 
     fn sync_egg_to_mode(
@@ -245,7 +291,7 @@ impl Yolk {
         let mut egg_configs = self.load_egg_configs(&mut eval_ctx)?;
         egg_configs
             .remove(egg_name)
-            .ok_or_else(|| miette::miette!("No egg with name {egg_name}"))
+            .ok_or_else(|| miette!("No egg with name {egg_name}"))
             .and_then(|config| self.yolk_paths.get_egg(egg_name, config))
     }
 }
@@ -404,7 +450,7 @@ mod test {
 
     use crate::{
         eggs_config::DeploymentStrategy,
-        util::{create_regex, setup_and_init_test_yolk, TestResult},
+        util::{create_regex, miette_no_color, setup_and_init_test_yolk, TestResult},
         yolk::EvalMode,
         yolk_paths::Egg,
     };
@@ -502,13 +548,15 @@ mod test {
         let (home, yolk, eggs) = setup_and_init_test_yolk()?;
         home.child(".config").create_dir_all()?;
         eggs.child("bar/.config/thing.toml").write_str("")?;
-        yolk.sync_egg_deployment(&Egg::open(
+        let result = yolk.sync_egg_deployment(&Egg::open(
             home.to_path_buf(),
             eggs.child("bar").to_path_buf(),
             EggConfig::new(".", &home),
-        )?)?;
+        )?);
         home.child(".config").assert(is_dir());
         home.child(".config/thing.toml").assert(exists().not());
+        assert!(format!("{:?}", miette::Report::from(result.unwrap_err()))
+            .contains("Failed to create symlink"));
         Ok(())
     }
 
@@ -645,12 +693,32 @@ mod test {
     }
 
     #[test]
+    fn test_sync_eggs_continues_after_failure() -> TestResult {
+        miette_no_color();
+        let (home, yolk, eggs) = setup_and_init_test_yolk()?;
+        home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
+            export let eggs = #{
+                foo: #{ targets: `~`, strategy: "merge", templates: ["foo"]},
+                bar: #{ targets: `~`, strategy: "merge", templates: ["bar"]},
+            };
+        "#})?;
+        eggs.child("foo/foo").write_str(r#"{< invalid rhai >}"#)?;
+        eggs.child("bar/bar").write_str(r#"foo # {<if false>}"#)?;
+        let result = yolk.sync_to_mode(EvalMode::Local);
+        eggs.child("foo/foo").assert(r#"{< invalid rhai >}"#);
+        eggs.child("bar/bar")
+            .assert(r#"#<yolk> foo # {<if false>}"#);
+        assert!(format!("{:?}", miette::Report::from(result.unwrap_err())).contains("Syntax error"));
+        Ok(())
+    }
+
+    #[test]
     fn test_access_sysinfo() -> TestResult {
         let (home, yolk, eggs) = setup_and_init_test_yolk()?;
         home.child("yolk/yolk.rhai").write_str(
             r#"
             export const hostname = SYSTEM.hostname;
-            export let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"]}};
+            export let eggs = #{foo: #{targets: `~/foo`, templates: ["foo.toml"]}};
         "#,
         )?;
         eggs.child("foo/foo.toml")
@@ -695,9 +763,7 @@ mod test {
 
     #[test]
     pub fn test_syntax_error_in_yolk_rhai() -> TestResult {
-        miette::set_hook(Box::new(|_| {
-            Box::new(miette::MietteHandlerOpts::new().color(false).build())
-        }))?;
+        miette_no_color();
         let (home, yolk, _) = setup_and_init_test_yolk()?;
         home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
             fn foo(

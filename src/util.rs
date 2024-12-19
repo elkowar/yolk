@@ -6,6 +6,13 @@ use regex::Regex;
 
 /// Create a symlink at `link` pointing to `original`.
 pub fn create_symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> miette::Result<()> {
+    let link = link.as_ref();
+    let original = original.as_ref();
+    tracing::trace!(
+        "Creating symlink at {} -> {}",
+        link.to_abbrev_str(),
+        original.to_abbrev_str()
+    );
     #[cfg(unix)]
     fs_err::os::unix::fs::symlink(original, link)
         .into_diagnostic()
@@ -49,9 +56,13 @@ impl Path {
     }
 
     fn expanduser(&self) -> PathBuf {
+        #[cfg(not(test))]
         let Some(home) = dirs::home_dir() else {
             return self.to_path_buf();
         };
+        #[cfg(test)]
+        let home = PathBuf::from(std::env::var("HOME").unwrap());
+
         if let Some(first) = self.components().next() {
             if first.as_os_str().to_string_lossy() == "~" {
                 return home.join(self.strip_prefix("~").unwrap());
@@ -117,4 +128,12 @@ pub fn render_error(e: impl miette::Diagnostic) -> String {
         .render_report(&mut out, &e)
         .unwrap();
     out
+}
+
+#[cfg(test)]
+pub fn miette_no_color() {
+    miette::set_hook(Box::new(|_| {
+        Box::new(miette::MietteHandlerOpts::new().color(false).build())
+    }))
+    .unwrap();
 }

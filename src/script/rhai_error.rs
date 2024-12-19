@@ -44,7 +44,7 @@ impl RhaiError {
             let offset_start = source_code
                 .split_inclusive('\n')
                 .take(line_nr - 1)
-                .map(|x| dbg!(x).len())
+                .map(|x| x.len())
                 .sum::<usize>();
             span = if let Some(within_line) = position.position() {
                 offset_start + within_line..offset_start + within_line + 1
