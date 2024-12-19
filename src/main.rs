@@ -224,6 +224,10 @@ fn run_command(args: Args) -> Result<()> {
             {
                 cmd.status().into_diagnostic()?;
             } else {
+                // TODO: Ensure that, in something goes wrong during the sync, the git command is _not_ run.
+                // Even if, normally, the sync call would only emit warnings, we must _never_ commit a failed syc.
+                // This also means there should potentially be slightly more separation between syncing templates and deployment,
+                // as deployment errors are not fatal for git usage.
                 yolk.with_canonical_state(|| {
                     cmd.status().into_diagnostic()?;
                     Ok(())
