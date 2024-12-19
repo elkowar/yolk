@@ -1,7 +1,10 @@
 use fs_err::PathExt as _;
 use miette::{Context, IntoDiagnostic, Result, Severity};
 use normalize_path::NormalizePath;
-use std::{collections::HashMap, path::Path};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use crate::{
     eggs_config::{DeploymentStrategy, EggConfig},
@@ -263,90 +266,97 @@ fn symlink_recursive(
     actual_path: impl AsRef<Path>,
     link_path: &impl AsRef<Path>,
 ) -> Result<()> {
-    let actual_path = actual_path.as_ref().normalize();
-    let link_path = link_path.as_ref().normalize();
-    let egg_root = egg_root.as_ref().normalize();
-    assert!(
-        link_path.is_absolute(),
-        "link_ path must be absolute, but was {}",
-        link_path.display()
-    );
-    assert!(
-        actual_path.is_absolute(),
-        "actual_path must be absolute, but was {}",
-        actual_path.display()
-    );
-    assert!(
-        actual_path.starts_with(&egg_root),
-        "actual_path must be inside egg_root: {} not in {}",
-        actual_path.display(),
-        egg_root.display(),
-    );
-    tracing::debug!(
-        "symlink_recursive({}, {})",
-        actual_path.to_abbrev_str(),
-        link_path.to_abbrev_str()
-    );
-
-    let actual_path = actual_path.canonical()?;
-
-    tracing::trace!("Checking {}", link_path.to_abbrev_str());
-    if link_path.is_symlink() {
-        let link_target = link_path.fs_err_read_link().into_diagnostic()?;
-        tracing::trace!(
-            "link_path exists as symlink at {} -> {}",
-            link_path.to_abbrev_str(),
-            link_target.to_abbrev_str()
+    fn inner(egg_root: PathBuf, actual_path: PathBuf, link_path: PathBuf) -> Result<()> {
+        let actual_path = actual_path.normalize();
+        let link_path = link_path.normalize();
+        let egg_root = egg_root.normalize();
+        assert!(
+            link_path.is_absolute(),
+            "link_ path must be absolute, but was {}",
+            link_path.display()
         );
-        if link_target == actual_path {
-            return Ok(());
-        } else if link_target.exists() {
-            miette::bail!(
-                "Failed to create symlink {} -> {}, as a file already exists there",
-                link_path.to_abbrev_str(),
-                actual_path.to_abbrev_str(),
-            );
-        } else if link_target.starts_with(&egg_root) {
-            tracing::info!(
-                "Removing dead symlink {} -> {}",
+        assert!(
+            actual_path.is_absolute(),
+            "actual_path must be absolute, but was {}",
+            actual_path.display()
+        );
+        assert!(
+            actual_path.starts_with(&egg_root),
+            "actual_path must be inside egg_root: {} not in {}",
+            actual_path.display(),
+            egg_root.display(),
+        );
+        tracing::debug!(
+            "symlink_recursive({}, {})",
+            actual_path.to_abbrev_str(),
+            link_path.to_abbrev_str()
+        );
+
+        let actual_path = actual_path.canonical()?;
+
+        tracing::trace!("Checking {}", link_path.to_abbrev_str());
+        if link_path.is_symlink() {
+            let link_target = link_path.fs_err_read_link().into_diagnostic()?;
+            tracing::trace!(
+                "link_path exists as symlink at {} -> {}",
                 link_path.to_abbrev_str(),
                 link_target.to_abbrev_str()
             );
-            fs_err::remove_file(&link_path).into_diagnostic()?;
-            cov_mark::hit!(remove_dead_symlink);
-            // After we've removed that file, creating the symlink later will succeed!
-        } else {
-            miette::bail!(
-                "Encountered dead symlink, but it doesn't target the egg dir: {}",
+            if link_target == actual_path {
+                return Ok(());
+            } else if link_target.exists() {
+                miette::bail!(
+                    "Failed to create symlink {} -> {}, as a file already exists there",
+                    link_path.to_abbrev_str(),
+                    actual_path.to_abbrev_str(),
+                );
+            } else if link_target.starts_with(&egg_root) {
+                tracing::info!(
+                    "Removing dead symlink {} -> {}",
+                    link_path.to_abbrev_str(),
+                    link_target.to_abbrev_str()
+                );
+                fs_err::remove_file(&link_path).into_diagnostic()?;
+                cov_mark::hit!(remove_dead_symlink);
+                // After we've removed that file, creating the symlink later will succeed!
+            } else {
+                miette::bail!(
+                    "Encountered dead symlink, but it doesn't target the egg dir: {}",
+                    link_path.to_abbrev_str(),
+                );
+            }
+        } else if link_path.exists() {
+            tracing::trace!(
+                "link_path exists as non-symlink {}",
                 link_path.to_abbrev_str(),
             );
-        }
-    } else if link_path.exists() {
-        tracing::trace!(
-            "link_path exists as non-symlink {}",
-            link_path.to_abbrev_str(),
-        );
-        if link_path.is_dir() && actual_path.is_dir() {
-            for entry in actual_path.fs_err_read_dir().into_diagnostic()? {
-                let entry = entry.into_diagnostic()?;
-                symlink_recursive(&egg_root, entry.path(), &link_path.join(entry.file_name()))?;
+            if link_path.is_dir() && actual_path.is_dir() {
+                for entry in actual_path.fs_err_read_dir().into_diagnostic()? {
+                    let entry = entry.into_diagnostic()?;
+                    symlink_recursive(&egg_root, entry.path(), &link_path.join(entry.file_name()))?;
+                }
+                return Ok(());
+            } else if link_path.is_dir() || actual_path.is_dir() {
+                miette::bail!(
+                    "Conflicting file or directory {} with {}",
+                    actual_path.to_abbrev_str(),
+                    link_path.to_abbrev_str()
+                );
             }
-            return Ok(());
-        } else if link_path.is_dir() || actual_path.is_dir() {
-            miette::bail!(
-                "Conflicting file or directory {} with {}",
-                actual_path.to_abbrev_str(),
-                link_path.to_abbrev_str()
-            );
         }
+        util::create_symlink(&actual_path, &link_path)?;
+        tracing::info!(
+            "created symlink {} -> {}",
+            link_path.to_abbrev_str(),
+            actual_path.to_abbrev_str(),
+        );
+        Ok(())
     }
-    util::create_symlink(&actual_path, &link_path)?;
-    tracing::info!(
-        "created symlink {} -> {}",
-        link_path.to_abbrev_str(),
-        actual_path.to_abbrev_str(),
-    );
-    Ok(())
+    inner(
+        egg_root.as_ref().to_path_buf(),
+        actual_path.as_ref().to_path_buf(),
+        link_path.as_ref().to_path_buf(),
+    )
 }
 
 #[tracing::instrument(skip(actual_path, link_path), fields(
