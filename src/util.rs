@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use cached::proc_macro::cached;
+use cached::UnboundCache;
 use miette::{Context as _, IntoDiagnostic as _};
 use regex::Regex;
 
@@ -79,9 +79,15 @@ impl<T: std::fmt::Debug + std::fmt::Display> From<T> for TestError {
     }
 }
 
-#[cached(key = "String", convert = r#"{s.to_string()}"#, result)]
-pub fn create_regex(s: &str) -> miette::Result<Regex> {
-    Regex::new(s).into_diagnostic()
+pub fn create_regex(s: impl AsRef<str>) -> miette::Result<Regex> {
+    cached::cached_key! {
+         REGEXES: UnboundCache<String, Result<Regex, regex::Error>> = UnboundCache::new();
+         Key = { s.to_string() };
+         fn create_regex_cached(s: &str) -> Result<Regex, regex::Error> = {
+             Regex::new(s.as_ref())
+         }
+    }
+    create_regex_cached(s.as_ref()).into_diagnostic()
 }
 
 #[cfg(test)]

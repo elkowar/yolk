@@ -1,9 +1,8 @@
 use std::borrow::Cow;
 
-use cached::proc_macro::cached;
-use regex::Regex;
-
 pub const COMMENT_START: &str = "<yolk> ";
+
+use crate::util::create_regex;
 
 use super::element::{Block, Element};
 
@@ -160,13 +159,6 @@ impl CommentStyle {
         };
         format!("{indent}{left}{COMMENT_START}{remaining_line}{right}",).into()
     }
-}
-
-/// Same as [`Regex::new`], but with caching.
-/// This is used so we don't have to re-create the same regex for each instance of `CommentStyle`
-#[cached]
-fn create_regex(s: String) -> Result<Regex, regex::Error> {
-    Regex::new(&s)
 }
 
 #[cfg(test)]

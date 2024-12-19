@@ -7,8 +7,6 @@ use regex::Regex;
 
 use crate::yolk::EvalMode;
 
-use cached::proc_macro::cached;
-
 use super::sysinfo::{SystemInfo, SystemInfoPaths};
 
 macro_rules! if_canonical_return {
@@ -520,9 +518,8 @@ fn color_hex_to_rgb(hex_string: &str) -> Result<(u8, u8, u8, u8), Box<EvalAltRes
 
 type RhaiFnResult<T> = Result<T, Box<EvalAltResult>>;
 
-#[cached(key = "String", convert = r#"{s.to_string()}"#, result)]
 fn create_regex(s: &str) -> RhaiFnResult<Regex> {
-    Ok(Regex::new(s).map_err(|e| e.to_string())?)
+    Ok(crate::util::create_regex(s).map_err(|e| e.to_string())?)
 }
 
 #[cfg(test)]
