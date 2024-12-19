@@ -16,17 +16,6 @@ pub struct Document<'a> {
     source_name: String,
 }
 
-impl Default for Document<'_> {
-    fn default() -> Self {
-        Self {
-            comment_style: CommentStyle::Prefix("#".to_string()),
-            elements: Vec::new(),
-            source_name: "unnamed".to_string(),
-            source: "",
-        }
-    }
-}
-
 impl<'a> Document<'a> {
     pub fn render(&self, eval_ctx: &mut EvalCtx) -> Result<String> {
         let output = render_elements(&self.comment_style, eval_ctx, &self.elements)

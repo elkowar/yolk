@@ -7,8 +7,14 @@ use crate::templating::COMMENT_START;
 
 use super::element::{Block, Element};
 
-const PREFIX_COMMENT_SYMBOLS: [&str; 5] = ["//", "#", "--", ";", "%"];
-const CIRCUMFIX_COMMENT_SYMBOLS: [(&str, &str); 3] = [("/*", "*/"), ("<!--", "-->"), ("{-", "-}")];
+const PREFIX_COMMENT_SYMBOLS: [&str; 8] = ["//", "#", "--", ";", "%", "\"", "'", "rem"];
+const CIRCUMFIX_COMMENT_SYMBOLS: [(&str, &str); 5] = [
+    ("/*", "*/"),
+    ("<!--", "-->"),
+    ("{-", "-}"),
+    ("--[[", "]]"),
+    ("(", ")"),
+];
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum CommentStyle {
