@@ -47,6 +47,18 @@ impl Path {
             _ => self.display().to_string(),
         }
     }
+
+    fn expanduser(&self) -> PathBuf {
+        let Some(home) = dirs::home_dir() else {
+            return self.to_path_buf();
+        };
+        if let Some(first) = self.components().next() {
+            if first.as_os_str().to_string_lossy() == "~" {
+                return home.join(self.strip_prefix("~").unwrap());
+            }
+        }
+        self.to_path_buf()
+    }
 }
 
 /// like <https://crates.io/crates/testresult>, but shows the debug output instead of display.

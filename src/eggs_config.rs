@@ -1,4 +1,3 @@
-use expanduser::expanduser;
 use normalize_path::NormalizePath;
 use std::{
     collections::{HashMap, HashSet},
@@ -126,7 +125,7 @@ impl EggConfig {
             .iter()
             .map(|(source, target)| {
                 let source = egg_root.canonical()?.join(source);
-                let target = expanduser(target.to_string_lossy()).into_diagnostic()?;
+                let target = target.expanduser();
                 let target = if target.is_absolute() {
                     target
                 } else {
