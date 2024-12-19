@@ -1,0 +1,23 @@
+---
+source: src/templating/parser.rs
+expression: "parse_document(\"foo \\n/* \\n{#\\ntest\\ntest\\n#} */\\nbar\")"
+snapshot_kind: text
+---
+Ok(
+    [
+        Plain(
+            [0..9]"foo \n/* \n",
+        ),
+        NextLine {
+            tagged_line: TaggedLine {
+                left: "",
+                tag: "{#\ntest\ntest\n#}",
+                right: " */\n",
+                full_line: [9..28]"{#\ntest\ntest\n#} */\n",
+            },
+            expr: [12..22]"test\ntest\n",
+            next_line: [28..31]"bar",
+            is_if: false,
+        },
+    ],
+)

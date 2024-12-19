@@ -23,15 +23,15 @@ pub fn eval_ctx() -> EvalCtx {
 )]
 #[case::multiline(
     indoc!{r#"
-            /* {% get_yolk_text().to_upper() %} */
-            foo
-            /* {% end %} */
-        "#},
+        /* {% get_yolk_text().to_upper() %} */
+        foo
+        /* {% end %} */
+    "#},
     indoc! {r#"
-            /* {% get_yolk_text().to_upper() %} */
-            FOO
-            /* {% end %} */
-        "#},
+        /* {% get_yolk_text().to_upper() %} */
+        FOO
+        /* {% end %} */
+    "#},
 )]
 #[case::inline_conditional("foo/* {< if false >} */", "/*<yolk> foo/* {< if false >} */*/")]
 #[case::nextline_conditional(
@@ -40,37 +40,51 @@ pub fn eval_ctx() -> EvalCtx {
 )]
 #[case::multiline_conditional(
     indoc!{r#"
-            /* {% if false %} */
-            foo
-            /* {% elif false %} */
-            foo
-            /* {% elif true %} */
-            bar
-            /* {% else %} */
-            bar
-            /* {% end %} */
-        "#},
+        /* {% if false %} */
+        foo
+        /* {% elif false %} */
+        foo
+        /* {% elif true %} */
+        bar
+        /* {% else %} */
+        bar
+        /* {% end %} */
+    "#},
     indoc!{r#"
-            /* {% if false %} */
-            /*<yolk> foo*/
-            /* {% elif false %} */
-            /*<yolk> foo*/
-            /* {% elif true %} */
-            bar
-            /* {% else %} */
-            /*<yolk> bar*/
-            /* {% end %} */
-        "#}
+        /* {% if false %} */
+        /*<yolk> foo*/
+        /* {% elif false %} */
+        /*<yolk> foo*/
+        /* {% elif true %} */
+        bar
+        /* {% else %} */
+        /*<yolk> bar*/
+        /* {% end %} */
+    "#}
+)]
+#[case::nextline_conditional_with_newlines(
+    indoc!{"
+        /* {#
+            if false
+        #} */
+        foo
+    "},
+    indoc!{"
+        /* {#
+            if false
+        #} */
+        /*<yolk> foo*/
+    "},
 )]
 #[case::replace(
     indoc!{r#"
-            {# replace_re(`'.*'`, `'new'`) #}
-            foo: 'original'
-        "#},
+        {# replace_re(`'.*'`, `'new'`) #}
+        foo: 'original'
+    "#},
     indoc!{r#"
-            {# replace_re(`'.*'`, `'new'`) #}
-            foo: 'new'
-        "#}
+        {# replace_re(`'.*'`, `'new'`) #}
+        foo: 'new'
+    "#}
 )]
 pub fn test_render(
     mut eval_ctx: EvalCtx,
@@ -85,23 +99,22 @@ pub fn test_render(
 
 #[rstest]
 #[case::regression_keep_indents(indoc!{r#"
-        # foo
-            indented
-                indented more
-                foo // {< if true >}
-            indented
-        not
-    "#} )]
+    # foo
+        indented
+            indented more
+            foo // {< if true >}
+        indented
+    not
+"#} )]
 #[case::regression_blank_lines_around_conditional(indoc!{"
-        foo
+    foo
 
-        {% if true %}
-        foo
-        {% end %}
+    {% if true %}
+    foo
+    {% end %}
 
-        foo
-    "})]
-
+    foo
+"})]
 pub fn test_render_noop(mut eval_ctx: EvalCtx, #[case] input: &str) -> TestResult {
     let doc = Document::parse_string(input)?;
     let actual = doc.render(&mut eval_ctx)?;

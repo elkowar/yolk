@@ -1,0 +1,17 @@
+---
+source: src/templating/parser.rs
+expression: "p_inline_element.parse(new_input(\"foo /* {< iftest >} */\"))"
+snapshot_kind: text
+---
+Ok(
+    Inline {
+        line: TaggedLine {
+            left: "foo /* ",
+            tag: "{< iftest >}",
+            right: " */",
+            full_line: [0..22]"foo /* {< iftest >} */",
+        },
+        expr: [10..17]"iftest ",
+        is_if: false,
+    },
+)

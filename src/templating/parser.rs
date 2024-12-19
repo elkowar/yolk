@@ -120,16 +120,7 @@ fn p_plain_line_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
 }
 
 fn p_regular_tag_inner(end: &str) -> impl winnow::Parser<Input<'_>, &'_ str, YolkParseError> {
-    let p = repeat_till(
-        1..,
-        (
-            not(line_ending).context(cx().hlp("Line endings are forbidden within tags")),
-            not(end),
-            any,
-        ),
-        peek(end),
-    )
-    .map(|(_, _): ((), _)| ());
+    let p = repeat_till(1.., (not(end), any), peek(end)).map(|(_, _): ((), _)| ());
     cut_err(
         p.context(cx().msg("Failed to parse expression").lbl("expression"))
             .take(),
@@ -144,7 +135,7 @@ fn p_tag<'a, T>(
 ) -> impl winnow::Parser<Input<'a>, Sp<T>, YolkParseError> {
     (delimited(
         start,
-        delimited(wss, p_inner.with_span(), wss),
+        delimited(wsp0_or_newline, p_inner.with_span(), wsp0_or_newline),
         cut_err(end),
     ))
     .context(cx().msg("Failed to parse tag").lbl("tag"))
@@ -200,7 +191,7 @@ fn p_tag_line<'a, T>(
 fn p_nextline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     peek(any).parse_next(input)?;
     let p_inner = (
-        opt((literal("if"), wsp)).map(|x| x.is_some()),
+        opt((literal("if"), wsp1)).map(|x| x.is_some()),
         p_regular_tag_inner("#}"),
     );
     let (tagged_line, expr) = p_tag_line("{#", p_inner, "#}", true).parse_next(input)?;
@@ -217,7 +208,7 @@ fn p_nextline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
 fn p_inline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     peek(any).parse_next(input)?;
     let p_inner = (
-        opt((literal("if"), wsp)).map(|x| x.is_some()),
+        opt((literal("if"), wsp1)).map(|x| x.is_some()),
         p_regular_tag_inner(">}"),
     )
         .context(cx().msg("Failed to parse tag inner").lbl("here"));
@@ -298,27 +289,27 @@ fn p_conditional_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     let p_if = p_block::<Sp<&'a str>>(
         p_tag_line(
             "{%",
-            preceded(("if", wsp), p_regular_tag_inner("%}")),
+            preceded(("if", wsp1), p_regular_tag_inner("%}")),
             "%}",
             true,
         ),
         p_multiline_body(alt((
             "end",
             "else",
-            preceded(("elif", wsp), p_regular_tag_inner("%}")),
+            preceded(("elif", wsp1), p_regular_tag_inner("%}")),
         ))),
     );
     let p_elif = p_block::<Sp<&'a str>>(
         p_tag_line(
             "{%",
-            preceded(("elif", wsp), p_regular_tag_inner("%}")),
+            preceded(("elif", wsp1), p_regular_tag_inner("%}")),
             "%}",
             true,
         ),
         p_multiline_body(alt((
             "end",
             "else",
-            preceded(("elif", wsp), p_regular_tag_inner("%}")),
+            preceded(("elif", wsp1), p_regular_tag_inner("%}")),
         ))),
     );
     let p_else = p_block(
@@ -350,12 +341,16 @@ fn p_conditional_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     })
 }
 
-fn wss(input: &mut Input<'_>) -> PResult<()> {
-    winnow::ascii::space0.void().parse_next(input)
+fn wsp0_or_newline(input: &mut Input<'_>) -> PResult<()> {
+    repeat(
+        0..,
+        alt((winnow::ascii::space1, winnow::ascii::line_ending)).void(),
+    )
+    .parse_next(input)
 }
 
-fn wsp(input: &mut Input<'_>) -> PResult<()> {
-    winnow::ascii::space0.void().parse_next(input)
+fn wsp1(input: &mut Input<'_>) -> PResult<()> {
+    winnow::ascii::space1.void().parse_next(input)
 }
 
 #[cfg(test)]
@@ -400,10 +395,18 @@ mod test {
     }
 
     #[test]
+    fn test_inline_conditional_tag() -> TestResult {
+        assert_debug_snapshot!(p_inline_element.parse(new_input("foo /* {< if test >} */")));
+        assert_debug_snapshot!(p_inline_element.parse(new_input("foo /* {< iftest >} */")));
+        Ok(())
+    }
+
+    #[test]
     fn test_nextline_tag() -> TestResult {
         assert_debug_snapshot!(p_nextline_element(&mut new_input("/* {# x #} */\nfoo"))?);
         Ok(())
     }
+
     #[test]
     fn test_parse_end() -> TestResult {
         assert_debug_snapshot!(p_tag_line("{%", "end", "%}", false).parse(new_input("a{% end %}b")));
@@ -477,6 +480,17 @@ mod test {
     }
 
     #[test]
+    fn test_newline_in_inline() -> TestResult {
+        assert_debug_snapshot!(parse_document("foo /* {< test\ntest >} */"));
+        Ok(())
+    }
+    #[test]
+    fn test_newlines_in_multiline() -> TestResult {
+        assert_debug_snapshot!(parse_document("foo \n/* \n{#\ntest\ntest\n#} */\nbar"));
+        Ok(())
+    }
+
+    #[test]
     fn test_error_incomplete_nextline() {
         insta::assert_snapshot!(render_error(parse_document("{#f#}").unwrap_err()));
     }
@@ -498,18 +512,9 @@ mod test {
             parse_document("{%f%}\n{%else%}\n{%end%}").unwrap_err()
         ));
     }
-    #[test]
-    fn test_error_if_without_expression() {
-        insta::assert_snapshot!(render_error(parse_document("{<if>}").unwrap_err()));
-    }
 
     #[test]
     fn test_error_empty_tag() {
         insta::assert_snapshot!(render_error(parse_document("{%%}").unwrap_err()));
-    }
-
-    #[test]
-    fn test_error_newline_in_tag() {
-        insta::assert_snapshot!(render_error(parse_document("{<foo\nbar>}").unwrap_err()));
     }
 }
