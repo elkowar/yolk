@@ -399,6 +399,7 @@ mod test {
     use assert_fs::{
         assert::PathAssert,
         prelude::{FileWriteStr, PathChild, PathCreateDir},
+        TempDir,
     };
     use p::path::{exists, is_dir, is_symlink};
     use predicates::prelude::PredicateBooleanExt;
@@ -462,6 +463,21 @@ mod test {
         )?)?;
         home.child("foo.toml").assert(is_symlink());
         home.child("thing").assert(is_symlink());
+        Ok(())
+    }
+
+    #[test]
+    fn test_deploy_outside_of_home() -> TestResult {
+        let (home, yolk, eggs) = setup_and_init_test_yolk()?;
+        let other_dir = TempDir::new()?;
+        eggs.child("foo/foo.toml").write_str("")?;
+        yolk.sync_egg_deployment(&Egg::open(
+            home.to_path_buf(),
+            eggs.child("foo").to_path_buf(),
+            EggConfig::new("foo.toml", other_dir.child("foo.toml"))
+                .with_strategy(DeploymentStrategy::Put),
+        )?)?;
+        other_dir.child("foo.toml").assert(is_symlink());
         Ok(())
     }
 

@@ -25,7 +25,7 @@ pub fn eval_ctx() -> EvalCtx {
     indoc!{r#"
         /* {% get_yolk_text().to_upper() %} */
         foo
-        /* {% end %} */
+        /* {% end %} w/
     "#},
     indoc! {r#"
         /* {% get_yolk_text().to_upper() %} */
