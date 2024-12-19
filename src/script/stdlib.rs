@@ -307,8 +307,11 @@ pub fn tag_module() -> Module {
             /// Otherwise, we would end up with invalid toml.
         "}])
         .with_params_info(["regex: &str", "replacement: &str", "Result<String>"])
+        .with_namespace(rhai::FnNamespace::Global)
         .set_into_module(&mut module, f);
-    FuncRegistration::new("rr").set_into_module(&mut module, f);
+    FuncRegistration::new("rr")
+        .in_global_namespace()
+        .set_into_module(&mut module, f);
 
     let f = |ctx: Ncc, between: IStr, replacement: IStr| -> RhaiFnResult<_> {
         let text: IStr = ctx.call_fn("get_yolk_text", ())?;
@@ -332,7 +335,9 @@ pub fn tag_module() -> Module {
         .with_params_info(["between: &str", "replacement: &str", "Result<String>"])
         .in_global_namespace()
         .set_into_module(&mut module, f);
-    FuncRegistration::new("rin").set_into_module(&mut module, f);
+    FuncRegistration::new("rin")
+        .in_global_namespace()
+        .set_into_module(&mut module, f);
 
     let f = |ctx: Ncc, left: IStr, right: IStr, replacement: IStr| -> RhaiFnResult<_> {
         let text: IStr = ctx.call_fn("get_yolk_text", ())?;
@@ -361,7 +366,9 @@ pub fn tag_module() -> Module {
         ])
         .in_global_namespace()
         .set_into_module(&mut module, f);
-    FuncRegistration::new("rbet").set_into_module(&mut module, f);
+    FuncRegistration::new("rbet")
+        .in_global_namespace()
+        .set_into_module(&mut module, f);
 
     let f = |ctx: Ncc, replacement: IStr| -> RhaiFnResult<_> {
         let text: IStr = ctx.call_fn("get_yolk_text", ())?;
@@ -386,7 +393,9 @@ pub fn tag_module() -> Module {
         .with_params_info(["replacement: &str", "Result<String>"])
         .in_global_namespace()
         .set_into_module(&mut module, f);
-    FuncRegistration::new("rcol").set_into_module(&mut module, f);
+    FuncRegistration::new("rcol")
+        .in_global_namespace()
+        .set_into_module(&mut module, f);
 
     let f = |ctx: Ncc, replacement: Dynamic| -> RhaiFnResult<_> {
         let text: IStr = ctx.call_fn("get_yolk_text", ())?;
@@ -407,7 +416,9 @@ pub fn tag_module() -> Module {
         .with_params_info(["replacement: Dynamic", "Result<String>"])
         .in_global_namespace()
         .set_into_module(&mut module, f);
-    FuncRegistration::new("rnum").set_into_module(&mut module, f);
+    FuncRegistration::new("rnum")
+        .in_global_namespace()
+        .set_into_module(&mut module, f);
 
     let f = |ctx: Ncc, replacement: IStr| -> RhaiFnResult<_> {
         let text: IStr = ctx.call_fn("get_yolk_text", ())?;
@@ -517,7 +528,7 @@ fn create_regex(s: &str) -> RhaiFnResult<Regex> {
 #[cfg(test)]
 mod test {
     use crate::util::TestResult;
-    use miette::IntoDiagnostic;
+    use miette::IntoDiagnostic as _;
     use rhai::Variant;
 
     use crate::{script::eval_ctx::EvalCtx, yolk::EvalMode};

@@ -1,6 +1,8 @@
+use std::path::Path;
 use std::sync::Arc;
 
 use miette::Result;
+use rhai::module_resolvers::FileModuleResolver;
 use rhai::Engine;
 use rhai::Module;
 use rhai::Scope;
@@ -40,6 +42,10 @@ impl EvalCtx {
         }
     }
 
+    /// Initialize a new [`EvalCtx`] with set up modules and module resolver.
+    ///
+    /// The given mode is used when initializing the `io` module,
+    /// to determine whether to actually perform any IO or to just simulate it.
     pub fn new_in_mode(mode: EvalMode) -> Result<Self> {
         let mut ctx = Self::new_empty();
         ctx.engine
@@ -49,14 +55,23 @@ impl EvalCtx {
         ctx.engine
             .register_static_module("io", Arc::new(stdlib::io_module(mode)));
         let template_module = Arc::new(stdlib::tag_module());
-        ctx.engine.register_global_module(template_module.clone());
         ctx.engine
             .register_static_module("template", template_module);
 
         Ok(ctx)
     }
 
-    pub fn load_as_global_module(&mut self, content: &str) -> Result<(), RhaiError> {
+    /// Set the directory to look for imports in.
+    ///
+    /// The given `path` is used as the path for the a [`FileModuleResolver`],
+    /// such that `import` statements can be used in rhai code relative to this path.
+    pub fn set_module_path(&mut self, path: &Path) {
+        self.engine
+            .set_module_resolver(FileModuleResolver::new_with_path(path));
+    }
+
+    /// Load a given rhai string as a global module, and store it as the `yolk_file_module`.
+    pub fn load_rhai_file_to_module(&mut self, content: &str) -> Result<(), RhaiError> {
         let ast = self.compile(content)?;
         let module = Module::eval_ast_as_new(self.scope.clone(), &ast, &self.engine)
             .map_err(|e| RhaiError::from_rhai(content, *e))?;
@@ -66,6 +81,7 @@ impl EvalCtx {
         Ok(())
     }
 
+    /// Eval a given string of rhai and return the result. Execute in the scope of this [`EvalCtx`].
     pub fn eval_rhai<T: Variant + Clone>(&mut self, content: &str) -> Result<T, RhaiError> {
         let ast = self.compile(content)?;
         self.engine
@@ -73,6 +89,8 @@ impl EvalCtx {
             .map_err(|e| RhaiError::from_rhai(content, *e))
     }
 
+    /// Eval a rhai expression in a scope that has a special `get_yolk_text()` function that returns the given `text`.
+    /// After the expression is evaluated, the scope is rewound to its state before the function was added.
     pub fn eval_text_transformation(
         &mut self,
         text: &str,

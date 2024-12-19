@@ -164,12 +164,13 @@ impl Yolk {
             EvalMode::Local => SystemInfo::generate(),
         };
         let mut eval_ctx = EvalCtx::new_in_mode(mode)?;
+        eval_ctx.set_module_path(self.yolk_paths.root_path());
         let yolk_file =
             fs_err::read_to_string(self.yolk_paths.yolk_rhai_path()).into_diagnostic()?;
 
         eval_ctx.set_global("SYSTEM", sysinfo);
         eval_ctx.set_global("LOCAL", mode == EvalMode::Local);
-        eval_ctx.load_as_global_module(&yolk_file).map_err(|e| {
+        eval_ctx.load_rhai_file_to_module(&yolk_file).map_err(|e| {
             e.into_report(
                 self.yolk_paths.yolk_rhai_path().to_string_lossy(),
                 yolk_file,
@@ -394,6 +395,7 @@ mod test {
     use crate::{
         eggs_config::DeploymentStrategy,
         util::{create_regex, setup_and_init_test_yolk, TestResult},
+        yolk::EvalMode,
         yolk_paths::Egg,
     };
     use assert_fs::{
@@ -408,8 +410,6 @@ mod test {
     use test_log::test;
 
     use crate::eggs_config::EggConfig;
-
-    use super::EvalMode;
 
     // fn is_direct_file(
     // ) -> AndPredicate<FileTypePredicate, NotPredicate<FileTypePredicate, Path>, Path> {
@@ -653,12 +653,28 @@ mod test {
     }
 
     #[test]
+    fn test_imports_work_in_yolk_rhai() -> TestResult {
+        let (home, yolk, _) = setup_and_init_test_yolk()?;
+        home.child("yolk/foo.rhai").write_str(indoc::indoc! {r#"
+            fn some_function() { 1 }
+            export let some_value = 1;
+        "#})?;
+        home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
+            import "foo" as foo;
+            fn get_value() { foo::some_function() + foo::some_value }
+        "#})?;
+        let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(EvalMode::Local)?;
+        assert_eq!(2, eval_ctx.eval_rhai::<i64>("get_value()")?);
+        Ok(())
+    }
+
+    #[test]
     pub fn test_custom_functions_in_text_transformer_tag() -> TestResult {
         let (home, yolk, _) = setup_and_init_test_yolk()?;
         home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
             fn scream() { get_yolk_text().to_upper() }
         "#})?;
-        let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(crate::yolk::EvalMode::Local)?;
+        let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(EvalMode::Local)?;
         assert_str_eq!(
             "TEST{< scream() >}",
             yolk.eval_template(&mut eval_ctx, "", "test{< scream() >}")?

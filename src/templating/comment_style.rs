@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use cached::proc_macro::cached;
 use regex::Regex;
 
-use crate::templating::COMMENT_START;
+pub const COMMENT_START: &str = "<yolk> ";
 
 use super::element::{Block, Element};
 
