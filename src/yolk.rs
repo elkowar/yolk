@@ -143,7 +143,7 @@ impl Yolk {
                 Ok(())
             } else {
                 Err(MultiError::new(
-                    format!("Failed to deploy egg {}", egg.name()),
+                    format!("Failed to undeploy egg {}", egg.name()),
                     errs,
                 ))
             }
