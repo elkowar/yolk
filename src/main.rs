@@ -359,7 +359,7 @@ fn run_command(args: Args) -> Result<()> {
             .into_diagnostic()?;
 
             for dir in dirs_to_watch {
-                tracing::info!("Watching {}", dir.to_abbrev_str());
+                tracing::info!("Watching {}", dir.abbr());
                 debouncer
                     .watch(&dir, notify::RecursiveMode::Recursive)
                     .into_diagnostic()?;

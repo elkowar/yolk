@@ -4,15 +4,30 @@ use cached::UnboundCache;
 use miette::{Context as _, IntoDiagnostic as _};
 use regex::Regex;
 
+/// Rename or move a file, but only if the destination doesn't exist.
+/// This is a safer verison of [`std::fs::rename`] that doesn't overwrite files.
+pub fn rename_safely(original: impl AsRef<Path>, new: impl AsRef<Path>) -> miette::Result<()> {
+    let original = original.as_ref();
+    let new = new.as_ref();
+    tracing::trace!("Renaming {} -> {}", original.abbr(), new.abbr());
+    if new.exists() {
+        miette::bail!(
+            "Failed to move file {} to {}: File already exists.",
+            original.abbr(),
+            new.abbr()
+        );
+    }
+    fs_err::rename(original, new)
+        .into_diagnostic()
+        .wrap_err("Failed to rename file")?;
+    Ok(())
+}
+
 /// Create a symlink at `link` pointing to `original`.
 pub fn create_symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> miette::Result<()> {
     let link = link.as_ref();
     let original = original.as_ref();
-    tracing::trace!(
-        "Creating symlink at {} -> {}",
-        link.to_abbrev_str(),
-        original.to_abbrev_str()
-    );
+    tracing::trace!("Creating symlink at {} -> {}", link.abbr(), original.abbr());
     #[cfg(unix)]
     fs_err::os::unix::fs::symlink(original, link)
         .into_diagnostic()
@@ -39,7 +54,10 @@ impl Path {
         Ok(dunce::simplified(&fs_err::canonicalize(self).into_diagnostic()?).to_path_buf())
     }
 
-    fn to_abbrev_str(&self) -> String {
+    /// Stringify the path into an abbreviated form.
+    ///
+    /// This replaces the home path with `~`, as well as reducing paths that point into the eggs directory to `eggs/rest/of/path`.
+    fn abbr(&self) -> String {
         match (
             dirs::home_dir(),
             dirs::config_dir().map(|x| x.join("yolk").join("eggs")),
@@ -55,6 +73,7 @@ impl Path {
         }
     }
 
+    /// Expands `~` in a path to the home directory.
     fn expanduser(&self) -> PathBuf {
         #[cfg(not(test))]
         let Some(home) = dirs::home_dir() else {

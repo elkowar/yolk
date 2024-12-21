@@ -91,7 +91,7 @@ impl Yolk {
                                     miette!(
                                         severity = Severity::Warning,
                                         "Warning: Failed to create parent dir for deployment of {}: {e:?}",
-                                        in_egg.to_abbrev_str()
+                                        in_egg.abbr()
                                     )
                                 })?;
                             }
@@ -104,7 +104,7 @@ impl Yolk {
                     errs.push(miette!(
                         severity = Severity::Warning,
                         "Failed to deploy {}: {e:?}",
-                        in_egg.to_abbrev_str()
+                        in_egg.abbr()
                     ));
                 }
             }
@@ -131,7 +131,7 @@ impl Yolk {
                 if let Err(e) = remove_symlink_recursive(in_egg, &deployed) {
                     errs.push(miette!(
                         "Failed to remove deployment of {}: {e:?}",
-                        in_egg.to_abbrev_str()
+                        in_egg.abbr()
                     ));
                 }
             }
@@ -205,7 +205,7 @@ impl Yolk {
             } else if !tmpl_path.exists() {
                 tracing::warn!(
                     "{} was specified as templated file, but doesn't exist",
-                    tmpl_path.to_abbrev_str()
+                    tmpl_path.abbr()
                 );
             }
         }
@@ -254,17 +254,17 @@ impl Yolk {
     /// Sync a single template file in place on the filesystem.
     pub fn sync_template_file(&self, eval_ctx: &mut EvalCtx, path: impl AsRef<Path>) -> Result<()> {
         let path = path.as_ref();
-        tracing::debug!("Syncing file {}", path.to_abbrev_str());
+        tracing::debug!("Syncing file {}", path.abbr());
         let content = fs_err::read_to_string(path).into_diagnostic()?;
         let rendered = self
             .eval_template(eval_ctx, &path.to_string_lossy(), &content)
-            .with_context(|| format!("Failed to eval template file: {}", path.to_abbrev_str()))?;
+            .with_context(|| format!("Failed to eval template file: {}", path.abbr()))?;
         if rendered == content {
-            tracing::debug!("No changes needed in {}", path.to_abbrev_str());
+            tracing::debug!("No changes needed in {}", path.abbr());
             return Ok(());
         }
         fs_err::write(path, rendered).into_diagnostic()?;
-        tracing::info!("Synced templated file {}", path.to_abbrev_str());
+        tracing::info!("Synced templated file {}", path.abbr());
         Ok(())
     }
 
@@ -339,33 +339,33 @@ fn symlink_recursive(
         );
         tracing::debug!(
             "symlink_recursive({}, {})",
-            actual_path.to_abbrev_str(),
-            link_path.to_abbrev_str()
+            actual_path.abbr(),
+            link_path.abbr()
         );
 
         let actual_path = actual_path.canonical()?;
 
-        tracing::trace!("Checking {}", link_path.to_abbrev_str());
+        tracing::trace!("Checking {}", link_path.abbr());
         if link_path.is_symlink() {
             let link_target = link_path.fs_err_read_link().into_diagnostic()?;
             tracing::trace!(
                 "link_path exists as symlink at {} -> {}",
-                link_path.to_abbrev_str(),
-                link_target.to_abbrev_str()
+                link_path.abbr(),
+                link_target.abbr()
             );
             if link_target == actual_path {
                 return Ok(());
             } else if link_target.exists() {
                 miette::bail!(
                     "Failed to create symlink {} -> {}, as a file already exists there",
-                    link_path.to_abbrev_str(),
-                    actual_path.to_abbrev_str(),
+                    link_path.abbr(),
+                    actual_path.abbr(),
                 );
             } else if link_target.starts_with(&egg_root) {
                 tracing::info!(
                     "Removing dead symlink {} -> {}",
-                    link_path.to_abbrev_str(),
-                    link_target.to_abbrev_str()
+                    link_path.abbr(),
+                    link_target.abbr()
                 );
                 fs_err::remove_file(&link_path).into_diagnostic()?;
                 cov_mark::hit!(remove_dead_symlink);
@@ -373,14 +373,11 @@ fn symlink_recursive(
             } else {
                 miette::bail!(
                     "Encountered dead symlink, but it doesn't target the egg dir: {}",
-                    link_path.to_abbrev_str(),
+                    link_path.abbr(),
                 );
             }
         } else if link_path.exists() {
-            tracing::trace!(
-                "link_path exists as non-symlink {}",
-                link_path.to_abbrev_str(),
-            );
+            tracing::trace!("link_path exists as non-symlink {}", link_path.abbr(),);
             if link_path.is_dir() && actual_path.is_dir() {
                 for entry in actual_path.fs_err_read_dir().into_diagnostic()? {
                     let entry = entry.into_diagnostic()?;
@@ -390,16 +387,16 @@ fn symlink_recursive(
             } else if link_path.is_dir() || actual_path.is_dir() {
                 miette::bail!(
                     "Conflicting file or directory {} with {}",
-                    actual_path.to_abbrev_str(),
-                    link_path.to_abbrev_str()
+                    actual_path.abbr(),
+                    link_path.abbr()
                 );
             }
         }
         util::create_symlink(&actual_path, &link_path)?;
         tracing::info!(
             "created symlink {} -> {}",
-            link_path.to_abbrev_str(),
-            actual_path.to_abbrev_str(),
+            link_path.abbr(),
+            actual_path.abbr(),
         );
         Ok(())
     }
@@ -411,8 +408,8 @@ fn symlink_recursive(
 }
 
 #[tracing::instrument(skip(actual_path, link_path), fields(
-    actual_path = actual_path.as_ref().to_abbrev_str(),
-    link_path = link_path.as_ref().to_abbrev_str()
+    actual_path = actual_path.as_ref().abbr(),
+    link_path = link_path.as_ref().abbr()
 ))]
 fn remove_symlink_recursive(
     actual_path: impl AsRef<Path>,
@@ -423,8 +420,8 @@ fn remove_symlink_recursive(
     if link_path.is_symlink() && link_path.canonical()? == actual_path {
         tracing::info!(
             "Removing symlink {} -> {}",
-            link_path.to_abbrev_str(),
-            actual_path.to_abbrev_str(),
+            link_path.abbr(),
+            actual_path.abbr(),
         );
         fs_err::remove_file(link_path).into_diagnostic()?;
     } else if link_path.is_dir() && actual_path.is_dir() {
@@ -435,8 +432,8 @@ fn remove_symlink_recursive(
     } else if link_path.exists() {
         miette::bail!(
             "Tried to remove deployment of {}, but {} doesn't link to it",
-            actual_path.to_abbrev_str(),
-            link_path.to_abbrev_str()
+            actual_path.abbr(),
+            link_path.abbr()
         );
     }
     Ok(())

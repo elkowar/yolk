@@ -4,7 +4,10 @@ use fs_err::PathExt;
 use miette::{Context as _, IntoDiagnostic, Result};
 use normalize_path::NormalizePath;
 
-use crate::{eggs_config::EggConfig, util::PathExt as _};
+use crate::{
+    eggs_config::EggConfig,
+    util::{self, PathExt as _},
+};
 
 const DEFAULT_YOLK_RHAI: &str = indoc::indoc! {r#"
     export let data = #{
@@ -64,19 +67,19 @@ impl YolkPaths {
         if !self.root_path().exists() {
             miette::bail!(
                 "Yolk directory does not exist at {}",
-                self.root_path().to_abbrev_str()
+                self.root_path().abbr()
             );
         }
         if !self.yolk_rhai_path().exists() {
             miette::bail!(
                 "Yolk directory does not contain a yolk.rhai file at {}",
-                self.yolk_rhai_path().to_abbrev_str()
+                self.yolk_rhai_path().abbr()
             );
         }
         if !self.eggs_dir_path().exists() {
             miette::bail!(
                 "Yolk directory does not contain an eggs directory at {}",
-                self.eggs_dir_path().to_abbrev_str()
+                self.eggs_dir_path().abbr()
             );
         }
         Ok(())
@@ -88,7 +91,7 @@ impl YolkPaths {
             && path.is_dir()
             && fs_err::read_dir(path).into_diagnostic()?.next().is_some()
         {
-            miette::bail!("Yolk directory already exists at {}", path.to_abbrev_str());
+            miette::bail!("Yolk directory already exists at {}", path.abbr());
         }
         fs_err::create_dir_all(path).into_diagnostic()?;
         fs_err::create_dir_all(self.eggs_dir_path()).into_diagnostic()?;
@@ -107,11 +110,10 @@ impl YolkPaths {
                     "Yolk directory contains both a .git directory and a .yolk_git directory"
                 );
             } else {
-                fs_err::rename(
+                util::rename_safely(
                     self.root_path().join(".git"),
                     self.yolk_safeguarded_git_path(),
-                )
-                .into_diagnostic()?;
+                )?;
             }
         }
         Ok(())
@@ -288,11 +290,11 @@ impl Iterator for TraverseDeployment {
             stack = ?self
                 .stack
                 .iter()
-                .map(|x| (x.0.to_abbrev_str(), x.1.to_abbrev_str()))
+                .map(|x| (x.0.abbr(), x.1.abbr()))
                 .collect::<Vec<_>>(),
             "checking for deployment {} -> {}.",
-            link.to_abbrev_str(),
-            in_egg.to_abbrev_str(),
+            link.abbr(),
+            in_egg.abbr(),
         );
 
         if link.is_symlink() {
