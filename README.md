@@ -3,7 +3,6 @@
 
 # Yolk – Painfree Templated Dotfile Management
 
-
 </div>
 
 Yolk is a dotfile management tool with a unique spin on templating,

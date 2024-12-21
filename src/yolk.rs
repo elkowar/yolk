@@ -76,6 +76,13 @@ impl Yolk {
                     }
                     DeploymentStrategy::Put => {
                         cov_mark::hit!(deploy_put);
+                        if deployed.is_symlink() {
+                            let target = deployed.fs_err_read_link().into_diagnostic()?;
+                            if target.starts_with(egg.path()) {
+                                fs_err::remove_file(deployed).into_diagnostic()?;
+                                tracing::info!("Removed dead symlink {}", deployed.abbr());
+                            }
+                        }
                         if let Some(parent) = deployed.parent() {
                             fs_err::create_dir_all(parent).map_err(|e| {
                                 miette!(
@@ -359,6 +366,7 @@ fn symlink_recursive(
         let actual_path = actual_path.canonical()?;
 
         tracing::trace!("Checking {}", link_path.abbr());
+
         if link_path.is_symlink() {
             let link_target = link_path.fs_err_read_link().into_diagnostic()?;
             tracing::trace!(
