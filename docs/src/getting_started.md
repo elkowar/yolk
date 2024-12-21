@@ -12,7 +12,7 @@ Always have a good backup of your files before using Yolk in this stage. You hav
 Yolk manages your dotfiles by storing them in a separate directory, typically inside `~/.config/yolk`.
 This allows you to keep your dotfiles in version control easily, and lets you manage your configuration from one central location.
 
-Yolk groups dotfiles into so-called "eggs", which are packages of configuration,
+Yolk groups dotfiles into so-called ["eggs"](eggs.md), which are packages of configuration,
 typically for one single application (although you can group them however you want, or even just have one egg for all your configuration files).
 
 When an egg is "deployed", Yolk creates symlinks in the target location pointing towards the egg directory.

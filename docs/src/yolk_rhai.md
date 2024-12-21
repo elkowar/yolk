@@ -2,7 +2,7 @@
 
 The `yolk.rhai` file is the heart of your Yolk configuration.
 
-It's where you define all of your eggs (packages), as well as export any variables and functionality you will then refer to inside your templates.
+It's where you define all of your [eggs](eggs.md) (packages), as well as export any variables and functionality you will then refer to inside your [templates](templates.md).
 
 If you're familiar with [Rhai](https://rhai.rs/), this is loaded as a module, imported into the global scope of your template tags.
 
