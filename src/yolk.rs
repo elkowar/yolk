@@ -293,6 +293,7 @@ impl Yolk {
         result
     }
 
+    /// Run the yolk.rhai script, load the egg configs and return a list of all eggs.
     pub fn list_eggs(&self) -> Result<Vec<Egg>> {
         let mut eval_ctx = self.prepare_eval_ctx_for_templates(EvalMode::Local)?;
         let egg_configs = self.load_egg_configs(&mut eval_ctx)?;
@@ -303,7 +304,7 @@ impl Yolk {
     }
 
     /// Run the yolk.rhai script, load the egg configs and return the requested egg.
-    pub fn get_egg(&self, egg_name: &str) -> Result<Egg> {
+    pub fn load_egg(&self, egg_name: &str) -> Result<Egg> {
         let mut eval_ctx = self.prepare_eval_ctx_for_templates(EvalMode::Local)?;
         let mut egg_configs = self.load_egg_configs(&mut eval_ctx)?;
         egg_configs

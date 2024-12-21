@@ -258,7 +258,7 @@ fn run_command(args: Args) -> Result<()> {
         Command::Edit { egg: egg_name } => {
             match egg_name {
                 Some(egg_name) => {
-                    let egg = yolk.get_egg(egg_name)?;
+                    let egg = yolk.load_egg(egg_name)?;
                     let cd_path = egg
                         .find_first_deployed_symlink()?
                         .unwrap_or_else(|| yolk.paths().egg_path(egg_name));

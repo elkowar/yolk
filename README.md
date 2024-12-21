@@ -13,11 +13,8 @@ Have a look at our [documentation](https://elkowar.github.io/yolk/book) for more
 
 ## WARNING
 
-This is pre-alpha software. In its current state, do not trust it. At all.
+This is beta-quality software. In its current state, be careful trying this.
 Always make backups of everything before trying to use yolk, until it's in a stable state.
-
-You have been warned.
-
 
 ## The Concept
 
