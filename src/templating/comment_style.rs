@@ -147,7 +147,7 @@ impl CommentStyle {
             return line.into();
         }
         let left = self.left();
-        let re = create_regex("^(\\s*)(.*)$".to_string()).unwrap();
+        let re = create_regex("^(\\s*)(.*)$").unwrap();
         let (indent, remaining_line) = re
             .captures(line)
             .and_then(|x| (x.get(1).zip(x.get(2))))

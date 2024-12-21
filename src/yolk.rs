@@ -61,6 +61,84 @@ impl Yolk {
 
     /// Deploy or un-deploy a given [`Egg`]
     #[tracing::instrument(skip_all, fields(egg = ?egg.name()))]
+    fn deploy_egg(
+        &self,
+        egg: &Egg,
+        mappings: &HashMap<PathBuf, PathBuf>,
+    ) -> Result<(), MultiError> {
+        let mut errs = Vec::new();
+        for (in_egg, deployed) in mappings {
+            let deploy_mapping = || -> miette::Result<()> {
+                match egg.config().strategy {
+                    DeploymentStrategy::Merge => {
+                        cov_mark::hit!(deploy_merge);
+                        symlink_recursive(egg.path(), in_egg, &deployed)?;
+                    }
+                    DeploymentStrategy::Put => {
+                        cov_mark::hit!(deploy_put);
+                        if let Some(parent) = deployed.parent() {
+                            fs_err::create_dir_all(parent).map_err(|e| {
+                                miette!(
+                                    severity = Severity::Warning,
+                                    "Warning: Failed to create parent dir for deployment of {}: {e:?}",
+                                    in_egg.abbr()
+                                )
+                            })?;
+                        }
+                        util::create_symlink(in_egg, deployed)?;
+                    }
+                }
+                Result::Ok(())
+            };
+            if let Err(e) = deploy_mapping() {
+                errs.push(miette!(
+                    severity = Severity::Warning,
+                    "Failed to deploy {}: {e:?}",
+                    in_egg.abbr()
+                ));
+            }
+        }
+        if !errs.is_empty() {
+            return Err(MultiError::new(
+                format!("Failed to deploy egg {}", egg.name()),
+                errs,
+            ));
+        }
+        debug_assert!(
+            !errs.is_empty() || egg.is_deployed()?,
+            "Egg::is_deployed should return true after deploying"
+        );
+        Ok(())
+    }
+
+    fn undeploy_egg(
+        &self,
+        egg: &Egg,
+        mappings: &HashMap<PathBuf, PathBuf>,
+    ) -> Result<(), MultiError> {
+        let mut errs = Vec::new();
+        for (in_egg, deployed) in mappings {
+            if let Err(e) = remove_symlink_recursive(in_egg, &deployed) {
+                errs.push(miette!(
+                    "Failed to remove deployment of {}: {e:?}",
+                    in_egg.abbr()
+                ));
+            }
+        }
+        if !errs.is_empty() {
+            return Err(MultiError::new(
+                format!("Failed to undeploy egg {}", egg.name()),
+                errs,
+            ));
+        }
+        debug_assert!(
+            !errs.is_empty() || !egg.is_deployed()?,
+            "Egg::is_deployed should return false after undeploying"
+        );
+        Ok(())
+    }
+
+    /// Deploy or undeploy the given egg, depending on the current system state and the given Egg data.
     pub fn sync_egg_deployment(&self, egg: &Egg) -> Result<(), MultiError> {
         let deployed = egg
             .is_deployed()
@@ -70,83 +148,17 @@ impl Yolk {
             egg.enabled = egg.config().enabled,
             "Syncing egg deployment"
         );
+        let mappings = egg
+            .config()
+            .targets_expanded(self.yolk_paths.home_path(), egg.path())
+            .context("Failed to expand targets config for egg")?;
         if egg.config().enabled && !deployed {
             tracing::info!("Deploying egg {}", egg.name());
-            let mappings = egg
-                .config()
-                .targets_expanded(self.yolk_paths.home_path(), egg.path())
-                .context("Failed to expand targets config for egg")?;
-            let mut errs = Vec::new();
-            for (in_egg, deployed) in &mappings {
-                let deploy_mapping = || -> miette::Result<()> {
-                    match egg.config().strategy {
-                        DeploymentStrategy::Merge => {
-                            cov_mark::hit!(deploy_merge);
-                            symlink_recursive(egg.path(), in_egg, &deployed)?;
-                        }
-                        DeploymentStrategy::Put => {
-                            cov_mark::hit!(deploy_put);
-                            if let Some(parent) = deployed.parent() {
-                                fs_err::create_dir_all(parent).map_err(|e| {
-                                    miette!(
-                                        severity = Severity::Warning,
-                                        "Warning: Failed to create parent dir for deployment of {}: {e:?}",
-                                        in_egg.abbr()
-                                    )
-                                })?;
-                            }
-                            util::create_symlink(in_egg, deployed)?;
-                        }
-                    }
-                    Result::Ok(())
-                };
-                if let Err(e) = deploy_mapping() {
-                    errs.push(miette!(
-                        severity = Severity::Warning,
-                        "Failed to deploy {}: {e:?}",
-                        in_egg.abbr()
-                    ));
-                }
-            }
-            if errs.is_empty() {
-                debug_assert!(
-                    !errs.is_empty() || egg.is_deployed()?,
-                    "Egg::is_deployed should return true after deploying"
-                );
-                Ok(())
-            } else {
-                Err(MultiError::new(
-                    format!("Failed to deploy egg {}", egg.name()),
-                    errs,
-                ))
-            }
+            self.deploy_egg(egg, &mappings)
         } else if !egg.config().enabled && deployed {
             cov_mark::hit!(undeploy);
             tracing::debug!("Removing egg {}", egg.name());
-            let mut errs = Vec::new();
-            let mappings = egg
-                .config()
-                .targets_expanded(self.yolk_paths.home_path(), egg.path())?;
-            for (in_egg, deployed) in &mappings {
-                if let Err(e) = remove_symlink_recursive(in_egg, &deployed) {
-                    errs.push(miette!(
-                        "Failed to remove deployment of {}: {e:?}",
-                        in_egg.abbr()
-                    ));
-                }
-            }
-            if errs.is_empty() {
-                debug_assert!(
-                    !errs.is_empty() || !egg.is_deployed()?,
-                    "Egg::is_deployed should return false after undeploying"
-                );
-                Ok(())
-            } else {
-                Err(MultiError::new(
-                    format!("Failed to undeploy egg {}", egg.name()),
-                    errs,
-                ))
-            }
+            self.undeploy_egg(egg, &mappings)
         } else {
             Ok(())
         }

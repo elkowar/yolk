@@ -114,7 +114,7 @@ pub fn create_regex(s: impl AsRef<str>) -> miette::Result<Regex> {
          REGEXES: UnboundCache<String, Result<Regex, regex::Error>> = UnboundCache::new();
          Key = { s.to_string() };
          fn create_regex_cached(s: &str) -> Result<Regex, regex::Error> = {
-             Regex::new(s.as_ref())
+             Regex::new(s)
          }
     }
     create_regex_cached(s.as_ref()).into_diagnostic()
