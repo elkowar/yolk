@@ -31,9 +31,7 @@ pub fn create_symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> mie
     let original = original.as_ref();
     tracing::trace!("Creating symlink at {} -> {}", link.abbr(), original.abbr());
     #[cfg(unix)]
-    fs_err::os::unix::fs::symlink(original, link)
-        .into_diagnostic()
-        .wrap_err("Failed to create symlink")?;
+    fs_err::os::unix::fs::symlink(original, link).into_diagnostic()?;
     #[cfg(target_os = "windows")]
     {
         if original.as_ref().is_dir() {

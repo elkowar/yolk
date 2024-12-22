@@ -98,11 +98,7 @@ impl Yolk {
                 Result::Ok(())
             };
             if let Err(e) = deploy_mapping() {
-                errs.push(miette!(
-                    severity = Severity::Warning,
-                    "Failed to deploy {}: {e:?}",
-                    in_egg.abbr()
-                ));
+                errs.push(e.wrap_err(format!("Failed to deploy {}", in_egg.abbr())));
             }
         }
         if !errs.is_empty() {
@@ -160,13 +156,20 @@ impl Yolk {
             .targets_expanded(self.yolk_paths.home_path(), egg.path())
             .context("Failed to expand targets config for egg")?;
         if egg.config().enabled && !deployed {
-            //TODO: Print "successfully deployed egg" afterwards instead, and list them _after_ the errors, maybe?
-            tracing::info!("Deploying egg {}", egg.name());
-            self.deploy_egg(egg, &mappings)
+            tracing::debug!("Deploying egg {}", egg.name());
+            let result = self.deploy_egg(egg, &mappings);
+            if result.is_ok() {
+                tracing::info!("Successfully deployed egg {}", egg.name());
+            }
+            result
         } else if !egg.config().enabled && deployed {
             cov_mark::hit!(undeploy);
             tracing::debug!("Removing egg {}", egg.name());
-            self.undeploy_egg(egg, &mappings)
+            let result = self.undeploy_egg(egg, &mappings);
+            if result.is_ok() {
+                tracing::info!("Successfully undeployed egg {}", egg.name());
+            }
+            result
         } else {
             Ok(())
         }
@@ -580,7 +583,7 @@ mod test {
         home.child(".config").assert(is_dir());
         home.child(".config/thing.toml").assert(exists().not());
         assert!(format!("{:?}", miette::Report::from(result.unwrap_err()))
-            .contains("Failed to create symlink"));
+            .contains("failed to symlink file"));
         Ok(())
     }
 
@@ -800,6 +803,27 @@ mod test {
                 .to_string())
             .unwrap_err());
 
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_deployment_error() -> TestResult {
+        miette_no_color();
+        let (home, yolk, eggs) = setup_and_init_test_yolk()?;
+        eggs.child("bar/file1").write_str("")?;
+        eggs.child("bar/file2").write_str("")?;
+        home.child("file1").write_str("")?;
+        home.child("file2").write_str("")?;
+        let egg = Egg::open(
+            home.to_path_buf(),
+            eggs.child("bar").to_path_buf(),
+            EggConfig::default()
+                .with_target("file1", home.child("file1"))
+                .with_target("file2", home.child("file2")),
+        )?;
+        insta::assert_compact_debug_snapshot!(miette::Report::from(
+            yolk.sync_egg_deployment(&egg).unwrap_err()
+        ));
         Ok(())
     }
 }
