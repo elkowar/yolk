@@ -5,7 +5,7 @@
 
 </div>
 
-Yolk is a dotfile management tool with a unique spin on templating,
+Yolk is a cross platform dotfile management tool with a unique spin on templating,
 sitting somewhere in between [GNU Stow](https://www.gnu.org/software/stow/) and [chezmoi](https://www.chezmoi.io/).
 
 Have a look at our [documentation](https://elkowar.github.io/yolk/book) for more information on how to get started!
