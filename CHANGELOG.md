@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.16](https://github.com/elkowar/yolk/compare/v0.0.15...v0.0.16) - 2024-12-22
+
+### Fixed
+
+- yolk git --force-canonical flag being bad
+
 ## [0.0.15](https://github.com/elkowar/yolk/compare/v0.0.14...v0.0.15) - 2024-12-22
 
 ### Added
