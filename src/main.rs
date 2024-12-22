@@ -75,6 +75,7 @@ enum Command {
     #[clap(alias = "g")]
     Git {
         /// Run the command in canonical state, even if it typically is not necesary.
+        #[arg(long)]
         force_canonical: bool,
 
         #[clap(allow_hyphen_values = true)]

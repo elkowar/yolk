@@ -160,6 +160,7 @@ impl Yolk {
             .targets_expanded(self.yolk_paths.home_path(), egg.path())
             .context("Failed to expand targets config for egg")?;
         if egg.config().enabled && !deployed {
+            //TODO: Print "successfully deployed egg" afterwards instead, and list them _after_ the errors, maybe?
             tracing::info!("Deploying egg {}", egg.name());
             self.deploy_egg(egg, &mappings)
         } else if !egg.config().enabled && deployed {
