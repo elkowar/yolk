@@ -8,7 +8,10 @@ cargo-dist-version = "0.26.1"
 # pr-run-mode = "upload"
 pr-run-mode = "plan"
 ci = "github"
-installers = ["shell"]
+installers = ["shell", "homebrew"]
+tap = "elkowar/homebrew-tap"
+publish-jobs = ["homebrew"]
+formula = "yolk"
 targets = [
     # "aarch64-apple-darwin",
     "x86_64-apple-darwin",

@@ -38,36 +38,50 @@ struct Args {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// Initialize the yolk directory
+    /// Initialize the yolk directory.
+    ///
+    /// This creates a directory called `yolk` within your config directory, and initializes it with the basic yolk directory structure.
     Init,
-    /// Show the current state of your yolk eggs
+    /// Show the current state of your yolk eggs.
     Status,
     /// Make sure you don't accidentally commit your local egg states
     ///
     /// This renames `.git` to `.yolk_git` to ensure that git interaction happens through the yolk CLI
     Safeguard,
-    /// Evaluate an expression like it would be done in a template
+    /// Evaluate a rhai expression.
+    ///
+    /// The expression is executed in the same scope that template tag expression are evaluated in.
     Eval {
         /// Evaluate in canonical context instead.
         #[arg(long)]
         canonical: bool,
-        /// The expression to evaluate
+        /// The rhai expression to evaluate.
         expr: String,
     },
-    /// Re-evaluate all local templates to ensure that they are in a consistent state
+
+    /// Sync all template files and sync the deployments to match the configuration in yolk.rhai.
+    ///
+    /// This will modify your template files in place, as well as deploying or undeploying any eggs to match your egg configuration.
     #[clap(alias = "s")]
     Sync {
         /// Sync to canonical state. This should only be necessary for debugging purposes.
         #[arg(long)]
         canonical: bool,
     },
+
     /// Run a git-command within the yolk directory while in canonical state.
+    ///
+    /// Some git commands do not get executed in the canonical state, such as `git push`.
     #[clap(alias = "g")]
     Git {
+        /// Run the command in canonical state, even if it typically is not necesary.
+        force_canonical: bool,
+
         #[clap(allow_hyphen_values = true)]
         command: Vec<String>,
     },
-    /// Evaluate a given templated file, or read a templated string from stdin
+
+    /// Evaluate a given templated file, or read a templated string from stdin.
     #[clap(name = "eval-template")]
     EvalTemplate {
         #[arg(long)]
@@ -76,10 +90,13 @@ enum Command {
         /// If not provided, the program will read from stdin
         path: Option<PathBuf>,
     },
+
     /// List all the eggs in your yolk directory
     List,
-    /// Open your `yolk.rhai` or the given egg in your `$EDITOR` of choice
+
+    /// Open your `yolk.rhai` or the given egg in your `$EDITOR` of choice.
     Edit { egg: Option<String> },
+
     /// Watch for changes in your templated files and re-sync them when they change.
     Watch {
         #[arg(long)]
@@ -202,17 +219,21 @@ fn run_command(args: Args) -> Result<()> {
                 .map_err(|e| e.into_report("<inline>", expr))?;
             println!("{result}");
         }
-        Command::Git { command } => {
+        Command::Git {
+            command,
+            force_canonical,
+        } => {
             let mut cmd = yolk.paths().start_git_command_builder()?;
             cmd.args(command);
             // if the command is `git push`, we don't need to enter canonical state
             // before executing it
 
             let first_cmd = command.first().map(|x| x.as_ref());
-            if first_cmd == Some("push")
-                || first_cmd == Some("init")
-                || first_cmd == Some("pull")
-                || first_cmd.is_none()
+            if !force_canonical
+                && (first_cmd == Some("push")
+                    || first_cmd == Some("init")
+                    || first_cmd == Some("pull")
+                    || first_cmd.is_none())
             {
                 cmd.status().into_diagnostic()?;
             } else {
