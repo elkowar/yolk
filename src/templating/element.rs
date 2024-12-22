@@ -4,7 +4,7 @@ use miette::Result;
 use super::{comment_style::CommentStyle, error::TemplateError, parser::Sp};
 
 /// A single, full line with a tag in it. Contains the span of the entire line.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, arbitrary::Arbitrary)]
 pub struct TaggedLine<'a> {
     pub left: &'a str,
     pub tag: &'a str,
@@ -15,7 +15,7 @@ pub struct TaggedLine<'a> {
 /// The starting line and body of a block, such as a multiline tag or part of a conditional.
 ///
 /// `Expr` should either be `Sp<&'a str>` or `()`.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, arbitrary::Arbitrary)]
 pub struct Block<'a, Expr = Sp<&'a str>> {
     /// The full line including the tag
     pub tagged_line: TaggedLine<'a>,
@@ -33,7 +33,7 @@ impl<'a, Expr> Block<'a, Expr> {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, arbitrary::Arbitrary)]
 pub enum Element<'a> {
     Plain(Sp<&'a str>),
     Inline {

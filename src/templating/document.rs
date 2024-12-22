@@ -8,7 +8,7 @@ use super::{
 
 use miette::{NamedSource, Result};
 
-#[derive(Debug)]
+#[derive(Debug, arbitrary::Arbitrary)]
 pub struct Document<'a> {
     comment_style: CommentStyle,
     elements: Vec<element::Element<'a>>,

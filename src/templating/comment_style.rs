@@ -15,7 +15,7 @@ const CIRCUMFIX_COMMENT_SYMBOLS: [(&str, &str); 5] = [
     ("(", ")"),
 ];
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, arbitrary::Arbitrary)]
 pub enum CommentStyle {
     Prefix(String),
     Circumfix(String, String),

@@ -14,18 +14,8 @@ use tracing_subscriber::{
     filter, fmt::format::FmtSpan, layer::SubscriberExt as _, util::SubscriberInitExt as _,
     EnvFilter, Layer,
 };
-use util::PathExt;
-use yolk::{EvalMode, Yolk};
-
-#[cfg(feature = "docgen")]
-mod doc_generator;
-
-pub mod eggs_config;
-pub mod script;
-mod templating;
-mod util;
-mod yolk;
-mod yolk_paths;
+use yolk::util::PathExt;
+use yolk::yolk::{EvalMode, Yolk};
 
 #[derive(clap::Parser, Debug)]
 #[command(version, about)]
@@ -152,7 +142,7 @@ fn init_logging(args: &Args) {
 }
 
 fn run_command(args: Args) -> Result<()> {
-    let mut yolk_paths = yolk_paths::YolkPaths::from_env();
+    let mut yolk_paths = yolk::yolk_paths::YolkPaths::from_env();
     if let Some(d) = args.yolk_dir {
         yolk_paths.set_yolk_dir(d);
     }

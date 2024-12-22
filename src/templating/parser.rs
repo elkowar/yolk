@@ -24,7 +24,7 @@ use super::{
 type Input<'a> = Recoverable<Located<&'a str>, YolkParseError>;
 type PResult<T> = winnow::PResult<T, YolkParseError>;
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, arbitrary::Arbitrary)]
 pub struct Sp<T> {
     range: Range<usize>,
     content: T,
