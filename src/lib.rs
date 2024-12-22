@@ -2,6 +2,7 @@
 mod doc_generator;
 
 pub mod eggs_config;
+pub mod multi_error;
 pub mod script;
 pub mod templating;
 pub mod util;
