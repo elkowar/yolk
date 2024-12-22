@@ -7,6 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::multi_error::MultiError;
 use crate::{
     eggs_config::{DeploymentStrategy, EggConfig},
     script::{eval_ctx::EvalCtx, rhai_error::RhaiError, sysinfo::SystemInfo},
@@ -14,32 +15,6 @@ use crate::{
     util::{self, PathExt as _},
     yolk_paths::{Egg, YolkPaths},
 };
-
-#[derive(Debug, thiserror::Error, miette::Diagnostic)]
-#[error("{message}")]
-#[diagnostic()]
-pub struct MultiError {
-    message: String,
-    #[related]
-    errors: Vec<miette::Report>,
-}
-
-impl MultiError {
-    pub fn new(message: impl Into<String>, errors: Vec<miette::Report>) -> Self {
-        Self {
-            message: message.into(),
-            errors,
-        }
-    }
-}
-impl From<miette::Report> for MultiError {
-    fn from(report: miette::Report) -> Self {
-        Self {
-            message: "Something went wrong".to_string(),
-            errors: vec![report],
-        }
-    }
-}
 
 pub struct Yolk {
     yolk_paths: YolkPaths,
@@ -821,9 +796,11 @@ mod test {
                 .with_target("file1", home.child("file1"))
                 .with_target("file2", home.child("file2")),
         )?;
-        insta::assert_compact_debug_snapshot!(miette::Report::from(
-            yolk.sync_egg_deployment(&egg).unwrap_err()
-        ));
+        insta::with_settings!({filters => vec![(r"\.tmp[a-zA-Z0-9]{6}", "[tmp-dir]")]}, {
+            insta::assert_compact_debug_snapshot!(miette::Report::from(
+                yolk.sync_egg_deployment(&egg).unwrap_err()
+            ));
+        });
         Ok(())
     }
 }

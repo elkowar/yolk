@@ -60,6 +60,7 @@ assert_fs = "1.1.2"
 insta = { version = "1.41.1", default-features = false, features = [
     "colors",
     "redactions",
+    "filters",
 ] }
 predicates = "3.1.2"
 test-log = { version = "0.2.16", default-features = false, features = [
