@@ -76,24 +76,21 @@ impl YolkPaths {
 
     #[allow(unused)]
     pub fn check(&self) -> Result<()> {
-        if !self.root_path().exists() {
-            miette::bail!(
-                "Yolk directory does not exist at {}",
-                self.root_path().abbr()
-            );
-        }
-        if !self.yolk_rhai_path().exists() {
-            miette::bail!(
-                "Yolk directory does not contain a yolk.rhai file at {}",
-                self.yolk_rhai_path().abbr()
-            );
-        }
-        if !self.eggs_dir_path().exists() {
-            miette::bail!(
-                "Yolk directory does not contain an eggs directory at {}",
-                self.eggs_dir_path().abbr()
-            );
-        }
+        miette::ensure!(
+            self.root_path().exists(),
+            "Yolk directory does not exist at {}",
+            self.root_path().abbr()
+        );
+        miette::ensure!(
+            self.yolk_rhai_path().exists(),
+            "Yolk directory does not contain a yolk.rhai file at {}",
+            self.yolk_rhai_path().abbr()
+        );
+        miette::ensure!(
+            self.eggs_dir_path().exists(),
+            "Yolk directory does not contain an eggs directory at {}",
+            self.eggs_dir_path().abbr()
+        );
         Ok(())
     }
 
@@ -116,17 +113,15 @@ impl YolkPaths {
     /// Safeguard git directory by renaming it to `.yolk_git`
     pub fn safeguard_git_dir(&self) -> Result<()> {
         if self.root_path().join(".git").exists() {
-            if self.yolk_safeguarded_git_path().exists() {
-                miette::bail!(
-                    help = "Safeguarded Yolk renames .git to .yolk_git to ensure you don't accidentally commit without yolks processing",
-                    "Yolk directory contains both a .git directory and a .yolk_git directory"
-                );
-            } else {
-                util::rename_safely(
-                    self.root_path().join(".git"),
-                    self.yolk_safeguarded_git_path(),
-                )?;
-            }
+            miette::ensure!(
+                !self.yolk_safeguarded_git_path().exists(),
+                help = "Safeguarded Yolk renames .git to .yolk_git to ensure you don't accidentally commit without yolks processing",
+                "Yolk directory contains both a .git directory and a .yolk_git directory"
+            );
+            util::rename_safely(
+                self.root_path().join(".git"),
+                self.yolk_safeguarded_git_path(),
+            )?;
         }
         Ok(())
     }
@@ -165,7 +160,10 @@ impl YolkPaths {
         } else if default_git_dir.exists() {
             Ok(default_git_dir)
         } else {
-            miette::bail!("No git directory initialized")
+            miette::bail!(
+                help = "Run `git init`, then try again!",
+                "No git directory initialized"
+            )
         }
     }
     ///
@@ -197,16 +195,11 @@ pub struct Egg {
 
 impl Egg {
     pub fn open(home: PathBuf, egg_path: PathBuf, config: EggConfig) -> Result<Self> {
-        if !egg_path.is_dir() {
-            miette::bail!(
-                "Egg {} does not exist",
-                egg_path
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_str()
-                    .unwrap_or_default()
-            )
-        }
+        miette::ensure!(
+            egg_path.is_dir(),
+            "No egg at {} does not exist",
+            egg_path.abbr(),
+        );
         Ok(Self {
             home_path: home.canonical()?,
             egg_dir: egg_path.canonical()?,

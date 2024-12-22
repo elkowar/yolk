@@ -12,13 +12,12 @@ pub fn rename_safely(original: impl AsRef<Path>, new: impl AsRef<Path>) -> miett
     let original = original.as_ref();
     let new = new.as_ref();
     tracing::trace!("Renaming {} -> {}", original.abbr(), new.abbr());
-    if new.exists() {
-        miette::bail!(
-            "Failed to move file {} to {}: File already exists.",
-            original.abbr(),
-            new.abbr()
-        );
-    }
+    miette::ensure!(
+        !new.exists(),
+        "Failed to move file {} to {}: File already exists.",
+        original.abbr(),
+        new.abbr()
+    );
     fs_err::rename(original, new)
         .into_diagnostic()
         .wrap_err("Failed to rename file")?;

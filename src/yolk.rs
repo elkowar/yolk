@@ -62,7 +62,7 @@ impl Yolk {
                             fs_err::create_dir_all(parent).map_err(|e| {
                                 miette!(
                                     severity = Severity::Warning,
-                                    "Warning: Failed to create parent dir for deployment of {}: {e:?}",
+                                    "Failed to create parent dir for deployment of {}: {e:?}",
                                     in_egg.abbr()
                                 )
                             })?;
@@ -97,10 +97,7 @@ impl Yolk {
         let mut errs = Vec::new();
         for (in_egg, deployed) in mappings {
             if let Err(e) = remove_symlink_recursive(in_egg, &deployed) {
-                errs.push(miette!(
-                    "Failed to remove deployment of {}: {e:?}",
-                    in_egg.abbr()
-                ));
+                errs.push(e.wrap_err(format!("Failed to remove deployment of {}", in_egg.abbr())));
             }
         }
         if !errs.is_empty() {
@@ -431,6 +428,7 @@ fn remove_symlink_recursive(
         }
     } else if link_path.exists() {
         miette::bail!(
+            help = "Yolk will only try to remove files that are symlinks pointing into the corresponding egg.",
             "Tried to remove deployment of {}, but {} doesn't link to it",
             actual_path.abbr(),
             link_path.abbr()
