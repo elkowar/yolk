@@ -29,8 +29,6 @@ pub struct SystemInfoPaths {
     config_dir: PathBuf,
     #[rhai_type(readonly)]
     home_dir: PathBuf,
-    #[rhai_type(readonly)]
-    yolk_dir: PathBuf,
 }
 
 impl SystemInfo {
@@ -50,7 +48,6 @@ impl SystemInfo {
                 cache_dir: dirs::cache_dir().unwrap_or_else(|| "unknown".into()),
                 config_dir: dirs::config_dir().unwrap_or_else(|| "unknown".into()),
                 home_dir: dirs::home_dir().unwrap_or_else(|| "unknown".into()),
-                yolk_dir: crate::yolk_paths::default_yolk_dir(),
             },
         }
     }
@@ -63,7 +60,6 @@ impl SystemInfo {
                 cache_dir: (PathBuf::from("/canonical/cache")),
                 config_dir: (PathBuf::from("/canonical/config")),
                 home_dir: (PathBuf::from("/canonical/home")),
-                yolk_dir: PathBuf::from("/canonical/yolk"),
             },
             distro: "distro".to_string(),
             device_name: "devicename".to_string(),

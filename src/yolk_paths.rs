@@ -31,9 +31,21 @@ pub struct YolkPaths {
 }
 
 pub fn default_yolk_dir() -> PathBuf {
-    dirs::config_dir()
+    let standard_dir = dirs::config_dir()
         .expect("No config dir available")
-        .join("yolk")
+        .join("yolk");
+    if standard_dir.exists() {
+        standard_dir
+    } else {
+        let config_dir = if let Ok(config_dir) = std::env::var("XDG_CONFIG_DIR") {
+            PathBuf::from(config_dir)
+        } else {
+            dirs::home_dir()
+                .expect("No home dir available")
+                .join(".config")
+        };
+        config_dir.join("yolk")
+    }
 }
 
 impl YolkPaths {

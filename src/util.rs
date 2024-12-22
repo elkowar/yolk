@@ -4,6 +4,8 @@ use cached::UnboundCache;
 use miette::{Context as _, IntoDiagnostic as _};
 use regex::Regex;
 
+use crate::yolk_paths::default_yolk_dir;
+
 /// Rename or move a file, but only if the destination doesn't exist.
 /// This is a safer verison of [`std::fs::rename`] that doesn't overwrite files.
 pub fn rename_safely(original: impl AsRef<Path>, new: impl AsRef<Path>) -> miette::Result<()> {
@@ -58,11 +60,9 @@ impl Path {
     ///
     /// This replaces the home path with `~`, as well as reducing paths that point into the eggs directory to `eggs/rest/of/path`.
     fn abbr(&self) -> String {
-        match (
-            dirs::home_dir(),
-            dirs::config_dir().map(|x| x.join("yolk").join("eggs")),
-        ) {
-            (Some(home), Some(eggs)) => self
+        let eggs = default_yolk_dir().join("eggs");
+        match dirs::home_dir() {
+            Some(home) => self
                 .strip_prefix(&eggs)
                 .map(|x| PathBuf::from("eggs").join(x))
                 .or_else(|_| self.strip_prefix(&home).map(|x| PathBuf::from("~").join(x)))
