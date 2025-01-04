@@ -114,7 +114,8 @@ impl Yolk {
     }
 
     /// Deploy or undeploy the given egg, depending on the current system state and the given Egg data.
-    pub fn sync_egg_deployment(&self, egg: &Egg) -> Result<(), MultiError> {
+    /// Returns true if the egg is now deployed, false if it is not.
+    pub fn sync_egg_deployment(&self, egg: &Egg) -> Result<bool, MultiError> {
         let deployed = egg
             .is_deployed()
             .with_context(|| format!("Failed to check deployment state for egg {}", egg.name()))?;
@@ -122,7 +123,7 @@ impl Yolk {
             egg.name = egg.name(),
             egg.deployed = deployed,
             egg.enabled = egg.config().enabled,
-            "Syncing egg deployment"
+            "Checking egg deployment"
         );
         let mappings = egg
             .config()
@@ -134,7 +135,7 @@ impl Yolk {
             if result.is_ok() {
                 tracing::info!("Successfully deployed egg {}", egg.name());
             }
-            result
+            result.map(|()| true)
         } else if !egg.config().enabled && deployed {
             cov_mark::hit!(undeploy);
             tracing::debug!("Removing egg {}", egg.name());
@@ -142,9 +143,9 @@ impl Yolk {
             if result.is_ok() {
                 tracing::info!("Successfully undeployed egg {}", egg.name());
             }
-            result
+            result.map(|()| false)
         } else {
-            Ok(())
+            Ok(deployed)
         }
     }
 

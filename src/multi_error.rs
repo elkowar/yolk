@@ -3,20 +3,15 @@
 #[diagnostic()]
 pub struct MultiError {
     message: String,
-    #[diagnostic_source]
-    errors: ErrList,
+    #[related]
+    errors: Vec<miette::Report>,
 }
-
-#[derive(Debug, thiserror::Error, miette::Diagnostic)]
-#[error("Something went wrong")]
-#[diagnostic()]
-pub struct ErrList(#[related] Vec<miette::Report>);
 
 impl MultiError {
     pub fn new(message: impl Into<String>, errors: Vec<miette::Report>) -> Self {
         Self {
             message: message.into(),
-            errors: ErrList(errors),
+            errors,
         }
     }
 }
@@ -24,7 +19,7 @@ impl From<miette::Report> for MultiError {
     fn from(report: miette::Report) -> Self {
         Self {
             message: "Something went wrong".to_string(),
-            errors: ErrList(vec![report]),
+            errors: vec![report],
         }
     }
 }
