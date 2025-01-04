@@ -422,9 +422,19 @@ fn remove_symlink_recursive(
             link_path.abbr(),
             actual_path.abbr(),
         );
-        symlink::remove_symlink_auto(link_path)
-            .into_diagnostic()
-            .wrap_err_with(|| format!("Failed to remove symlink at {}", link_path.abbr(),))?;
+        if link_path.is_dir() {
+            symlink::remove_symlink_dir(link_path)
+                .into_diagnostic()
+                .wrap_err_with(|| {
+                    format!("Failed to remove symlink dir at {}", link_path.abbr(),)
+                })?;
+        } else {
+            symlink::remove_symlink_file(link_path)
+                .into_diagnostic()
+                .wrap_err_with(|| {
+                    format!("Failed to remove symlink file at {}", link_path.abbr(),)
+                })?;
+        }
     } else if link_path.is_dir() && actual_path.is_dir() {
         for entry in actual_path.fs_err_read_dir().into_diagnostic()? {
             let entry = entry.into_diagnostic()?;
