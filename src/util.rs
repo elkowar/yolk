@@ -33,7 +33,7 @@ pub fn create_symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> mie
     fs_err::os::unix::fs::symlink(original, link).into_diagnostic()?;
     #[cfg(target_os = "windows")]
     {
-        if original.as_ref().is_dir() {
+        if original.is_dir() {
             fs_err::os::windows::fs::symlink_dir(original, link)
                 .into_diagnostic()
                 .wrap_err("Failed to create symlink")?;
