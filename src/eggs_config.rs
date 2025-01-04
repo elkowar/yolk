@@ -241,7 +241,7 @@ mod test {
 
     use crate::{
         eggs_config::{DeploymentStrategy, EggConfig},
-        util::TestResult,
+        util::test_util::TestResult,
     };
 
     use rstest::rstest;

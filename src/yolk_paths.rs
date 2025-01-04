@@ -333,7 +333,7 @@ impl Iterator for TraverseDeployment {
 #[cfg(test)]
 mod test {
     use crate::{
-        util::{setup_and_init_test_yolk, TestResult},
+        util::test_util::{setup_and_init_test_yolk, TestResult},
         yolk_paths::{Egg, DEFAULT_YOLK_RHAI},
     };
     use assert_fs::{

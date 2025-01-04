@@ -378,7 +378,7 @@ impl<T: Parser<I, O, E> + Sized, I: Stream + Location, O, E> ParserExt<I, O, E> 
 
 #[cfg(test)]
 mod test {
-    use crate::util::{render_error, TestResult};
+    use crate::util::test_util::{render_error, TestResult};
     use insta::assert_debug_snapshot;
     use winnow::Parser as _;
 

@@ -119,6 +119,7 @@ impl Yolk {
             .is_deployed()
             .with_context(|| format!("Failed to check deployment state for egg {}", egg.name()))?;
         tracing::debug!(
+            egg.name = egg.name(),
             egg.deployed = deployed,
             egg.enabled = egg.config().enabled,
             "Syncing egg deployment"
@@ -420,7 +421,9 @@ fn remove_symlink_recursive(
             link_path.abbr(),
             actual_path.abbr(),
         );
-        fs_err::remove_file(link_path).into_diagnostic()?;
+        symlink::remove_symlink_auto(link_path)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Failed to remove symlink at {}", link_path.abbr(),))?;
     } else if link_path.is_dir() && actual_path.is_dir() {
         for entry in actual_path.fs_err_read_dir().into_diagnostic()? {
             let entry = entry.into_diagnostic()?;
@@ -450,7 +453,10 @@ mod test {
 
     use crate::{
         eggs_config::DeploymentStrategy,
-        util::{create_regex, miette_no_color, setup_and_init_test_yolk, TestResult},
+        util::{
+            create_regex,
+            test_util::{render_error, render_report, setup_and_init_test_yolk, TestResult},
+        },
         yolk::EvalMode,
         yolk_paths::Egg,
     };
@@ -556,7 +562,7 @@ mod test {
         home.child(".config").assert(is_dir());
         home.child(".config/thing.toml").assert(exists().not());
         assert!(format!("{:?}", miette::Report::from(result.unwrap_err()))
-            .contains("failed to symlink file"));
+            .contains("Failed to create symlink"));
         Ok(())
     }
 
@@ -694,7 +700,6 @@ mod test {
 
     #[test]
     fn test_sync_eggs_continues_after_failure() -> TestResult {
-        miette_no_color();
         let (home, yolk, eggs) = setup_and_init_test_yolk()?;
         home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
             export let eggs = #{
@@ -708,7 +713,7 @@ mod test {
         eggs.child("foo/foo").assert(r#"{< invalid rhai >}"#);
         eggs.child("bar/bar")
             .assert(r#"#<yolk> foo # {<if false>}"#);
-        assert!(format!("{:?}", miette::Report::from(result.unwrap_err())).contains("Syntax error"));
+        assert!(render_error(result.unwrap_err()).contains("Syntax error"));
         Ok(())
     }
 
@@ -763,7 +768,6 @@ mod test {
 
     #[test]
     pub fn test_syntax_error_in_yolk_rhai() -> TestResult {
-        miette_no_color();
         let (home, yolk, _) = setup_and_init_test_yolk()?;
         home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
             fn foo(
@@ -772,7 +776,7 @@ mod test {
             .prepare_eval_ctx_for_templates(crate::yolk::EvalMode::Local)
             .map_err(|e| create_regex(r"\[.*.rhai:\d+:\d+]")
                 .unwrap()
-                .replace(&format!("{:?}", e), "[no-filename-in-test]")
+                .replace(&render_report(e), "[no-filename-in-test]")
                 .to_string())
             .unwrap_err());
 
@@ -781,7 +785,6 @@ mod test {
 
     #[test]
     pub fn test_deployment_error() -> TestResult {
-        miette_no_color();
         let (home, yolk, eggs) = setup_and_init_test_yolk()?;
         eggs.child("bar/file1").write_str("")?;
         eggs.child("bar/file2").write_str("")?;
@@ -798,7 +801,7 @@ mod test {
             (r"\.tmp[a-zA-Z0-9]{6}", "[tmp-dir]"),
             (r"file\d", "[filename]")
         ]}, {
-            insta::assert_compact_debug_snapshot!(miette::Report::from(
+            insta::assert_snapshot!(render_error(
                 yolk.sync_egg_deployment(&egg).unwrap_err()
             ));
         });

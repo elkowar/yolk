@@ -163,7 +163,7 @@ impl CommentStyle {
 
 #[cfg(test)]
 mod test {
-    use crate::util::TestResult;
+    use crate::util::test_util::TestResult;
 
     use crate::templating::element::Element;
 

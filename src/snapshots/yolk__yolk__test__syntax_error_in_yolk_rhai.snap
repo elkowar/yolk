@@ -1,11 +1,9 @@
 ---
 source: src/yolk.rs
-expression: "yolk.prepare_eval_ctx_for_templates(crate::yolk::EvalMode::Local).map_err(|e|\ncreate_regex(r\"\\[.*.rhai:\\d+:\\d+]\").unwrap().replace(&format!(\"{:?}\", e),\n\"[no-filename-in-test]\").to_string()).unwrap_err()"
-snapshot_kind: text
+expression: "yolk.prepare_eval_ctx_for_templates(crate::yolk::EvalMode::Local).map_err(|e|\ncreate_regex(r\"\\[.*.rhai:\\d+:\\d+]\").unwrap().replace(&render_report(e),\n\"[no-filename-in-test]\").to_string()).unwrap_err()"
 ---
   × Failed to execute yolk.rhai
-  ╰─▶ Syntax error: Expecting ')' to close the parameters list of function
-      'foo' (line 2, position 1)
+  ╰─▶ Syntax error: Expecting ')' to close the parameters list of function 'foo' (line 2, position 1)
    ╭─[no-filename-in-test]
  1 │ fn foo(
    ·        ┬

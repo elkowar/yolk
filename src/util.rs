@@ -29,20 +29,15 @@ pub fn create_symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> mie
     let link = link.as_ref();
     let original = original.as_ref();
     tracing::trace!("Creating symlink at {} -> {}", link.abbr(), original.abbr());
-    #[cfg(unix)]
-    fs_err::os::unix::fs::symlink(original, link).into_diagnostic()?;
-    #[cfg(target_os = "windows")]
-    {
-        if original.is_dir() {
-            fs_err::os::windows::fs::symlink_dir(original, link)
-                .into_diagnostic()
-                .wrap_err("Failed to create symlink")?;
-        } else {
-            std::os::windows::fs::symlink_file(original, link)
-                .into_diagnostic()
-                .wrap_err("Failed to create symlink")?;
-        }
-    }
+    symlink::symlink_auto(original, link)
+        .into_diagnostic()
+        .wrap_err_with(|| {
+            format!(
+                "Failed to create symlink at {} -> {}",
+                link.abbr(),
+                original.abbr()
+            )
+        })?;
     Ok(())
 }
 
@@ -77,7 +72,7 @@ impl Path {
             return self.to_path_buf();
         };
         #[cfg(test)]
-        let home = PathBuf::from(std::env::var("HOME").unwrap());
+        let home = test_util::get_home_dir();
 
         if let Some(first) = self.components().next() {
             if first.as_os_str().to_string_lossy() == "~" {
@@ -85,24 +80,6 @@ impl Path {
             }
         }
         self.to_path_buf()
-    }
-}
-
-/// like <https://crates.io/crates/testresult>, but shows the debug output instead of display.
-#[cfg(test)]
-pub type TestResult<T = ()> = std::result::Result<T, TestError>;
-
-#[cfg(test)]
-#[derive(Debug)]
-pub enum TestError {}
-
-#[cfg(test)]
-impl<T: std::fmt::Debug + std::fmt::Display> From<T> for TestError {
-    #[track_caller] // Will show the location of the caller in test failure messages
-    fn from(error: T) -> Self {
-        // Use alternate format for rich error message for anyhow
-        // See: https://docs.rs/anyhow/latest/anyhow/struct.Error.html#display-representations
-        panic!("error: {} - {:?}", std::any::type_name::<T>(), error);
     }
 }
 
@@ -118,38 +95,81 @@ pub fn create_regex(s: impl AsRef<str>) -> miette::Result<Regex> {
 }
 
 #[cfg(test)]
-pub fn setup_and_init_test_yolk() -> miette::Result<(
-    assert_fs::TempDir,
-    crate::yolk::Yolk,
-    assert_fs::fixture::ChildPath,
-)> {
-    use assert_fs::prelude::PathChild as _;
+pub mod test_util {
+    use std::cell::RefCell;
+    use std::path::PathBuf;
+    use std::thread_local;
 
-    let home = assert_fs::TempDir::new().into_diagnostic()?;
-    let paths = crate::yolk_paths::YolkPaths::new(home.join("yolk"), home.to_path_buf());
-    let yolk = crate::yolk::Yolk::new(paths);
-    std::env::set_var("HOME", home.to_string_lossy().to_string());
-    let eggs = home.child("yolk/eggs");
-    yolk.init_yolk()?;
-    Ok((home, yolk, eggs))
-}
+    use miette::IntoDiagnostic as _;
 
-#[cfg(test)]
-pub fn render_error(e: impl miette::Diagnostic) -> String {
-    use miette::GraphicalReportHandler;
+    thread_local! {
+        static HOME_DIR: RefCell<Option<PathBuf>> = RefCell::new(None);
+    }
 
-    let mut out = String::new();
-    GraphicalReportHandler::new()
-        .with_theme(miette::GraphicalTheme::unicode_nocolor())
-        .render_report(&mut out, &e)
-        .unwrap();
-    out
-}
+    pub fn set_home_dir(path: PathBuf) {
+        HOME_DIR.with(|home_dir| {
+            *home_dir.borrow_mut() = Some(path);
+        });
+    }
 
-#[cfg(test)]
-pub fn miette_no_color() {
-    miette::set_hook(Box::new(|_| {
-        Box::new(miette::MietteHandlerOpts::new().color(false).build())
-    }))
-    .unwrap();
+    pub fn get_home_dir() -> PathBuf {
+        HOME_DIR.with_borrow(|x| x.clone()).expect(
+            "Home directory not set in this test. Use `set_home_dir` to set the home directory.",
+        )
+    }
+
+    /// like <https://crates.io/crates/testresult>, but shows the debug output instead of display.
+    pub type TestResult<T = ()> = std::result::Result<T, TestError>;
+
+    #[derive(Debug)]
+    pub enum TestError {}
+
+    impl<T: std::fmt::Debug + std::fmt::Display> From<T> for TestError {
+        #[track_caller] // Will show the location of the caller in test failure messages
+        fn from(error: T) -> Self {
+            // Use alternate format for rich error message for anyhow
+            // See: https://docs.rs/anyhow/latest/anyhow/struct.Error.html#display-representations
+            panic!("error: {} - {:?}", std::any::type_name::<T>(), error);
+        }
+    }
+
+    pub fn setup_and_init_test_yolk() -> miette::Result<(
+        assert_fs::TempDir,
+        crate::yolk::Yolk,
+        assert_fs::fixture::ChildPath,
+    )> {
+        use assert_fs::prelude::PathChild as _;
+
+        let home = assert_fs::TempDir::new().into_diagnostic()?;
+        let paths = crate::yolk_paths::YolkPaths::new(home.join("yolk"), home.to_path_buf());
+        let yolk = crate::yolk::Yolk::new(paths);
+        std::env::set_var("HOME", "/tmp/TEST_HOMEDIR_SHOULD_NOT_BE_USED");
+        set_home_dir(home.to_path_buf());
+
+        let eggs = home.child("yolk/eggs");
+        yolk.init_yolk()?;
+        Ok((home, yolk, eggs))
+    }
+
+    pub fn render_error(e: impl miette::Diagnostic) -> String {
+        use miette::GraphicalReportHandler;
+
+        let mut out = String::new();
+        GraphicalReportHandler::new()
+            .with_theme(miette::GraphicalTheme::unicode_nocolor())
+            .render_report(&mut out, &e)
+            .unwrap();
+        out
+    }
+
+    pub fn render_report(e: miette::Report) -> String {
+        use miette::GraphicalReportHandler;
+
+        let mut out = String::new();
+        GraphicalReportHandler::new()
+            .with_theme(miette::GraphicalTheme::unicode_nocolor())
+            .render_report(&mut out, e.as_ref())
+            .unwrap();
+        out
+    }
 }

@@ -540,7 +540,7 @@ impl Module {
 
 #[cfg(test)]
 mod test {
-    use crate::util::TestResult;
+    use crate::util::test_util::TestResult;
     use miette::IntoDiagnostic as _;
     use rhai::Variant;
 
