@@ -38,16 +38,17 @@ impl Yolk {
     #[tracing::instrument(skip_all, fields(egg = ?egg.name()))]
     fn deploy_egg(
         &self,
+        created_symlinks: &mut Vec<(PathBuf, PathBuf)>,
         egg: &Egg,
         mappings: &HashMap<PathBuf, PathBuf>,
     ) -> Result<(), MultiError> {
         let mut errs = Vec::new();
         for (in_egg, deployed) in mappings {
-            let deploy_mapping = || -> miette::Result<()> {
+            let mut deploy_mapping = || -> miette::Result<()> {
                 match egg.config().strategy {
                     DeploymentStrategy::Merge => {
                         cov_mark::hit!(deploy_merge);
-                        symlink_recursive(egg.path(), in_egg, &deployed)?;
+                        symlink_recursive(created_symlinks, egg.path(), in_egg, &deployed)?;
                     }
                     DeploymentStrategy::Put => {
                         cov_mark::hit!(deploy_put);
@@ -302,6 +303,8 @@ impl Yolk {
 /// Set up a symlink from the given `link_path` to the given `actual_path`, recursively.
 /// Also takes the `egg_root` dir, to ensure we can safely delete any stale symlinks on the way there.
 ///
+/// Also takes a mutable list that new (actual_path, link_path) pairs will be added to when created or encountered.
+///
 /// Requires all paths to be absolute.
 ///
 /// This means:
@@ -311,17 +314,23 @@ impl Yolk {
 /// - If `actual_path` is a directory that does not exist in `link_path`, symlink it.
 /// - If `actual_path` is a directory that already exists in `link_path`, recurse into it and `symlink_recursive` `actual_path`s children.
 fn symlink_recursive(
+    created_symlinks: &mut Vec<(PathBuf, PathBuf)>,
     egg_root: impl AsRef<Path>,
     actual_path: impl AsRef<Path>,
     link_path: &impl AsRef<Path>,
 ) -> Result<()> {
-    fn inner(egg_root: PathBuf, actual_path: PathBuf, link_path: PathBuf) -> Result<()> {
+    fn inner(
+        created_symlinks: &mut Vec<(PathBuf, PathBuf)>,
+        egg_root: PathBuf,
+        actual_path: PathBuf,
+        link_path: PathBuf,
+    ) -> Result<()> {
         let actual_path = actual_path.normalize();
         let link_path = link_path.normalize();
         let egg_root = egg_root.normalize();
         assert!(
             link_path.is_absolute(),
-            "link_ path must be absolute, but was {}",
+            "link_path must be absolute, but was {}",
             link_path.display()
         );
         assert!(
@@ -335,7 +344,7 @@ fn symlink_recursive(
             actual_path.display(),
             egg_root.display(),
         );
-        tracing::debug!(
+        tracing::trace!(
             "symlink_recursive({}, {})",
             actual_path.abbr(),
             link_path.abbr()
@@ -353,6 +362,7 @@ fn symlink_recursive(
                 link_target.abbr()
             );
             if link_target == actual_path {
+                created_symlinks.push((actual_path, link_path));
                 return Ok(());
             } else if link_target.exists() {
                 miette::bail!(
@@ -380,7 +390,12 @@ fn symlink_recursive(
             if link_path.is_dir() && actual_path.is_dir() {
                 for entry in actual_path.fs_err_read_dir().into_diagnostic()? {
                     let entry = entry.into_diagnostic()?;
-                    symlink_recursive(&egg_root, entry.path(), &link_path.join(entry.file_name()))?;
+                    symlink_recursive(
+                        created_symlinks,
+                        &egg_root,
+                        entry.path(),
+                        &link_path.join(entry.file_name()),
+                    )?;
                 }
                 return Ok(());
             } else if link_path.is_dir() || actual_path.is_dir() {
@@ -397,9 +412,11 @@ fn symlink_recursive(
             link_path.abbr(),
             actual_path.abbr(),
         );
+        created_symlinks.push((actual_path, link_path));
         Ok(())
     }
     inner(
+        created_symlinks,
         egg_root.as_ref().to_path_buf(),
         actual_path.as_ref().to_path_buf(),
         link_path.as_ref().to_path_buf(),
