@@ -2,13 +2,16 @@
 members = ["cargo:."]
 
 [dist]
+windows-archive = ".zip"
+fail-fast = true
+github-attestations = true
 global-artifacts-jobs = ["./build-man"]
 # github-build-setup = "build-setup.yml"
 cargo-dist-version = "0.26.1"
 # pr-run-mode = "upload"
 pr-run-mode = "plan"
 ci = "github"
-installers = ["shell", "homebrew"]
+installers = ["shell", "homebrew", "powershell"]
 tap = "elkowar/homebrew-tap"
 publish-jobs = ["homebrew"]
 formula = "yolk"
@@ -16,7 +19,7 @@ targets = [
     # "aarch64-apple-darwin",
     "x86_64-apple-darwin",
     "x86_64-unknown-linux-gnu",
-    # "x86_64-pc-windows-msvc",
+    "x86_64-pc-windows-msvc",
 ]
 install-path = "CARGO_HOME"
 install-updater = false
