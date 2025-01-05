@@ -38,7 +38,7 @@ impl Yolk {
     #[tracing::instrument(skip_all, fields(egg = ?egg.name()))]
     fn deploy_egg(
         &self,
-        created_symlinks: &mut Vec<(PathBuf, PathBuf)>,
+        created_symlinks: &mut Vec<PathBuf>,
         egg: &Egg,
         mappings: &HashMap<PathBuf, PathBuf>,
     ) -> Result<(), MultiError> {
@@ -69,6 +69,7 @@ impl Yolk {
                             })?;
                         }
                         util::create_symlink(in_egg, deployed)?;
+                        created_symlinks.push(deployed.clone());
                     }
                 }
                 Result::Ok(())
@@ -116,6 +117,7 @@ impl Yolk {
 
     /// Deploy or undeploy the given egg, depending on the current system state and the given Egg data.
     /// Returns true if the egg is now deployed, false if it is not.
+    #[tracing::instrument(skip_all, fields(egg.name = %egg.name()))]
     pub fn sync_egg_deployment(&self, egg: &Egg) -> Result<bool, MultiError> {
         let deployed = egg
             .is_deployed()
@@ -130,11 +132,18 @@ impl Yolk {
             .config()
             .targets_expanded(self.yolk_paths.home_path(), egg.path())
             .context("Failed to expand targets config for egg")?;
+
         if egg.config().enabled && !deployed {
             tracing::debug!("Deploying egg {}", egg.name());
-            let result = self.deploy_egg(egg, &mappings);
+
+            let mut deployed_symlinks = Vec::new();
+            let result = self.deploy_egg(&mut deployed_symlinks, egg, &mappings);
             if result.is_ok() {
                 tracing::info!("Successfully deployed egg {}", egg.name());
+            }
+
+            if let Err(e) = self.cleanup_stale_symlinks_for(egg.name(), &deployed_symlinks) {
+                tracing::error!("{e:?}");
             }
             result.map(|()| true)
         } else if !egg.config().enabled && deployed {
@@ -144,10 +153,58 @@ impl Yolk {
             if result.is_ok() {
                 tracing::info!("Successfully undeployed egg {}", egg.name());
             }
+
+            if let Err(e) = self.cleanup_stale_symlinks_for(egg.name(), &[]) {
+                tracing::error!("{e:?}");
+            }
+
             result.map(|()| false)
         } else {
             Ok(deployed)
         }
+    }
+
+    /// Check through the old symlinks from the cache file of a given egg,
+    /// and remove any that are not included in the `deployed_symlinks` list.
+    pub fn cleanup_stale_symlinks_for(
+        &self,
+        egg_name: &str,
+        deployed_symlinks: &[PathBuf],
+    ) -> Result<(), MultiError> {
+        let mut errs = Vec::new();
+        let old_symlinks_db = self.yolk_paths.previous_egg_deployment_locations_db()?;
+        let old_symlinks = old_symlinks_db.read(egg_name)?;
+
+        for old_symlink in old_symlinks {
+            // TODO: This is very,.... reliant on the fact that paths are normalized.
+            // Should be the case, but can we enforce this somehow?
+            if !deployed_symlinks.contains(&old_symlink) {
+                let is_symlink_to_egg = if old_symlink.exists() && old_symlink.is_symlink() {
+                    match old_symlink.fs_err_read_link() {
+                        Ok(x) => x.starts_with(self.paths().egg_path(egg_name)),
+                        Err(e) => {
+                            errs.push(miette::Report::from_err(e));
+                            false
+                        }
+                    }
+                } else {
+                    false
+                };
+                if is_symlink_to_egg {
+                    tracing::info!("Removing stale symlink at {}", old_symlink.abbr());
+                    cov_mark::hit!(delete_stale_symlink);
+                    if let Err(e) = util::remove_symlink(&old_symlink) {
+                        errs.push(e.wrap_err(format!(
+                            "Failed to remove old symlink {}",
+                            old_symlink.abbr()
+                        )));
+                    }
+                }
+            }
+        }
+        old_symlinks_db.write(egg_name, deployed_symlinks)?;
+
+        Ok(())
     }
 
     /// fetch the `eggs` variable from a given EvalCtx.
@@ -303,7 +360,7 @@ impl Yolk {
 /// Set up a symlink from the given `link_path` to the given `actual_path`, recursively.
 /// Also takes the `egg_root` dir, to ensure we can safely delete any stale symlinks on the way there.
 ///
-/// Also takes a mutable list that new (actual_path, link_path) pairs will be added to when created or encountered.
+/// Also takes a mutable list that all encountered or created symlinks will be added to.
 ///
 /// Requires all paths to be absolute.
 ///
@@ -314,13 +371,13 @@ impl Yolk {
 /// - If `actual_path` is a directory that does not exist in `link_path`, symlink it.
 /// - If `actual_path` is a directory that already exists in `link_path`, recurse into it and `symlink_recursive` `actual_path`s children.
 fn symlink_recursive(
-    created_symlinks: &mut Vec<(PathBuf, PathBuf)>,
+    created_symlinks: &mut Vec<PathBuf>,
     egg_root: impl AsRef<Path>,
     actual_path: impl AsRef<Path>,
     link_path: &impl AsRef<Path>,
 ) -> Result<()> {
     fn inner(
-        created_symlinks: &mut Vec<(PathBuf, PathBuf)>,
+        created_symlinks: &mut Vec<PathBuf>,
         egg_root: PathBuf,
         actual_path: PathBuf,
         link_path: PathBuf,
@@ -362,7 +419,7 @@ fn symlink_recursive(
                 link_target.abbr()
             );
             if link_target == actual_path {
-                created_symlinks.push((actual_path, link_path));
+                created_symlinks.push(link_path);
                 return Ok(());
             } else if link_target.exists() {
                 miette::bail!(
@@ -412,7 +469,7 @@ fn symlink_recursive(
             link_path.abbr(),
             actual_path.abbr(),
         );
-        created_symlinks.push((actual_path, link_path));
+        created_symlinks.push(link_path);
         Ok(())
     }
     inner(
@@ -546,6 +603,62 @@ mod test {
         )?)?;
         home.child("foo.toml").assert(is_symlink());
         home.child("thing").assert(is_symlink());
+        Ok(())
+    }
+
+    #[test]
+    fn test_moving_put_deploy_cleans_up_old_symlinks() -> TestResult {
+        cov_mark::check_count!(delete_stale_symlink, 2);
+        let (home, yolk, eggs) = setup_and_init_test_yolk()?;
+        eggs.child("foo/foo.toml").write_str("")?;
+        let mut egg = Egg::open(
+            home.to_path_buf(),
+            eggs.child("foo").to_path_buf(),
+            EggConfig::new("foo.toml", home.child("foo.toml")),
+        )?;
+        yolk.sync_egg_deployment(&egg)?;
+        home.child("foo.toml").assert(is_symlink());
+
+        // now we sync again, to a different location
+        *egg.config_mut() = EggConfig::new("foo.toml", home.child("bar.toml"));
+        yolk.sync_egg_deployment(&egg)?;
+        home.child("bar.toml").assert(is_symlink());
+        home.child("foo.toml").assert(exists().not());
+
+        // and back, just to be sure
+        *egg.config_mut() = EggConfig::new("foo.toml", home.child("foo.toml"));
+        yolk.sync_egg_deployment(&egg)?;
+        home.child("foo.toml").assert(is_symlink());
+        home.child("bar.toml").assert(exists().not());
+        Ok(())
+    }
+
+    #[test]
+    fn test_moving_merge_deploy_cleans_up_old_symlinks() -> TestResult {
+        cov_mark::check_count!(delete_stale_symlink, 2);
+        let (home, yolk, eggs) = setup_and_init_test_yolk()?;
+        home.child("a").create_dir_all()?;
+        home.child("b").create_dir_all()?;
+        eggs.child("foo/foo/foo.toml").write_str("")?;
+        let mut egg = Egg::open(
+            home.to_path_buf(),
+            eggs.child("foo").to_path_buf(),
+            EggConfig::new_merge(".", home.child("a")),
+        )?;
+        yolk.sync_egg_deployment(&egg)?;
+        home.child("a/foo").assert(is_symlink());
+
+        // now we sync again, to a different location
+        *egg.config_mut() = EggConfig::new_merge(".", home.child("b"));
+        yolk.sync_egg_deployment(&egg)?;
+        home.child("b/foo").assert(is_symlink());
+        home.child("a/foo").assert(exists().not());
+
+        // and back, just to be sure
+        *egg.config_mut() = EggConfig::new_merge(".", home.child("a"));
+        yolk.sync_egg_deployment(&egg)?;
+        home.child("a/foo").assert(is_symlink());
+        home.child("b/foo").assert(exists().not());
         Ok(())
     }
 

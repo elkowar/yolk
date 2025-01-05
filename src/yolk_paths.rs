@@ -184,6 +184,54 @@ impl YolkPaths {
     pub fn get_egg(&self, name: &str, config: EggConfig) -> Result<Egg> {
         Egg::open(self.home.clone(), self.egg_path(name), config)
     }
+
+    pub fn previous_egg_deployment_locations_db_path(&self) -> PathBuf {
+        self.root_path.join(".previous_deployment_targets")
+    }
+
+    pub fn previous_egg_deployment_locations_db(&self) -> Result<PreviousEggDeploymentLocationsDb> {
+        PreviousEggDeploymentLocationsDb::open(self.root_path.join(".deployed_cache"))
+    }
+}
+
+pub struct PreviousEggDeploymentLocationsDb {
+    path: PathBuf,
+}
+
+impl PreviousEggDeploymentLocationsDb {
+    fn open(path: PathBuf) -> Result<Self> {
+        fs_err::create_dir_all(&path).into_diagnostic()?;
+        Ok(Self { path })
+    }
+
+    pub fn egg_data_path(&self, egg_name: &str) -> PathBuf {
+        self.path.join(egg_name)
+    }
+
+    pub fn read(&self, egg_name: &str) -> Result<Vec<PathBuf>> {
+        let cache_path = self.egg_data_path(egg_name);
+        if cache_path.exists() {
+            Ok(fs_err::read_to_string(cache_path)
+                .into_diagnostic()?
+                .lines()
+                .map(PathBuf::from)
+                .collect())
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    pub fn write(&self, egg_name: &str, symlinks: &[PathBuf]) -> Result<()> {
+        let cache_path = self.egg_data_path(egg_name);
+        let content = symlinks
+            .iter()
+            .map(|x| x.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs_err::write(cache_path, content)
+            .into_diagnostic()
+            .with_context(|| format!("Failed to update egg deployment cache for egg {egg_name}"))
+    }
 }
 
 #[derive(Debug)]
@@ -213,6 +261,7 @@ impl Egg {
     }
 
     /// Check if the egg is _fully_ deployed (-> All contained entries have corresponding symlinks)
+    #[tracing::instrument(skip_all, fields(egg.name = self.name()))]
     pub fn is_deployed(&self) -> Result<bool> {
         for x in self.find_deployed_symlinks()? {
             if x.context("Got error while iterating through deployed files or egg")?
