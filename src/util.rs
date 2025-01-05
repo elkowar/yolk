@@ -41,6 +41,24 @@ pub fn create_symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> mie
     Ok(())
 }
 
+/// Delete a symlink at `path`, but only if it actually is a symlink.
+pub fn remove_symlink(path: impl AsRef<Path>) -> miette::Result<()> {
+    let path = path.as_ref();
+    if !path.is_symlink() {
+        miette::bail!("Path is not a symlink: {}", path.abbr());
+    }
+    if path.is_dir() {
+        symlink::remove_symlink_dir(path)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Failed to remove symlink dir at {}", path.abbr()))?;
+    } else {
+        symlink::remove_symlink_file(path)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Failed to remove symlink file at {}", path.abbr()))?;
+    }
+    Ok(())
+}
+
 #[extend::ext(pub)]
 impl Path {
     /// [`fs_err::canonicalize`] but on windows it doesn't return UNC paths.
