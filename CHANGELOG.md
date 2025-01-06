@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0](https://github.com/elkowar/yolk/compare/v0.0.16...v0.1.0) - 2025-01-06
+
+### Added
+
+- Clean up stale symlinks by caching deployment targets
+- Allow for both .config and standard ~/Library/... dir on mac
+
+### Fixed
+
+- Fix windows symlink deletion again
+- simplify multi error output
+- inconsistent tests, failing symlink deletion on windows
+- compile error on windows
+
 ## [0.0.16](https://github.com/elkowar/yolk/compare/v0.0.15...v0.0.16) - 2024-12-22
 
 ### Fixed
