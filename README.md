@@ -10,11 +10,6 @@ sitting somewhere in between [GNU Stow](https://www.gnu.org/software/stow/) and 
 
 Have a look at our [documentation](https://elkowar.github.io/yolk/book) for more information on how to get started!
 
-## WARNING
-
-This is beta-quality software. In its current state, be careful trying this.
-Always make backups of everything before trying to use yolk, until it's in a stable state.
-
 ## The Concept
 
 Yolk allows you to use simple templates in your configuration files without having to worry about keeping a separate template file and the generated config file in sync.

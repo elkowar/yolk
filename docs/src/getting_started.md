@@ -2,8 +2,7 @@
 
 <div class="warning">
 
-**Remember: Yolk is currently in very early development. Expect some breakages and issues.
-Always have a good backup of your files before using Yolk in this stage. You have been warned.**
+**Remember: Always have a good backup of your files before using any tool that modifies your files. Nothing bad should happen here, but better be careful.**
 
 </div>
 
