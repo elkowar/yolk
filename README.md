@@ -3,6 +3,10 @@
 
 # Yolk – Painfree Templated Dotfile Management
 
+<a href="https://repology.org/project/yolk/versions">
+    <img src="https://repology.org/badge/vertical-allrepos/yolk.svg" alt="Packaging status" align="right">
+</a>
+
 </div>
 
 Yolk is a cross platform dotfile management tool with a unique spin on templating,
