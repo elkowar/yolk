@@ -1,3 +1,4 @@
+
 # Getting started
 
 <div class="warning">
@@ -8,27 +9,27 @@
 
 ## How dotfiles are stored
 
-Yolk manages your dotfiles by storing them in a separate directory, typically inside `~/.config/yolk`.
+Chicken manages your dotfiles by storing them in a separate directory, typically inside `~/.config/chicken`.
 This allows you to keep your dotfiles in version control easily, and lets you manage your configuration from one central location.
 
-Yolk groups dotfiles into so-called ["eggs"](eggs.md), which are packages of configuration,
+Chicken groups dotfiles into so-called ["eggs"](eggs.md), which are packages of configuration,
 typically for one single application (although you can group them however you want, or even just have one egg for all your configuration files).
 
-When an egg is "deployed", Yolk creates symlinks in the target location pointing towards the egg directory.
+When an egg "hatches" (is deployed), Chicken creates symlinks in the target location pointing towards the egg directory.
 This way, the configured appliactions will see the configuration files as they expect to see them.
 
-To define where a set of configuration files should be deployed to, you declare each of your eggs in your [main yolk configuration file](./yolk_rhai.md).
+To define where a set of configuration files should be deployed to, you declare each of your eggs in your [main chicken configuration file](./chicken_rhai.md).
 This allows you, among other things, to define a different target directory per system.
 
 ## Initial setup
 
-To get started with Yolk, you'll first need to set up the Yolk file structure.
+To get started with Chicken, you'll first need to set up the Chicken file structure.
 
 ```bash
-$ yolk init
+$ chicken init
 ```
 
-This will create the yolk directory, with a default `yolk.rhai` file, and an `eggs` directory.
+This will create the chicken directory, with a default `chicken.rhai` file, and an `eggs` directory.
 
 ### Adding your first egg
 
@@ -36,10 +37,10 @@ let's say we want to manage the configuration for the `alacritty` terminal emula
 To do this, we first move our alacritty configuration into the `eggs` directory:
 
 ```bash
-$ mv ~/.config/alacritty ~/.config/yolk/eggs/
+$ mv ~/.config/alacritty ~/.config/chicken/eggs/
 ```
 
-And then configure the corresponding [egg deployment](./yolk_rhai.md#basic-structure):
+And then configure the corresponding [egg deployment](./chicken_rhai.md#basic-structure):
 
 ```rust,ignore
 export let eggs = #{
@@ -51,34 +52,34 @@ export let eggs = #{
 }
 ```
 
-Now we can run `yolk sync`!
+Now we can run `chicken sync`!
 This will set up a symlink from the target location `~/.config/alacritty`
-back to the alacritty egg directory `~/.config/yolk/eggs/alacritty`.
+back to the alacritty egg directory `~/.config/chicken/eggs/alacritty`.
 
 ### Committing your dots to git
 
 Now, we want to make sure our dotfiles are in version control and pushed to our git host of choice.
-Every interaction with git should be done through the `yolk git` command.
-This ensures that git sees the canonical (stable) representation of your files, and automatically performs them from within the yolk directory.
+Every interaction with git should be done through the `chicken git` command.
+This ensures that git sees the canonical (stable) representation of your files, and automatically performs them from within the chicken directory.
 
 ```bash
-$ yolk git init
-$ yolk safeguard
-$ yolk git add --all
-$ yolk git commit -m "Setup alacritty"
+$ chicken git init
+$ chicken safeguard
+$ chicken git add --all
+$ chicken git commit -m "Setup alacritty"
 ```
 
-To understand what `yolk safeguard` does, see [safeguarding git](./git_concepts.md#safeguarding-git).
+To understand what `chicken safeguard` does, see [safeguarding git](./git_concepts.md#safeguarding-git).
 
-You can now set up your git reomte and use git as usual -- just remember to always use `yolk git`, especially when you're committing your files.
+You can now set up your git reomte and use git as usual -- just remember to always use `chicken git`, especially when you're committing your files.
 
 ### Baby's first template
 
 Because you too are very indecisive about your terminal colors,
-you now decide you want to use yolk to manage your color theme for alacritty, and any other applications that you might add later.
+you now decide you want to use chicken to manage your color theme for alacritty, and any other applications that you might add later.
 You also decide that you want to use a different color scheme on your desktop and your laptop.
 
-To achieve this, let's first add a declaration of your color theme in your `~/.config/yolk/yolk.rhai` file:
+To achieve this, let's first add a declaration of your color theme in your `~/.config/chicken/chicken.rhai` file:
 
 ```rust,ignore
 // ... snip ...
@@ -124,7 +125,7 @@ The tag calls the built-in `replace_color` function, which looks for a hex-code 
 Run
 
 ```bash
-$ yolk sync
+$ chicken sync
 ```
 
-You will see that, your `alacritty.toml` has changed, and the colors from your `yolk.rhai` file have been applied, depending on your hostname.
+You will see that, your `alacritty.toml` has changed, and the colors from your `chicken.rhai` file have been applied, depending on your hostname.
