@@ -27,6 +27,36 @@ impl Yolk {
 
     pub fn init_yolk(&self) -> Result<()> {
         self.yolk_paths.create()?;
+        std::process::Command::new("git")
+            .arg("init")
+            .current_dir(self.yolk_paths.root_path())
+            .status()
+            .into_diagnostic()?;
+        std::process::Command::new("git")
+            .args(&[
+                "config",
+                "filter.yolk.clean",
+                &format!("yolk git-filter clean",),
+            ])
+            .current_dir(self.yolk_paths.root_path())
+            .status()
+            .into_diagnostic()?;
+        std::process::Command::new("git")
+            .args(&[
+                "config",
+                "filter.yolk.smudge",
+                &format!("yolk git-filter smudge",),
+            ])
+            .current_dir(self.yolk_paths.root_path())
+            .status()
+            .into_diagnostic()?;
+        fs_err::write(
+            self.yolk_paths.root_path().join(".gitattributes"),
+            "* filter=yolk",
+        )
+        .into_diagnostic()
+        .context("Failed to configure yolk filter in .gitattributes")?;
+
         Ok(())
     }
 

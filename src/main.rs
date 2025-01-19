@@ -14,8 +14,11 @@ use tracing_subscriber::{
     filter, fmt::format::FmtSpan, layer::SubscriberExt as _, util::SubscriberInitExt as _,
     EnvFilter, Layer,
 };
-use yolk::util::PathExt;
-use yolk::yolk::{EvalMode, Yolk};
+use yolk::{
+    git_filter_server::{self, GitFilterMode},
+    yolk::{EvalMode, Yolk},
+};
+use yolk::{script::eval_ctx::EvalCtx, util::PathExt};
 
 #[derive(clap::Parser, Debug)]
 #[command(version, about)]
@@ -96,7 +99,9 @@ enum Command {
     List,
 
     /// Open your `yolk.rhai` or the given egg in your `$EDITOR` of choice.
-    Edit { egg: Option<String> },
+    Edit {
+        egg: Option<String>,
+    },
 
     /// Watch for changes in your templated files and re-sync them when they change.
     Watch {
@@ -107,9 +112,13 @@ enum Command {
         no_sync: bool,
     },
 
+    GitFilter,
+
     #[cfg(feature = "docgen")]
     #[command(hide(true))]
-    Docs { dir: PathBuf },
+    Docs {
+        dir: PathBuf,
+    },
 }
 
 pub(crate) fn main() -> Result<()> {
@@ -382,6 +391,18 @@ fn run_command(args: Args) -> Result<()> {
                 std::thread::sleep(std::time::Duration::from_secs(1));
             }
         }
+        Command::GitFilter => {
+            let mut server = git_filter_server::GitFilterServer::new(
+                std::io::stdin(),
+                std::io::stdout(),
+                GitFilterProcessor {
+                    yolk: &yolk,
+                    eval_ctx: None,
+                },
+            );
+            server.run()?;
+        }
+
         #[cfg(feature = "docgen")]
         Command::Docs { dir } => {
             let docs = doc_generator::generate_docs(yolk)?;
@@ -391,4 +412,31 @@ fn run_command(args: Args) -> Result<()> {
         }
     }
     Ok(())
+}
+
+struct GitFilterProcessor<'a> {
+    yolk: &'a Yolk,
+    eval_ctx: Option<EvalCtx>,
+}
+impl<'a> git_filter_server::GitFilterProcessor for GitFilterProcessor<'a> {
+    fn process(
+        &mut self,
+        pathname: &str,
+        mode: git_filter_server::GitFilterMode,
+        input: String,
+    ) -> Result<String> {
+        let mut eval_ctx = if let Some(eval_ctx) = &mut self.eval_ctx {
+            eval_ctx
+        } else {
+            let eval_ctx = self.yolk.prepare_eval_ctx_for_templates(match mode {
+                GitFilterMode::Clean => EvalMode::Canonical,
+                GitFilterMode::Smudge => EvalMode::Local,
+            })?;
+            self.eval_ctx = Some(eval_ctx);
+            self.eval_ctx.as_mut().unwrap()
+        };
+        // TODO: Figure out what happens on failure, and make sure that it doesn't end up comitting non-cleaned stuff.
+        let evaluated = self.yolk.eval_template(&mut eval_ctx, &pathname, &input)?;
+        Ok(evaluated)
+    }
 }
