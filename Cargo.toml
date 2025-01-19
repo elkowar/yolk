@@ -51,6 +51,7 @@ winnow = { version = "0.6.20", features = ["unstable-recover"] }
 cov-mark = "2.0.0"
 arbitrary = { version = "1.4.1", features = ["derive"] }
 symlink = "0.1.0"
+hex = "0.4.3"
 # rhai-autodocs = { version = "0.7.0", path = "../../clones/rhai-autodocs" }
 
 [dev-dependencies]
