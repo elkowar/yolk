@@ -136,6 +136,8 @@ impl EggConfig {
             .collect()
     }
 
+    /// Expand the glob patterns in the `templates` field to a list of paths.
+    /// The globbed paths are considered relative to `in_dir`. The resulting list of paths will contain absolute paths.
     pub fn templates_globexpanded(&self, in_dir: impl AsRef<Path>) -> miette::Result<Vec<PathBuf>> {
         let in_dir = in_dir.as_ref();
         let mut paths = Vec::new();
