@@ -4,10 +4,7 @@ use fs_err::PathExt;
 use miette::{Context as _, IntoDiagnostic, Result};
 use normalize_path::NormalizePath;
 
-use crate::{
-    eggs_config::EggConfig,
-    util::{self, PathExt as _},
-};
+use crate::{eggs_config::EggConfig, util::PathExt as _};
 
 const DEFAULT_YOLK_RHAI: &str = indoc::indoc! {r#"
     export let data = #{
@@ -21,7 +18,8 @@ const DEFAULT_YOLK_RHAI: &str = indoc::indoc! {r#"
 
 const DEFAULT_GITIGNORE: &str = indoc::indoc! {r#"
     # Ignore the yolk git directory
-    /.yolk_git
+    /.git
+    /.deployed_cache
 "#};
 
 pub struct YolkPaths {
@@ -110,22 +108,6 @@ impl YolkPaths {
         Ok(())
     }
 
-    /// Safeguard git directory by renaming it to `.yolk_git`
-    pub fn safeguard_git_dir(&self) -> Result<()> {
-        if self.root_path().join(".git").exists() {
-            miette::ensure!(
-                !self.yolk_safeguarded_git_path().exists(),
-                help = "Safeguarded Yolk renames .git to .yolk_git to ensure you don't accidentally commit without yolks processing",
-                "Yolk directory contains both a .git directory and a .yolk_git directory"
-            );
-            util::rename_safely(
-                self.root_path().join(".git"),
-                self.yolk_safeguarded_git_path(),
-            )?;
-        }
-        Ok(())
-    }
-
     /// Start an invocation of the `git` command with the `--git-dir` and `--work-tree` set to the yolk git and root path.
     pub fn start_git_command_builder(&self) -> Result<std::process::Command> {
         let mut cmd = std::process::Command::new("git");
@@ -146,22 +128,16 @@ impl YolkPaths {
     pub fn yolk_default_git_path(&self) -> PathBuf {
         self.root_path.join(".git")
     }
-    pub fn yolk_safeguarded_git_path(&self) -> PathBuf {
-        self.root_path.join(".yolk_git")
-    }
 
     /// Return the path to the active git directory,
     /// which is either the [`yolk_default_git_path`] (`.git`) or the [`yolk_safeguarded_git_path`] (`.yolk_git`) if it exists.
     pub fn active_yolk_git_dir(&self) -> Result<PathBuf> {
         let default_git_dir = self.yolk_default_git_path();
-        let safeguarded_git_dir = self.yolk_safeguarded_git_path();
-        if safeguarded_git_dir.exists() {
-            Ok(safeguarded_git_dir)
-        } else if default_git_dir.exists() {
+        if default_git_dir.exists() {
             Ok(default_git_dir)
         } else {
             miette::bail!(
-                help = "Run `git init`, then try again!",
+                help = "Run `yolk init`, then try again!",
                 "No git directory initialized"
             )
         }
@@ -391,7 +367,7 @@ mod test {
         TempDir,
     };
     use miette::IntoDiagnostic;
-    use predicates::{path::exists, prelude::PredicateBooleanExt};
+    use predicates::path::exists;
     use test_log::test;
 
     use crate::eggs_config::EggConfig;
@@ -475,16 +451,6 @@ mod test {
         assert!(egg.is_deployed()?);
         fs_err::remove_file(home.child("content/dir_old/file1"))?;
         assert!(!(egg.is_deployed()?));
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_safeguard() -> TestResult {
-        let (home, yolk, _) = setup_and_init_test_yolk()?;
-        home.child("yolk/.git").create_dir_all()?;
-        yolk.paths().safeguard_git_dir()?;
-        home.child("yolk/.git").assert(exists().not());
-        home.child("yolk/.yolk_git").assert(exists());
         Ok(())
     }
 
