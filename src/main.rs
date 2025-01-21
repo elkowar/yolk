@@ -395,10 +395,7 @@ fn run_command(args: Args) -> Result<()> {
             let mut server = git_filter_server::GitFilterServer::new(
                 std::io::stdin(),
                 std::io::stdout(),
-                GitFilterProcessor {
-                    yolk: &yolk,
-                    eval_ctx: None,
-                },
+                GitFilterProcessor::new(&yolk),
             );
             server.run()?;
         }
@@ -417,7 +414,18 @@ fn run_command(args: Args) -> Result<()> {
 struct GitFilterProcessor<'a> {
     yolk: &'a Yolk,
     eval_ctx: Option<EvalCtx>,
+    templated_files: Option<HashSet<PathBuf>>,
 }
+impl<'a> GitFilterProcessor<'a> {
+    pub fn new(yolk: &'a Yolk) -> Self {
+        Self {
+            yolk,
+            eval_ctx: None,
+            templated_files: None,
+        }
+    }
+}
+
 impl<'a> git_filter_server::GitFilterProcessor for GitFilterProcessor<'a> {
     fn process(
         &mut self,
@@ -425,6 +433,7 @@ impl<'a> git_filter_server::GitFilterProcessor for GitFilterProcessor<'a> {
         mode: git_filter_server::GitFilterMode,
         input: String,
     ) -> Result<String> {
+        // TODO: Fix the fact that this assumes we will only ever be called with one mode at a time
         let mut eval_ctx = if let Some(eval_ctx) = &mut self.eval_ctx {
             eval_ctx
         } else {
@@ -435,6 +444,25 @@ impl<'a> git_filter_server::GitFilterProcessor for GitFilterProcessor<'a> {
             self.eval_ctx = Some(eval_ctx);
             self.eval_ctx.as_mut().unwrap()
         };
+
+        let templated_files = if let Some(ref templated_files) = self.templated_files {
+            templated_files
+        } else {
+            let egg_configs = self.yolk.load_egg_configs(eval_ctx)?;
+            let result = egg_configs
+                .iter()
+                .map(|(name, config)| {
+                    config.templates_globexpanded(self.yolk.paths().egg_path(name))
+                })
+                .collect::<miette::Result<Vec<Vec<PathBuf>>>>()?;
+            self.templated_files = Some(result.into_iter().flatten().collect());
+            self.templated_files.as_ref().unwrap()
+        };
+
+        if !templated_files.contains(&self.yolk.paths().root_path().join(pathname)) {
+            return Ok(input);
+        }
+
         // TODO: Figure out what happens on failure, and make sure that it doesn't end up comitting non-cleaned stuff.
         let evaluated = self.yolk.eval_template(&mut eval_ctx, &pathname, &input)?;
         Ok(evaluated)
