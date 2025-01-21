@@ -58,19 +58,15 @@ back to the alacritty egg directory `~/.config/yolk/eggs/alacritty`.
 ### Committing your dots to git
 
 Now, we want to make sure our dotfiles are in version control and pushed to our git host of choice.
-Every interaction with git should be done through the `yolk git` command.
-This ensures that git sees the canonical (stable) representation of your files, and automatically performs them from within the yolk directory.
+Yolk sets up a git-filter to ensure that git sees the canonical (stable) representation of your files.
+For convenience, you can use the `yolk git` command to interact with your git repository from anywhere on your system.
 
 ```bash
-$ yolk git init
-$ yolk safeguard
 $ yolk git add --all
 $ yolk git commit -m "Setup alacritty"
 ```
 
-To understand what `yolk safeguard` does, see [safeguarding git](./git_concepts.md#safeguarding-git).
-
-You can now set up your git reomte and use git as usual -- just remember to always use `yolk git`, especially when you're committing your files.
+You can now set up your git reomte and use git as usual.
 
 ### Baby's first template
 

@@ -9,7 +9,7 @@ pub struct GitFilterServer<P, R = std::io::Stdin, W = std::io::Stdout> {
     output: GitWriter<W>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum GitFilterMode {
     Clean,
     Smudge,

@@ -2,6 +2,7 @@ use fs_err::PathExt as _;
 use miette::miette;
 use miette::{Context, IntoDiagnostic, Result, Severity};
 use normalize_path::NormalizePath;
+use std::io::Write;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -26,37 +27,68 @@ impl Yolk {
     }
 
     pub fn init_yolk(&self) -> Result<()> {
-        self.yolk_paths.create()?;
-        std::process::Command::new("git")
-            .arg("init")
-            .current_dir(self.yolk_paths.root_path())
-            .status()
-            .into_diagnostic()?;
-        std::process::Command::new("git")
-            .args(&[
-                "config",
-                "filter.yolk.clean",
-                &format!("yolk git-filter clean",),
-            ])
-            .current_dir(self.yolk_paths.root_path())
-            .status()
-            .into_diagnostic()?;
-        std::process::Command::new("git")
-            .args(&[
-                "config",
-                "filter.yolk.smudge",
-                &format!("yolk git-filter smudge",),
-            ])
-            .current_dir(self.yolk_paths.root_path())
-            .status()
-            .into_diagnostic()?;
-        fs_err::write(
-            self.yolk_paths.root_path().join(".gitattributes"),
-            "* filter=yolk",
-        )
-        .into_diagnostic()
-        .context("Failed to configure yolk filter in .gitattributes")?;
+        if !self.yolk_paths.root_path().exists() {
+            self.yolk_paths.create()?;
+        }
+        if !self.yolk_paths.root_path().join(".git").exists() {
+            if self.yolk_paths.root_path().join(".yolk_git").exists() {
+                fs_err::rename(
+                    self.yolk_paths.root_path().join(".yolk_git"),
+                    self.yolk_paths.root_path().join(".git"),
+                )
+                .into_diagnostic()?;
+            } else {
+                std::process::Command::new("git")
+                    .arg("init")
+                    .current_dir(self.yolk_paths.root_path())
+                    .status()
+                    .into_diagnostic()?;
+            }
+        }
+        self.init_git_config()?;
 
+        Ok(())
+    }
+
+    pub fn init_git_config(&self) -> Result<()> {
+        std::process::Command::new("git")
+            .args(&[
+                "config",
+                "filter.yolk.process",
+                &format!(
+                    "yolk --yolk-dir {} --home-dir {} git-filter",
+                    self.yolk_paths.root_path().canonical()?.display(),
+                    self.yolk_paths.home_path().canonical()?.display()
+                ),
+            ])
+            .current_dir(self.yolk_paths.root_path())
+            .status()
+            .into_diagnostic()?;
+        std::process::Command::new("git")
+            .args(&["config", "filter.yolk.required", "true"])
+            .current_dir(self.yolk_paths.root_path())
+            .status()
+            .into_diagnostic()?;
+
+        'gitattrs: {
+            let git_attrs_path = self.yolk_paths.root_path().join(".gitattributes");
+            if PathBuf::from(&git_attrs_path).exists() {
+                if fs_err::read_to_string(&git_attrs_path)
+                    .into_diagnostic()?
+                    .contains("* filter=yolk")
+                {
+                    break 'gitattrs;
+                }
+            }
+            fs_err::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(git_attrs_path)
+                .into_diagnostic()?
+                .write_fmt(format_args!("* filter=yolk"))
+                .into_diagnostic()
+                .context("Failed to configure yolk filter in .gitattributes")?;
+        }
         Ok(())
     }
 

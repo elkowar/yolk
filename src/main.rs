@@ -49,8 +49,6 @@ enum Command {
     Status,
     /// Make sure you don't accidentally commit your local egg states
     ///
-    /// This renames `.git` to `.yolk_git` to ensure that git interaction happens through the yolk CLI
-    Safeguard,
     /// Evaluate a rhai expression.
     ///
     /// The expression is executed in the same scope that template tag expression are evaluated in.
@@ -180,15 +178,11 @@ fn run_command(args: Args) -> Result<()> {
     let yolk = Yolk::new(yolk_paths);
     match &args.command {
         Command::Init => yolk.init_yolk()?,
-        Command::Safeguard => yolk.paths().safeguard_git_dir()?,
         Command::Status => {
             // TODO: Add a verification that exactly all the eggs in the eggs dir are defined in the
             // yolk.rhai file.
 
             yolk.paths().check()?;
-            if yolk.paths().active_yolk_git_dir()? == yolk.paths().yolk_default_git_path() {
-                println!("Yolk git is not safeguarded. It is recommended to run `yolk safeguard`.");
-            }
             yolk.with_canonical_state(|| {
                 yolk.paths()
                     .start_git_command_builder()?
@@ -415,6 +409,7 @@ struct GitFilterProcessor<'a> {
     yolk: &'a Yolk,
     eval_ctx: Option<EvalCtx>,
     templated_files: Option<HashSet<PathBuf>>,
+    mode: GitFilterMode,
 }
 impl<'a> GitFilterProcessor<'a> {
     pub fn new(yolk: &'a Yolk) -> Self {
@@ -422,6 +417,7 @@ impl<'a> GitFilterProcessor<'a> {
             yolk,
             eval_ctx: None,
             templated_files: None,
+            mode: GitFilterMode::Clean,
         }
     }
 }
@@ -433,21 +429,16 @@ impl<'a> git_filter_server::GitFilterProcessor for GitFilterProcessor<'a> {
         mode: git_filter_server::GitFilterMode,
         input: String,
     ) -> Result<String> {
-        // TODO: Fix the fact that this assumes we will only ever be called with one mode at a time
-        let mut eval_ctx = if let Some(eval_ctx) = &mut self.eval_ctx {
-            eval_ctx
-        } else {
+        if self.mode != mode || self.eval_ctx.is_none() {
             let eval_ctx = self.yolk.prepare_eval_ctx_for_templates(match mode {
                 GitFilterMode::Clean => EvalMode::Canonical,
                 GitFilterMode::Smudge => EvalMode::Local,
             })?;
             self.eval_ctx = Some(eval_ctx);
-            self.eval_ctx.as_mut().unwrap()
-        };
+        }
+        let mut eval_ctx = self.eval_ctx.as_mut().unwrap();
 
-        let templated_files = if let Some(ref templated_files) = self.templated_files {
-            templated_files
-        } else {
+        if self.templated_files.is_none() {
             let egg_configs = self.yolk.load_egg_configs(eval_ctx)?;
             let result = egg_configs
                 .iter()
@@ -456,15 +447,16 @@ impl<'a> git_filter_server::GitFilterProcessor for GitFilterProcessor<'a> {
                 })
                 .collect::<miette::Result<Vec<Vec<PathBuf>>>>()?;
             self.templated_files = Some(result.into_iter().flatten().collect());
-            self.templated_files.as_ref().unwrap()
-        };
-
-        if !templated_files.contains(&self.yolk.paths().root_path().join(pathname)) {
+        }
+        let templated_files = self.templated_files.as_ref().unwrap();
+        let canonical_file_path = self.yolk.paths().root_path().join(&pathname).canonical()?;
+        if !templated_files.contains(&canonical_file_path) {
             return Ok(input);
         }
 
-        // TODO: Figure out what happens on failure, and make sure that it doesn't end up comitting non-cleaned stuff.
-        let evaluated = self.yolk.eval_template(&mut eval_ctx, &pathname, &input)?;
+        let evaluated =
+            self.yolk
+                .eval_template(&mut eval_ctx, &canonical_file_path.abbr(), &input)?;
         Ok(evaluated)
     }
 }
