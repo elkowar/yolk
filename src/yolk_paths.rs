@@ -109,15 +109,15 @@ impl YolkPaths {
     }
 
     /// Start an invocation of the `git` command with the `--git-dir` and `--work-tree` set to the yolk git and root path.
-    pub fn start_git_command_builder(&self) -> Result<std::process::Command> {
+    pub fn start_git_command_builder(&self) -> std::process::Command {
         let mut cmd = std::process::Command::new("git");
         cmd.current_dir(self.root_path()).args([
             "--git-dir",
-            &self.active_yolk_git_dir()?.to_string_lossy(),
+            &self.yolk_default_git_path().to_string_lossy(),
             "--work-tree",
             &self.root_path().to_string_lossy(),
         ]);
-        Ok(cmd)
+        cmd
     }
     pub fn root_path(&self) -> &std::path::Path {
         &self.root_path
@@ -129,20 +129,6 @@ impl YolkPaths {
         self.root_path.join(".git")
     }
 
-    /// Return the path to the active git directory,
-    /// which is either the [`yolk_default_git_path`] (`.git`) or the [`yolk_safeguarded_git_path`] (`.yolk_git`) if it exists.
-    pub fn active_yolk_git_dir(&self) -> Result<PathBuf> {
-        let default_git_dir = self.yolk_default_git_path();
-        if default_git_dir.exists() {
-            Ok(default_git_dir)
-        } else {
-            miette::bail!(
-                help = "Run `yolk init`, then try again!",
-                "No git directory initialized"
-            )
-        }
-    }
-    ///
     /// Path to the `yolk.rhai` file
     pub fn yolk_rhai_path(&self) -> PathBuf {
         self.root_path.join("yolk.rhai")
