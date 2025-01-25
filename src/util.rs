@@ -165,7 +165,8 @@ pub mod test_util {
         set_home_dir(home.to_path_buf());
 
         let eggs = home.child("yolk/eggs");
-        yolk.init_yolk()?;
+        let yolk_binary_path = assert_cmd::cargo::cargo_bin("yolk");
+        yolk.init_yolk(yolk_binary_path.to_string_lossy().as_ref())?;
         Ok((home, yolk, eggs))
     }
 

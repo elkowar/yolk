@@ -26,7 +26,11 @@ impl Yolk {
         Self { yolk_paths }
     }
 
-    pub fn init_yolk(&self) -> Result<()> {
+    /// Init or update the yolk directory, setting up the required git structure and files.
+    ///
+    /// The yolk binary path is used in the git filter configuration.
+    /// Most of the time, it should just be `yolk`, but for tests we provide a specific path here.
+    pub fn init_yolk(&self, yolk_binary: &str) -> Result<()> {
         if !self.yolk_paths.root_path().exists() {
             self.yolk_paths.create()?;
         }
@@ -45,18 +49,18 @@ impl Yolk {
                     .into_diagnostic()?;
             }
         }
-        self.init_git_config()?;
+        self.init_git_config(yolk_binary)?;
 
         Ok(())
     }
 
-    pub fn init_git_config(&self) -> Result<()> {
+    pub fn init_git_config(&self, yolk_binary: &str) -> Result<()> {
         std::process::Command::new("git")
             .args(&[
                 "config",
                 "filter.yolk.process",
                 &format!(
-                    "yolk --yolk-dir {} --home-dir {} git-filter",
+                    "{yolk_binary} --yolk-dir {} --home-dir {} git-filter",
                     self.yolk_paths.root_path().canonical()?.display(),
                     self.yolk_paths.home_path().canonical()?.display()
                 ),

@@ -69,6 +69,7 @@ test-log = { version = "0.2.16", default-features = false, features = [
     "color",
     "trace",
 ] }
+assert_cmd = "2.0.16"
 
 [profile.dev.package]
 insta = { opt-level = 3 }
