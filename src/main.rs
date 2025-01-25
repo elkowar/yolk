@@ -177,7 +177,7 @@ fn run_command(args: Args) -> Result<()> {
 
     let yolk = Yolk::new(yolk_paths);
     match &args.command {
-        Command::Init => yolk.init_yolk()?,
+        Command::Init => yolk.init_yolk("yolk")?,
         Command::Status => {
             // TODO: Add a verification that exactly all the eggs in the eggs dir are defined in the
             // yolk.rhai file.
