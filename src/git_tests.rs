@@ -10,9 +10,9 @@ use crate::{
 };
 
 struct TestEnv {
-    pub home: assert_fs::TempDir,
-    pub eggs: assert_fs::fixture::ChildPath,
-    pub yolk: Yolk,
+    home: assert_fs::TempDir,
+    eggs: assert_fs::fixture::ChildPath,
+    yolk: Yolk,
 }
 
 impl TestEnv {

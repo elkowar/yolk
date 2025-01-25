@@ -1,3 +1,8 @@
+//! Logic to handle the [git long-running filter process](https://git-scm.com/docs/gitattributes#_long_running_filter_process) connection.
+//!
+//! This is used to implement the `yolk git-filter` command, which gets called by git whenever the user checks out or checks in some files.
+//! This allows doing the template processing (canonicalization) in-memory within git, rather than having to change the files on-disk before and after interacting with them through git.
+
 use std::str::FromStr;
 
 use miette::{Context, IntoDiagnostic};

@@ -28,9 +28,10 @@ impl Yolk {
 
     /// Init or update the yolk directory, setting up the required git structure and files.
     ///
-    /// The yolk binary path is used in the git filter configuration.
-    /// Most of the time, it should just be `yolk`, but for tests we provide a specific path here.
-    pub fn init_yolk(&self, yolk_binary: &str) -> Result<()> {
+    /// `yolk_binary` is used as the path that git-filter uses when calling yolk to process the files.
+    /// In most cases, the `yolk_binary` can be left to None.
+    /// However, for tests, it should explicitly be provided to ensure that the correct yolk binary is being used.
+    pub fn init_yolk(&self, yolk_binary: Option<&str>) -> Result<()> {
         if !self.yolk_paths.root_path().exists() {
             self.yolk_paths.create()?;
         }
@@ -54,8 +55,10 @@ impl Yolk {
         Ok(())
     }
 
-    pub fn init_git_config(&self, yolk_binary: &str) -> Result<()> {
-        std::process::Command::new("git")
+    pub fn init_git_config(&self, yolk_binary: Option<&str>) -> Result<()> {
+        let yolk_binary = yolk_binary.unwrap_or("yolk");
+        self.paths()
+            .start_git_command_builder()
             .args(&[
                 "config",
                 "filter.yolk.process",
@@ -65,12 +68,11 @@ impl Yolk {
                     self.yolk_paths.home_path().canonical()?.display()
                 ),
             ])
-            .current_dir(self.yolk_paths.root_path())
             .status()
             .into_diagnostic()?;
-        std::process::Command::new("git")
+        self.paths()
+            .start_git_command_builder()
             .args(&["config", "filter.yolk.required", "true"])
-            .current_dir(self.yolk_paths.root_path())
             .status()
             .into_diagnostic()?;
 
@@ -89,7 +91,7 @@ impl Yolk {
                 .append(true)
                 .open(git_attrs_path)
                 .into_diagnostic()?
-                .write_fmt(format_args!("* filter=yolk"))
+                .write_fmt(format_args!("\n* filter=yolk\n"))
                 .into_diagnostic()
                 .context("Failed to configure yolk filter in .gitattributes")?;
         }

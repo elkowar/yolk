@@ -52,4 +52,6 @@ jobs:
       - name: Cargo check
         run: cargo check
       - name: Run tests
-        run: cargo nextest run
+        run: |
+          cargo build
+          cargo nextest run
