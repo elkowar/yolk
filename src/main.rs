@@ -70,15 +70,9 @@ enum Command {
         canonical: bool,
     },
 
-    /// Run a git-command within the yolk directory while in canonical state.
-    ///
-    /// Some git commands do not get executed in the canonical state, such as `git push`.
+    /// Run a git-command within the yolk directory.
     #[clap(alias = "g")]
     Git {
-        /// Run the command in canonical state, even if it typically is not necesary.
-        #[arg(long)]
-        force_canonical: bool,
-
         #[clap(allow_hyphen_values = true)]
         command: Vec<String>,
     },
@@ -97,9 +91,7 @@ enum Command {
     List,
 
     /// Open your `yolk.rhai` or the given egg in your `$EDITOR` of choice.
-    Edit {
-        egg: Option<String>,
-    },
+    Edit { egg: Option<String> },
 
     /// Watch for changes in your templated files and re-sync them when they change.
     Watch {
@@ -110,13 +102,12 @@ enum Command {
         no_sync: bool,
     },
 
+    #[command(hide(true))]
     GitFilter,
 
     #[cfg(feature = "docgen")]
     #[command(hide(true))]
-    Docs {
-        dir: PathBuf,
-    },
+    Docs { dir: PathBuf },
 }
 
 pub(crate) fn main() -> Result<()> {
@@ -177,19 +168,18 @@ fn run_command(args: Args) -> Result<()> {
 
     let yolk = Yolk::new(yolk_paths);
     match &args.command {
-        Command::Init => yolk.init_yolk("yolk")?,
+        Command::Init => yolk.init_yolk(None)?,
         Command::Status => {
             // TODO: Add a verification that exactly all the eggs in the eggs dir are defined in the
             // yolk.rhai file.
 
+            yolk.init_git_config(None)?;
             yolk.paths().check()?;
-            yolk.with_canonical_state(|| {
-                yolk.paths()
-                    .start_git_command_builder()?
-                    .args(["status", "--short"])
-                    .status()
-                    .into_diagnostic()
-            })?;
+            yolk.paths()
+                .start_git_command_builder()
+                .args(["status", "--short"])
+                .status()
+                .into_diagnostic()?;
         }
         Command::List => {
             let mut eggs = yolk.list_eggs()?;
@@ -223,30 +213,12 @@ fn run_command(args: Args) -> Result<()> {
                 .map_err(|e| e.into_report("<inline>", expr))?;
             println!("{result}");
         }
-        Command::Git {
-            command,
-            force_canonical,
-        } => {
-            let mut cmd = yolk.paths().start_git_command_builder()?;
-            cmd.args(command);
-            // if the command is `git push`, we don't need to enter canonical state
-            // before executing it
-
-            let first_cmd = command.first().map(|x| x.as_ref());
-            if !force_canonical
-                && (first_cmd == Some("push") || first_cmd == Some("init") || first_cmd.is_none())
-            {
-                cmd.status().into_diagnostic()?;
-            } else {
-                // TODO: Ensure that, in something goes wrong during the sync, the git command is _not_ run.
-                // Even if, normally, the sync call would only emit warnings, we must _never_ commit a failed syc.
-                // This also means there should potentially be slightly more separation between syncing templates and deployment,
-                // as deployment errors are not fatal for git usage.
-                yolk.with_canonical_state(|| {
-                    cmd.status().into_diagnostic()?;
-                    Ok(())
-                })?;
-            }
+        Command::Git { command } => {
+            yolk.paths()
+                .start_git_command_builder()
+                .args(command)
+                .status()
+                .into_diagnostic()?;
         }
         Command::EvalTemplate { path, canonical } => {
             let text = match path {
