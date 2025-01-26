@@ -1,6 +1,11 @@
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashSet,
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 use cached::UnboundCache;
+use fs_err::OpenOptions;
 use miette::{Context as _, IntoDiagnostic as _};
 use regex::Regex;
 
@@ -55,6 +60,37 @@ pub fn remove_symlink(path: impl AsRef<Path>) -> miette::Result<()> {
         symlink::remove_symlink_file(path)
             .into_diagnostic()
             .wrap_err_with(|| format!("Failed to remove symlink file at {}", path.abbr()))?;
+    }
+    Ok(())
+}
+
+/// Ensure that a file contains the given lines, appending them if they are missing. If the file does not yet exist, it will be created.
+pub fn ensure_file_contains_lines(path: impl AsRef<Path>, lines: &[&str]) -> miette::Result<()> {
+    let path = path.as_ref();
+
+    let mut trailing_newline_exists = true;
+
+    let existing_lines = if path.exists() {
+        let content = fs_err::read_to_string(path).into_diagnostic()?;
+        trailing_newline_exists = content.ends_with('\n');
+        content.lines().map(|x| x.to_string()).collect()
+    } else {
+        HashSet::new()
+    };
+    if lines.iter().all(|x| existing_lines.contains(*x)) {
+        return Ok(());
+    }
+    let mut file = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(path)
+        .into_diagnostic()?;
+    let missing_lines = lines.iter().filter(|x| !existing_lines.contains(**x));
+    if !trailing_newline_exists {
+        writeln!(file).into_diagnostic()?;
+    }
+    for line in missing_lines {
+        writeln!(file, "{}", line).into_diagnostic()?;
     }
     Ok(())
 }
@@ -121,7 +157,7 @@ pub mod test_util {
     use miette::IntoDiagnostic as _;
 
     thread_local! {
-        static HOME_DIR: RefCell<Option<PathBuf>> = RefCell::new(None);
+        static HOME_DIR: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
     }
 
     pub fn set_home_dir(path: PathBuf) {

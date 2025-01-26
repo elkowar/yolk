@@ -199,10 +199,16 @@ fn run_command(args: Args) -> Result<()> {
                 );
             }
         }
-        Command::Sync { canonical } => yolk.sync_to_mode(match *canonical {
-            true => EvalMode::Canonical,
-            false => EvalMode::Local,
-        })?,
+        Command::Sync { canonical } => {
+            // Lets always ensure that the yolk dir is in a properly set up state.
+            // This should later be replaced with some sort of version-aware compatibility check.
+            yolk.init_yolk(None)?;
+
+            yolk.sync_to_mode(match *canonical {
+                true => EvalMode::Canonical,
+                false => EvalMode::Local,
+            })?
+        }
         Command::Eval { expr, canonical } => {
             let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(match *canonical {
                 true => EvalMode::Canonical,
@@ -214,6 +220,7 @@ fn run_command(args: Args) -> Result<()> {
             println!("{result}");
         }
         Command::Git { command } => {
+            yolk.init_yolk(None)?;
             yolk.paths()
                 .start_git_command_builder()
                 .args(command)
@@ -394,7 +401,7 @@ impl<'a> GitFilterProcessor<'a> {
     }
 }
 
-impl<'a> git_filter_server::GitFilterProcessor for GitFilterProcessor<'a> {
+impl git_filter_server::GitFilterProcessor for GitFilterProcessor<'_> {
     fn process(
         &mut self,
         pathname: &str,
@@ -408,7 +415,7 @@ impl<'a> git_filter_server::GitFilterProcessor for GitFilterProcessor<'a> {
             })?;
             self.eval_ctx = Some(eval_ctx);
         }
-        let mut eval_ctx = self.eval_ctx.as_mut().unwrap();
+        let eval_ctx = self.eval_ctx.as_mut().unwrap();
 
         if self.templated_files.is_none() {
             let egg_configs = self.yolk.load_egg_configs(eval_ctx)?;
@@ -421,14 +428,14 @@ impl<'a> git_filter_server::GitFilterProcessor for GitFilterProcessor<'a> {
             self.templated_files = Some(result.into_iter().flatten().collect());
         }
         let templated_files = self.templated_files.as_ref().unwrap();
-        let canonical_file_path = self.yolk.paths().root_path().join(&pathname).canonical()?;
+        let canonical_file_path = self.yolk.paths().root_path().join(pathname).canonical()?;
         if !templated_files.contains(&canonical_file_path) {
             return Ok(input);
         }
 
-        let evaluated =
-            self.yolk
-                .eval_template(&mut eval_ctx, &canonical_file_path.abbr(), &input)?;
+        let evaluated = self
+            .yolk
+            .eval_template(eval_ctx, &canonical_file_path.abbr(), &input)?;
         Ok(evaluated)
     }
 }

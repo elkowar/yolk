@@ -16,12 +16,6 @@ const DEFAULT_YOLK_RHAI: &str = indoc::indoc! {r#"
     };
 "#};
 
-const DEFAULT_GITIGNORE: &str = indoc::indoc! {r#"
-    # Ignore the yolk git directory
-    /.git
-    /.deployed_cache
-"#};
-
 pub struct YolkPaths {
     /// Path to the yolk directory.
     root_path: PathBuf,
@@ -102,7 +96,6 @@ impl YolkPaths {
         }
         fs_err::create_dir_all(path).into_diagnostic()?;
         fs_err::create_dir_all(self.eggs_dir_path()).into_diagnostic()?;
-        fs_err::write(self.root_path().join(".gitignore"), DEFAULT_GITIGNORE).into_diagnostic()?;
         fs_err::write(self.yolk_rhai_path(), DEFAULT_YOLK_RHAI).into_diagnostic()?;
 
         Ok(())
@@ -358,7 +351,7 @@ mod test {
 
     use crate::eggs_config::EggConfig;
 
-    use super::{YolkPaths, DEFAULT_GITIGNORE};
+    use super::YolkPaths;
 
     #[test]
     pub fn test_setup() {
@@ -369,7 +362,6 @@ mod test {
         assert!(yolk_paths.check().is_ok());
         root.child("yolk/eggs").assert(exists());
         root.child("yolk/yolk.rhai").assert(DEFAULT_YOLK_RHAI);
-        root.child("yolk/.gitignore").assert(DEFAULT_GITIGNORE);
     }
 
     #[test]
