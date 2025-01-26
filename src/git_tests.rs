@@ -32,11 +32,11 @@ impl TestEnv {
     }
 
     pub fn git_add_all(&self) -> assert_cmd::assert::Assert {
-        self.start_git_command().args(&["add", "--all"]).assert()
+        self.start_git_command().args(["add", "--all"]).assert()
     }
     pub fn git_show_staged(&self, path: impl ToString) -> assert_cmd::assert::Assert {
         self.start_git_command()
-            .args(&["show", &format!(":{}", path.to_string())])
+            .args(["show", &format!(":{}", path.to_string())])
             .assert()
     }
 }
@@ -46,7 +46,7 @@ fn test_init_works() -> TestResult {
     let env = TestEnv::init()?;
     let yolk_binary_path = assert_cmd::cargo::cargo_bin("yolk");
     env.start_git_command()
-        .args(&["config", "--local", "--get-all", "filter.yolk.process"])
+        .args(["config", "--local", "--get-all", "filter.yolk.process"])
         .assert()
         .success()
         .stdout(format!(

@@ -2,7 +2,7 @@ use fs_err::PathExt as _;
 use miette::miette;
 use miette::{Context, IntoDiagnostic, Result, Severity};
 use normalize_path::NormalizePath;
-use std::io::Write;
+
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -16,6 +16,8 @@ use crate::{
     util::{self, PathExt as _},
     yolk_paths::{Egg, YolkPaths},
 };
+
+const GITIGNORE_ENTRIES: &[&str] = &["/.git", "/.deployed_cache"];
 
 pub struct Yolk {
     yolk_paths: YolkPaths,
@@ -55,46 +57,35 @@ impl Yolk {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all, fields(yolk_dir = self.yolk_paths.root_path().abbr()))]
     pub fn init_git_config(&self, yolk_binary: Option<&str>) -> Result<()> {
-        let yolk_binary = yolk_binary.unwrap_or("yolk");
+        tracing::trace!("Ensuring that git config is properly set up");
+        util::ensure_file_contains_lines(
+            self.paths().root_path().join(".gitignore"),
+            GITIGNORE_ENTRIES,
+        )
+        .context("Failed to ensure .gitignore is configured correctly")?;
+
+        let yolk_process_cmd = &format!(
+            "{} --yolk-dir {} --home-dir {} git-filter",
+            yolk_binary.unwrap_or("yolk"),
+            self.yolk_paths.root_path().canonical()?.display(),
+            self.yolk_paths.home_path().canonical()?.display()
+        );
         self.paths()
             .start_git_command_builder()
-            .args(&[
-                "config",
-                "filter.yolk.process",
-                &format!(
-                    "{yolk_binary} --yolk-dir {} --home-dir {} git-filter",
-                    self.yolk_paths.root_path().canonical()?.display(),
-                    self.yolk_paths.home_path().canonical()?.display()
-                ),
-            ])
+            .args(["config", "filter.yolk.process", yolk_process_cmd])
             .status()
             .into_diagnostic()?;
         self.paths()
             .start_git_command_builder()
-            .args(&["config", "filter.yolk.required", "true"])
+            .args(["config", "filter.yolk.required", "true"])
             .status()
             .into_diagnostic()?;
 
-        'gitattrs: {
-            let git_attrs_path = self.yolk_paths.root_path().join(".gitattributes");
-            if PathBuf::from(&git_attrs_path).exists() {
-                if fs_err::read_to_string(&git_attrs_path)
-                    .into_diagnostic()?
-                    .contains("* filter=yolk")
-                {
-                    break 'gitattrs;
-                }
-            }
-            fs_err::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(git_attrs_path)
-                .into_diagnostic()?
-                .write_fmt(format_args!("\n* filter=yolk\n"))
-                .into_diagnostic()
-                .context("Failed to configure yolk filter in .gitattributes")?;
-        }
+        let git_attrs_path = self.yolk_paths.root_path().join(".gitattributes");
+        util::ensure_file_contains_lines(git_attrs_path, &["* filter=yolk"])
+            .context("Failed to ensure .gitattributes file is configured correctly")?;
         Ok(())
     }
 
@@ -397,7 +388,6 @@ impl Yolk {
     ///
     /// First syncs them to canonical then runs the closure, then syncs them back to local.
     pub fn with_canonical_state<T>(&self, f: impl FnOnce() -> Result<T>) -> Result<T> {
-        // TODO: Consider using a pre_commit and post_commit hook instead of doing all this stuff.
         tracing::info!("Converting all templates into their canonical state");
         self.sync_to_mode(EvalMode::Canonical)?;
         let result = f();

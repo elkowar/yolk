@@ -90,7 +90,7 @@ impl<P: GitFilterProcessor, R: std::io::Read, W: std::io::Write> GitFilterServer
     fn expect_text_packet(&mut self, expected: &str) -> miette::Result<()> {
         if read_text_packet(&mut self.input)
             .with_context(|| format!("Expected text packet: {}", expected))?
-            .map_or(false, |x| x != expected)
+            .is_some_and(|x| x != expected)
         {
             miette::bail!("Expected text packet: {}", expected);
         }
@@ -177,7 +177,7 @@ fn read_text_packet(read: &mut impl std::io::Read) -> miette::Result<Option<Stri
         return Ok(None);
     };
 
-    if !bin.ends_with(&[b'\n']) {
+    if !bin.ends_with(b"\n") {
         miette::bail!("Expected text packet to end with a newline");
     }
     Ok(Some(
@@ -203,7 +203,7 @@ mod proto {
             for chunk in buf.chunks(MAX_PACKET_LEN - 4) {
                 let len_bytes = (chunk.len() as u16 + 4).to_be_bytes();
                 let mut len_hex = [0; 4];
-                hex::encode_to_slice(&len_bytes, &mut len_hex).unwrap();
+                hex::encode_to_slice(len_bytes, &mut len_hex).unwrap();
                 self.0.write_all(&len_hex).into_diagnostic()?;
                 self.0.write_all(chunk).into_diagnostic()?;
             }
@@ -235,7 +235,7 @@ mod proto {
                 .wrap_err("Failed to read packet length")?,
         }
         let mut len = [0; 2];
-        hex::decode_to_slice(&len_hex, &mut len)
+        hex::decode_to_slice(len_hex, &mut len)
             .into_diagnostic()
             .wrap_err("Bad hex length received")?;
         let len = u16::from_be_bytes(len) as usize;
@@ -248,8 +248,7 @@ mod proto {
         } else if len == 0 {
             miette::bail!("Packet size must never be 0");
         }
-        let mut result = Vec::with_capacity(len);
-        result.resize(len, 0);
+        let mut result = vec![0; len];
         read.read_exact(&mut result[..]).into_diagnostic()?;
         Ok(Some(PacketKind::Data(result)))
     }

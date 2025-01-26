@@ -58,7 +58,7 @@ back to the alacritty egg directory `~/.config/yolk/eggs/alacritty`.
 ### Committing your dots to git
 
 Now, we want to make sure our dotfiles are in version control and pushed to our git host of choice.
-Yolk sets up a git-filter to ensure that git sees the canonical (stable) representation of your files.
+Yolk sets up a [git-filter in your .gitattributes](https://git-scm.com/docs/gitattributes#_long_running_filter_process) to ensure that git sees the canonical (stable) representation of your files.
 For convenience, you can use the `yolk git` command to interact with your git repository from anywhere on your system.
 
 ```bash
