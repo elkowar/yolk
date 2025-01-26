@@ -9,9 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.0](https://github.com/elkowar/yolk/compare/v0.1.0...v0.2.0) - 2025-01-26
 
-### Added
+### BREAKING
 
-- [**breaking**] run canonicalization for git through git filters
+- [**breaking**] run canonicalization for git through git filters:
+    Yolk no longer expects a `.yolk_git` directory rather
+    than the typical `.git` dir. Instead, yolk now installs a git filter in
+    the `.git/config` file, and specifies it to run through
+    `.gitattributes`. To automatically apply these changes to your local
+    dotfile repository, simply run `yolk init` again, it will automatically
+    update the file structure.
 
 ## [0.1.0](https://github.com/elkowar/yolk/compare/v0.0.16...v0.1.0) - 2025-01-06
 
