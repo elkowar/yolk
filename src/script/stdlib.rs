@@ -110,10 +110,17 @@ pub fn utils_module() -> Module {
         .in_global_namespace()
         .set_into_module(&mut module, rhai_color_hex_to_rgb);
 
+    FuncRegistration::new("color_hex_to_rgb")
+        .with_comments(["/// Convert a hex color string to an RGB map."])
+        .with_params_info(["hex_string: &str", "Result<Map>"])
+        .in_global_namespace()
+        .set_into_module(&mut module, rhai_color_hex_to_rgb);
+
     let color_hex_to_rgb_str = |hex_string: String| -> Result<String, Box<EvalAltResult>> {
         let (r, g, b, _) = color_hex_to_rgb(&hex_string)?;
         Ok(format!("rgb({r}, {g}, {b})"))
     };
+
     FuncRegistration::new("color_hex_to_rgb_str")
         .with_comments(["/// Convert a hex color string to an RGB string."])
         .with_params_info(["hex_string: &str", "Result<String>"])
