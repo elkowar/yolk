@@ -102,3 +102,35 @@ To look at the contents of those variables or try out your logic, you can always
 ```bash
 $ yolk eval 'print(SYSTEM)'
 ```
+
+## Splitting up into multiple files
+
+Rhai allows you to import other files into your scripts.
+For example, let's say you want to keep your color theme definition in a separate file.
+Simply create a new `colors.rhai` file next to your `yolk.rhai`, and make sure to explicitly declare exported variables as `export`:
+
+```rust
+export let gruvbox = #{
+  background: "#282828",
+  foreground: "#ebdbb2",
+};
+
+fn some_function() {
+    print("hi")
+}
+```
+
+Note that functions are exported by default.
+
+Now, in your `yolk.rhai`, import this script, giving the module an explict name:
+
+```rs
+import "colors" as colors;
+```
+
+Now you can refer to anything exported from that file as `colors::thing`, i.e.:
+
+```rs
+let theme = colors::gruvbox;
+colors::some_function();
+```
