@@ -37,7 +37,7 @@ displays = ["eDP-1"]
 # {% end %}
 ```
 
-Note thta yolk added a special `<yolk>` prefix to the comments.
+Note that yolk added a special `<yolk>` prefix to the comments.
 Yolk conditionals will only ever add or remove comments with this prefix,
 which means that you can still have regular comments in those conditional blocks.
 

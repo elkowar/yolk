@@ -15,7 +15,7 @@ Yolk groups dotfiles into so-called ["eggs"](eggs.md), which are packages of con
 typically for one single application (although you can group them however you want, or even just have one egg for all your configuration files).
 
 When an egg is "deployed", Yolk creates symlinks in the target location pointing towards the egg directory.
-This way, the configured appliactions will see the configuration files as they expect to see them.
+This way, the configured applications will see the configuration files as they expect to see them.
 
 To define where a set of configuration files should be deployed to, you declare each of your eggs in your [main yolk configuration file](./yolk_rhai.md).
 This allows you, among other things, to define a different target directory per system.
@@ -66,7 +66,7 @@ $ yolk git add --all
 $ yolk git commit -m "Setup alacritty"
 ```
 
-You can now set up your git reomte and use git as usual.
+You can now set up your git remote and use git as usual.
 
 ### Baby's first template
 
@@ -91,7 +91,7 @@ const themes = #{
 }
 
 export const data = #{
-    colors = if SYSTEM.hostname == "laptop" { themes.gruvbox } else { themes.mono }
+    colors: if SYSTEM.hostname == "laptop" { themes.gruvbox } else { themes.mono }
 }
 ```
 

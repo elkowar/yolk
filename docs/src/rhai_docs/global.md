@@ -3,7 +3,7 @@
 # Rhai Standard Library builtins
 Rhai standard library functions.
 
-Note that the typesignatures here do look a bit weird.
+Note that the type signatures here do look a bit weird.
 This is simply a result of how we generate the documentation,
 and can't easily be improved.
 
