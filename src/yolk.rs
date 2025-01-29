@@ -269,10 +269,10 @@ impl Yolk {
     /// fetch the `eggs` variable from a given EvalCtx.
     pub fn load_egg_configs(&self, eval_ctx: &mut EvalCtx) -> Result<HashMap<String, EggConfig>> {
         // TODO: Important: We need to somehow verify that the template file list is ALWAYS the same between canonical and local mode.
-        //
-        let eggs_map = eval_ctx
+        let (_, yolk_file_module) = eval_ctx
             .yolk_file_module()
-            .expect("Tried to load egg configs before loading yolk file. This is a bug.")
+            .expect("Tried to load egg configs before loading yolk file. This is a bug.");
+        let eggs_map = yolk_file_module
             .get_var_value::<rhai::Map>("eggs")
             .ok_or_else(|| miette!("Could not find an `eggs` variable in scope"))?;
         Ok(eggs_map
@@ -952,6 +952,28 @@ mod test {
             yolk.eval_template(&mut eval_ctx, "", "test{< scream() >}")?
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_variable_and_import_in_text_transformer_tag() -> TestResult {
+        let (home, yolk, _) = setup_and_init_test_yolk()?;
+        home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
+            import "foo" as foo;
+            export let some_value = "a";
+        "#})?;
+        home.child("yolk/foo.rhai").write_str(indoc::indoc! {r#"
+            export let imported = "b";
+        "#})?;
+        let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(EvalMode::Local)?;
+        assert_str_eq!(
+            "foo=ab # {< replace_value(some_value + foo::imported) >}",
+            yolk.eval_template(
+                &mut eval_ctx,
+                "",
+                "foo=x # {< replace_value(some_value + foo::imported) >}"
+            )?
+        );
         Ok(())
     }
 

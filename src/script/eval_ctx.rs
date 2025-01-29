@@ -19,7 +19,7 @@ pub const YOLK_TEXT_NAME: &str = "YOLK_TEXT";
 pub struct EvalCtx {
     engine: Engine,
     scope: Scope<'static>,
-    yolk_file_module: Option<Arc<Module>>,
+    yolk_file_module: Option<(rhai::AST, Arc<Module>)>,
 }
 
 impl Default for EvalCtx {
@@ -77,13 +77,16 @@ impl EvalCtx {
             .map_err(|e| RhaiError::from_rhai(content, *e))?;
         let module = Arc::new(module);
         self.engine.register_global_module(module.clone());
-        self.yolk_file_module = Some(module.clone());
+        self.yolk_file_module = Some((ast, module.clone()));
         Ok(())
     }
 
     /// Eval a given string of rhai and return the result. Execute in the scope of this [`EvalCtx`].
     pub fn eval_rhai<T: Variant + Clone>(&mut self, content: &str) -> Result<T, RhaiError> {
-        let ast = self.compile(content)?;
+        let mut ast = self.compile(content)?;
+        if let Some((yolk_file_ast, _)) = self.yolk_file_module.as_ref() {
+            ast = yolk_file_ast.merge(&ast);
+        }
         self.engine
             .eval_ast_with_scope(&mut self.scope, &ast)
             .map_err(|e| RhaiError::from_rhai(content, *e))
@@ -113,7 +116,7 @@ impl EvalCtx {
         &mut self.engine
     }
 
-    pub fn yolk_file_module(&self) -> Option<&Arc<Module>> {
+    pub fn yolk_file_module(&self) -> Option<&(rhai::AST, Arc<Module>)> {
         self.yolk_file_module.as_ref()
     }
 
