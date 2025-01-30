@@ -451,7 +451,9 @@ pub fn tag_module() -> Module {
         .with_params_info(["replacement: &str", "Result<String>"])
         .in_global_namespace()
         .set_into_module(&mut module, f);
-    FuncRegistration::new("rq").set_into_module(&mut module, f);
+    FuncRegistration::new("rq")
+        .in_global_namespace()
+        .set_into_module(&mut module, f);
 
     let f = |ctx: Ncc, replacement: IStr| -> RhaiFnResult<_> {
         let text: IStr = ctx.call_fn("get_yolk_text", ())?;
@@ -492,7 +494,9 @@ pub fn tag_module() -> Module {
         .with_params_info(["replacement: &str", "Result<String>"])
         .in_global_namespace()
         .set_into_module(&mut module, f);
-    FuncRegistration::new("rv").set_into_module(&mut module, f);
+    FuncRegistration::new("rv")
+        .in_global_namespace()
+        .set_into_module(&mut module, f);
 
     module
 }
