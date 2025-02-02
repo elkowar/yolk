@@ -66,27 +66,11 @@ impl Yolk {
         )
         .context("Failed to ensure .gitignore is configured correctly")?;
 
-        // Apparently, git on windows doesn't really deal with backslashes all that well.
-        // When you run git config to set a value that contains a backslash, the .git/config file will store
-        // it with two backslashes. However, when git actually executes the git filter process,
-        // it seems to just remove those, resulting in it trying to put "CUsersfoo" as the home argument, etc.
-        // Therefore, we add an extra level of backslashes here, resulting in four backslashes per backslash in the .git/config file.
-        // Then,... it just works.
         let yolk_process_cmd = &format!(
-            "{} --yolk-dir '{}' --home-dir '{}' git-filter",
-            yolk_binary.unwrap_or("yolk").replace(r"\", r"\\"),
-            self.yolk_paths
-                .root_path()
-                .canonical()?
-                .display()
-                .to_string()
-                .replace(r"\", r"\\"),
-            self.yolk_paths
-                .home_path()
-                .canonical()?
-                .display()
-                .to_string()
-                .replace(r"\", r"\\")
+            r#"'{}' --yolk-dir '{}' --home-dir '{}' git-filter"#,
+            yolk_binary.unwrap_or("yolk"),
+            self.yolk_paths.root_path().canonical()?.display(),
+            self.yolk_paths.home_path().canonical()?.display(),
         );
         self.paths()
             .start_git_command_builder()
