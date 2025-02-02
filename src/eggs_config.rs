@@ -157,9 +157,8 @@ impl EggConfig {
         let Ok(map) = value.as_map_ref() else {
             return Err(rhai_error!("egg value must be a string or a map"));
         };
-        let targets = map
-            .get("targets")
-            .ok_or_else(|| rhai_error!("egg table must contain a 'target' key"))?;
+        let empty_map = Dynamic::from(rhai::Map::new());
+        let targets = map.get("targets").unwrap_or(&empty_map);
 
         let targets = if let Ok(targets) = targets.as_immutable_string_ref() {
             maplit::hashmap! { PathBuf::from(".") => PathBuf::from(targets.to_string()) }
