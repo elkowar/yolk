@@ -7,6 +7,7 @@
   - [The yolk.rhai file](./yolk_rhai.md)
   - [Conditionals](./conditional_templates.md)
   - [Custom Template Functions](./custom_template_functions.md)
+- [Yolk on Windows](./yolk_on_windows.md)
 # Rhai reference
 - [Function Reference](./rhai_docs/index.md)
   - [Template functions](./rhai_docs/template.md)
