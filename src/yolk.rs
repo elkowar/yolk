@@ -455,13 +455,14 @@ impl Yolk {
             let dir = dir.into_diagnostic()?;
             if !local_egg_configs.contains_key(&dir.file_name().to_string_lossy().to_string()) {
                 miette::bail!(
-                    "Egg {} is not configured in yolk.rhai",
+                    "Egg {} is not configured in local yolk.rhai",
                     dir.file_name().to_string_lossy()
                 );
             }
             if !canonical_egg_configs.contains_key(&dir.file_name().to_string_lossy().to_string()) {
                 miette::bail!(
-                    "Not all eggs in the eggs directory were configured in canonicalized yolk.rhai"
+                    "Egg {} is not configured in canonical yolk.rhai",
+                    dir.file_name().to_string_lossy()
                 );
             }
         }
@@ -480,6 +481,7 @@ impl Yolk {
                 .ok_or_else(|| miette!("Egg {name} was not found in canonical yolk.rhai"))?;
             if local_config.templates != canonical_config.templates {
                 miette::bail!(
+                    help = "Make sure that template configuration does not depend on the LOCAL or CANONICAL mode",
                     "Egg {name} has a different set of templated files in canonical mode compared to local mode"
                 );
             }
