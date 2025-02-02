@@ -66,11 +66,27 @@ impl Yolk {
         )
         .context("Failed to ensure .gitignore is configured correctly")?;
 
+        // Apparently, git on windows doesn't really deal with backslashes all that well.
+        // When you run git config to set a value that contains a backslash, the .git/config file will store
+        // it with two backslashes. However, when git actually executes the git filter process,
+        // it seems to just remove those, resulting in it trying to put "CUsersfoo" as the home argument, etc.
+        // Therefore, we add an extra level of backslashes here, resulting in four backslashes per backslash in the .git/config file.
+        // Then,... it just works.
         let yolk_process_cmd = &format!(
-            "{} --yolk-dir {} --home-dir {} git-filter",
-            yolk_binary.unwrap_or("yolk"),
-            self.yolk_paths.root_path().canonical()?.display(),
-            self.yolk_paths.home_path().canonical()?.display()
+            "{} --yolk-dir '{}' --home-dir '{}' git-filter",
+            yolk_binary.unwrap_or("yolk").replace(r"\", r"\\"),
+            self.yolk_paths
+                .root_path()
+                .canonical()?
+                .display()
+                .to_string()
+                .replace(r"\", r"\\"),
+            self.yolk_paths
+                .home_path()
+                .canonical()?
+                .display()
+                .to_string()
+                .replace(r"\", r"\\")
         );
         self.paths()
             .start_git_command_builder()
@@ -114,7 +130,7 @@ impl Yolk {
                         if deployed.is_symlink() {
                             let target = deployed.fs_err_read_link().into_diagnostic()?;
                             if target.starts_with(egg.path()) {
-                                fs_err::remove_file(deployed).into_diagnostic()?;
+                                util::remove_symlink(deployed)?;
                                 tracing::info!("Removed dead symlink {}", deployed.abbr());
                             }
                         }
@@ -493,7 +509,7 @@ fn symlink_recursive(
                     link_path.abbr(),
                     link_target.abbr()
                 );
-                fs_err::remove_file(&link_path).into_diagnostic()?;
+                util::remove_symlink(&link_path)?;
                 cov_mark::hit!(remove_dead_symlink);
                 // After we've removed that file, creating the symlink later will succeed!
             } else {
@@ -586,13 +602,13 @@ mod test {
 
     use crate::{
         eggs_config::DeploymentStrategy,
-        util::{
-            create_regex,
-            test_util::{render_error, render_report, setup_and_init_test_yolk, TestResult},
-        },
+        util::test_util::{setup_and_init_test_yolk, TestResult},
         yolk::EvalMode,
         yolk_paths::Egg,
     };
+
+    #[cfg(not(windows))]
+    use crate::util::test_util;
     use assert_fs::{
         assert::PathAssert,
         prelude::{FileWriteStr, PathChild, PathCreateDir},
@@ -888,6 +904,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(not(windows))]
     fn test_sync_eggs_continues_after_failure() -> TestResult {
         let (home, yolk, eggs) = setup_and_init_test_yolk()?;
         home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
@@ -902,7 +919,7 @@ mod test {
         eggs.child("foo/foo").assert(r#"{< invalid rhai >}"#);
         eggs.child("bar/bar")
             .assert(r#"#<yolk> foo # {<if false>}"#);
-        assert!(render_error(result.unwrap_err()).contains("Syntax error"));
+        assert!(test_util::render_error(result.unwrap_err()).contains("Syntax error"));
         Ok(())
     }
 
@@ -978,7 +995,10 @@ mod test {
     }
 
     #[test]
+    #[cfg(not(windows))]
     pub fn test_syntax_error_in_yolk_rhai() -> TestResult {
+        use crate::util::create_regex;
+
         let (home, yolk, _) = setup_and_init_test_yolk()?;
         home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
             fn foo(
@@ -987,7 +1007,7 @@ mod test {
             .prepare_eval_ctx_for_templates(crate::yolk::EvalMode::Local)
             .map_err(|e| create_regex(r"\[.*.rhai:\d+:\d+]")
                 .unwrap()
-                .replace(&render_report(e), "[no-filename-in-test]")
+                .replace(&test_util::render_report(e), "[no-filename-in-test]")
                 .to_string())
             .unwrap_err());
 
@@ -995,6 +1015,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(not(windows))]
     pub fn test_deployment_error() -> TestResult {
         let (home, yolk, eggs) = setup_and_init_test_yolk()?;
         eggs.child("bar/file1").write_str("")?;
@@ -1012,7 +1033,7 @@ mod test {
             (r"\.tmp[a-zA-Z0-9]{6}", "[tmp-dir]"),
             (r"file\d", "[filename]")
         ]}, {
-            insta::assert_snapshot!(render_error(
+            insta::assert_snapshot!(test_util::render_error(
                 yolk.sync_egg_deployment(&egg).unwrap_err()
             ));
         });
