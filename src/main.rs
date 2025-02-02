@@ -177,6 +177,7 @@ fn run_command(args: Args) -> Result<()> {
 
             yolk.init_git_config(None)?;
             yolk.paths().check()?;
+            yolk.validate_config_invariants()?;
             yolk.paths()
                 .start_git_command_builder()
                 .args(["status", "--short"])
@@ -223,6 +224,7 @@ fn run_command(args: Args) -> Result<()> {
         }
         Command::Git { command } => {
             yolk.init_git_config(None)?;
+            yolk.validate_config_invariants()?;
             yolk.paths()
                 .start_git_command_builder()
                 .args(command)
@@ -391,6 +393,7 @@ struct GitFilterProcessor<'a> {
     eval_ctx: Option<EvalCtx>,
     templated_files: Option<HashSet<PathBuf>>,
     mode: GitFilterMode,
+    validated: bool,
 }
 impl<'a> GitFilterProcessor<'a> {
     pub fn new(yolk: &'a Yolk) -> Self {
@@ -399,6 +402,7 @@ impl<'a> GitFilterProcessor<'a> {
             eval_ctx: None,
             templated_files: None,
             mode: GitFilterMode::Clean,
+            validated: false,
         }
     }
 }
@@ -429,6 +433,14 @@ impl git_filter_server::GitFilterProcessor for GitFilterProcessor<'_> {
                 .collect::<miette::Result<Vec<Vec<PathBuf>>>>()?;
             self.templated_files = Some(result.into_iter().flatten().collect());
         }
+
+        if !self.validated {
+            self.validated = true;
+            if mode == GitFilterMode::Smudge {
+                self.yolk.validate_config_invariants()?;
+            }
+        }
+
         let templated_files = self.templated_files.as_ref().unwrap();
         let canonical_file_path = self.yolk.paths().root_path().join(pathname).canonical()?;
         if !templated_files.contains(&canonical_file_path) {

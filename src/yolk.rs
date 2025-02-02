@@ -1,4 +1,4 @@
-use fs_err::PathExt as _;
+use fs_err::PathExt;
 use miette::miette;
 use miette::{Context, IntoDiagnostic, Result, Severity};
 use normalize_path::NormalizePath;
@@ -420,10 +420,12 @@ impl Yolk {
     pub fn list_eggs(&self) -> Result<Vec<Egg>> {
         let mut eval_ctx = self.prepare_eval_ctx_for_templates(EvalMode::Local)?;
         let egg_configs = self.load_egg_configs(&mut eval_ctx)?;
-        egg_configs
+        let eggs: Vec<Egg> = egg_configs
             .into_iter()
             .map(|(name, config)| self.yolk_paths.get_egg(&name, config))
-            .collect()
+            .collect::<Result<_>>()
+            .context("Failed to find egg that was configured in yolk.rhai")?;
+        Ok(eggs)
     }
 
     /// Run the yolk.rhai script, load the egg configs and return the requested egg.
@@ -434,6 +436,55 @@ impl Yolk {
             .remove(egg_name)
             .ok_or_else(|| miette!("No egg with name {egg_name}"))
             .and_then(|config| self.yolk_paths.get_egg(egg_name, config))
+    }
+
+    pub fn validate_config_invariants(&self) -> Result<()> {
+        let mut eval_ctx_local = self.prepare_eval_ctx_for_templates(EvalMode::Local)?;
+        let local_egg_configs = self.load_egg_configs(&mut eval_ctx_local)?;
+        let mut eval_ctx_canonical = self.prepare_eval_ctx_for_templates(EvalMode::Canonical)?;
+        let canonical_egg_configs = self.load_egg_configs(&mut eval_ctx_canonical)?;
+        // When listing eggs, let's ensure that the eggs directory exactly matches the configured eggs.
+        let eggs_dir_entries = self
+            .yolk_paths
+            .eggs_dir_path()
+            .fs_err_read_dir()
+            .into_diagnostic()?;
+        let mut count = 0;
+        for dir in eggs_dir_entries {
+            count += 1;
+            let dir = dir.into_diagnostic()?;
+            if !local_egg_configs.contains_key(&dir.file_name().to_string_lossy().to_string()) {
+                miette::bail!(
+                    "Egg {} is not configured in yolk.rhai",
+                    dir.file_name().to_string_lossy()
+                );
+            }
+            if !canonical_egg_configs.contains_key(&dir.file_name().to_string_lossy().to_string()) {
+                miette::bail!(
+                    "Not all eggs in the eggs directory were configured in canonicalized yolk.rhai"
+                );
+            }
+        }
+        if local_egg_configs.len() != canonical_egg_configs.len() {
+            miette::bail!(
+                help = "Always configure all eggs regardless of the LOCAL/CANONICAL state. Use the `enabled` field in the egg config to toggle eggs on and off instead.",
+                "canonical and local version of yolk.rhai have different egg configurations.",
+            );
+        }
+        if count != local_egg_configs.len() {
+            miette::bail!("Not all configured eggs were found in the eggs directory");
+        }
+        for (name, local_config) in local_egg_configs {
+            let canonical_config = canonical_egg_configs
+                .get(&name)
+                .ok_or_else(|| miette!("Egg {name} was not found in canonical yolk.rhai"))?;
+            if local_config.templates != canonical_config.templates {
+                miette::bail!(
+                    "Egg {name} has a different set of templated files in canonical mode compared to local mode"
+                );
+            }
+        }
+        Ok(())
     }
 }
 
