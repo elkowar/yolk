@@ -204,7 +204,7 @@ fn run_command(args: Args) -> Result<()> {
         Command::Sync { canonical } => {
             // Lets always ensure that the yolk dir is in a properly set up state.
             // This should later be replaced with some sort of version-aware compatibility check.
-            yolk.init_yolk(None)?;
+            yolk.init_git_config(None)?;
 
             yolk.sync_to_mode(match *canonical {
                 true => EvalMode::Canonical,
@@ -222,7 +222,7 @@ fn run_command(args: Args) -> Result<()> {
             println!("{result}");
         }
         Command::Git { command } => {
-            yolk.init_yolk(None)?;
+            yolk.init_git_config(None)?;
             yolk.paths()
                 .start_git_command_builder()
                 .args(command)

@@ -28,15 +28,13 @@ impl Yolk {
         Self { yolk_paths }
     }
 
-    /// Init or update the yolk directory, setting up the required git structure and files.
+    /// Init the yolk directory, setting up the required git structure and files.
     ///
     /// `yolk_binary` is used as the path that git-filter uses when calling yolk to process the files.
     /// In most cases, the `yolk_binary` can be left to None.
     /// However, for tests, it should explicitly be provided to ensure that the correct yolk binary is being used.
     pub fn init_yolk(&self, yolk_binary: Option<&str>) -> Result<()> {
-        if !self.yolk_paths.root_path().exists() {
-            self.yolk_paths.create()?;
-        }
+        self.yolk_paths.create()?;
         if !self.yolk_paths.root_path().join(".git").exists() {
             if self.yolk_paths.root_path().join(".yolk_git").exists() {
                 fs_err::rename(
@@ -59,7 +57,29 @@ impl Yolk {
 
     #[tracing::instrument(skip_all, fields(yolk_dir = self.yolk_paths.root_path().abbr()))]
     pub fn init_git_config(&self, yolk_binary: Option<&str>) -> Result<()> {
+        if !self.yolk_paths.root_path().exists() {
+            miette::bail!("Yolk directory is not initialized. Please run `yolk init` first.");
+        }
+        tracing::trace!("Ensuring git repo is initialized");
+
+        if !self.yolk_paths.root_path().join(".git").exists() {
+            if self.yolk_paths.root_path().join(".yolk_git").exists() {
+                fs_err::rename(
+                    self.yolk_paths.root_path().join(".yolk_git"),
+                    self.yolk_paths.root_path().join(".git"),
+                )
+                .into_diagnostic()?;
+            } else {
+                std::process::Command::new("git")
+                    .arg("init")
+                    .current_dir(self.yolk_paths.root_path())
+                    .status()
+                    .into_diagnostic()?;
+            }
+        }
+
         tracing::trace!("Ensuring that git config is properly set up");
+
         util::ensure_file_contains_lines(
             self.paths().root_path().join(".gitignore"),
             GITIGNORE_ENTRIES,
