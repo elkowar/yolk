@@ -58,9 +58,11 @@ impl YolkPaths {
     }
 
     pub fn set_yolk_dir(&mut self, path: PathBuf) {
+        tracing::trace!("Updating oylk-dir to {}", path.display());
         self.root_path = path;
     }
     pub fn set_home_dir(&mut self, path: PathBuf) {
+        tracing::trace!("Updating home-dir to {}", path.display());
         self.home = path
             .canonical()
             .expect("Failed to canonicalize home directory");
@@ -337,7 +339,7 @@ impl Iterator for TraverseDeployment {
 #[cfg(test)]
 mod test {
     use crate::{
-        util::test_util::{setup_and_init_test_yolk, TestResult},
+        util::{self, test_util::{setup_and_init_test_yolk, TestResult}},
         yolk_paths::{Egg, DEFAULT_YOLK_RHAI},
     };
     use assert_fs::{
@@ -396,7 +398,7 @@ mod test {
         assert!(!(egg.is_deployed()?));
         yolk.sync_egg_deployment(&egg)?;
         assert!(egg.is_deployed()?);
-        fs_err::remove_file(home.child("target"))?;
+        util::remove_symlink(home.child("target"))?;
         assert!(!(egg.is_deployed()?));
         Ok(())
     }

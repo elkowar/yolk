@@ -50,10 +50,14 @@ fn test_init_works() -> TestResult {
         .assert()
         .success()
         .stdout(format!(
-            "{} --yolk-dir {} --home-dir {} git-filter\n",
-            yolk_binary_path.display(),
-            env.yolk_root().path().display(),
-            env.home.path().display(),
+            "{} --yolk-dir '{}' --home-dir '{}' git-filter\n",
+            yolk_binary_path.display().to_string().replace(r"\", r"\\"),
+            env.yolk_root()
+                .path()
+                .display()
+                .to_string()
+                .replace(r"\", r"\\"),
+            env.home.path().display().to_string().replace(r"\", r"\\"),
         ));
     Ok(())
 }
