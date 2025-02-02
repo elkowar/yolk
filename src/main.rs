@@ -172,9 +172,6 @@ fn run_command(args: Args) -> Result<()> {
     match &args.command {
         Command::Init => yolk.init_yolk(None)?,
         Command::Status => {
-            // TODO: Add a verification that exactly all the eggs in the eggs dir are defined in the
-            // yolk.rhai file.
-
             yolk.init_git_config(None)?;
             yolk.paths().check()?;
             yolk.validate_config_invariants()?;

@@ -288,7 +288,6 @@ impl Yolk {
 
     /// fetch the `eggs` variable from a given EvalCtx.
     pub fn load_egg_configs(&self, eval_ctx: &mut EvalCtx) -> Result<HashMap<String, EggConfig>> {
-        // TODO: Important: We need to somehow verify that the template file list is ALWAYS the same between canonical and local mode.
         let (_, yolk_file_module) = eval_ctx
             .yolk_file_module()
             .expect("Tried to load egg configs before loading yolk file. This is a bug.");
