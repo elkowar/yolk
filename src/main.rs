@@ -160,9 +160,11 @@ fn init_logging(args: &Args) {
 fn run_command(args: Args) -> Result<()> {
     let mut yolk_paths = yolk::yolk_paths::YolkPaths::from_env();
     if let Some(d) = args.yolk_dir {
+        tracing::trace!("Setting yolk dir to {}", d.display());
         yolk_paths.set_yolk_dir(d);
     }
     if let Some(d) = args.home_dir {
+        tracing::trace!("Setting home dir to {}", d.display());
         yolk_paths.set_home_dir(d);
     }
 

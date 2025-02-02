@@ -52,14 +52,20 @@ pub fn remove_symlink(path: impl AsRef<Path>) -> miette::Result<()> {
     if !path.is_symlink() {
         miette::bail!("Path is not a symlink: {}", path.abbr());
     }
-    if path.is_dir() {
+    if path.symlink_metadata().into_diagnostic()?.is_dir() {
         symlink::remove_symlink_dir(path)
             .into_diagnostic()
             .wrap_err_with(|| format!("Failed to remove symlink dir at {}", path.abbr()))?;
     } else {
-        symlink::remove_symlink_file(path)
-            .into_diagnostic()
-            .wrap_err_with(|| format!("Failed to remove symlink file at {}", path.abbr()))?;
+        let result = symlink::remove_symlink_file(path);
+        if let Err(e) = result {
+            symlink::remove_symlink_dir(path)
+                .into_diagnostic()
+                .wrap_err("Failed to remove symlink dir as fallback from symlink file")
+                .wrap_err_with(|| {
+                    format!("Failed to remove symlink file at {}: {e:?}", path.abbr())
+                })?;
+        }
     }
     Ok(())
 }
