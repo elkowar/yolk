@@ -409,8 +409,8 @@ impl git_filter_server::GitFilterProcessor for GitFilterProcessor<'_> {
         &mut self,
         pathname: &str,
         mode: git_filter_server::GitFilterMode,
-        input: String,
-    ) -> Result<String> {
+        input: Vec<u8>,
+    ) -> Result<Vec<u8>> {
         if self.mode != mode || self.eval_ctx.is_none() {
             let eval_ctx = self.yolk.prepare_eval_ctx_for_templates(match mode {
                 GitFilterMode::Clean => EvalMode::Canonical,
@@ -444,9 +444,10 @@ impl git_filter_server::GitFilterProcessor for GitFilterProcessor<'_> {
             return Ok(input);
         }
 
+        let input = String::from_utf8(input).into_diagnostic()?;
         let evaluated = self
             .yolk
             .eval_template(eval_ctx, &canonical_file_path.abbr(), &input)?;
-        Ok(evaluated)
+        Ok(evaluated.as_bytes().to_vec())
     }
 }

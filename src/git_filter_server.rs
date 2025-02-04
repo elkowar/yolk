@@ -33,8 +33,12 @@ impl FromStr for GitFilterMode {
 }
 
 pub trait GitFilterProcessor {
-    fn process(&mut self, path: &str, mode: GitFilterMode, input: String)
-        -> miette::Result<String>;
+    fn process(
+        &mut self,
+        path: &str,
+        mode: GitFilterMode,
+        input: Vec<u8>,
+    ) -> miette::Result<Vec<u8>>;
 }
 
 impl<P: GitFilterProcessor, R: std::io::Read, W: std::io::Write> GitFilterServer<P, R, W> {
@@ -57,9 +61,8 @@ impl<P: GitFilterProcessor, R: std::io::Read, W: std::io::Write> GitFilterServer
                     let mode = GitFilterMode::from_str(t)?;
                     let content = read_bin_until_flush(&mut self.input)
                         .context("Failed to read content from git")?;
-                    let content_str = String::from_utf8(content).into_diagnostic()?;
-                    match self.processor.process(&pathname, mode, content_str) {
-                        Ok(success) => self.send_processing_success(success)?,
+                    match self.processor.process(&pathname, mode, content) {
+                        Ok(success) => self.send_processing_success(&success)?,
                         Err(error) => {
                             eprintln!("Error in git filter: {error:?}");
                             self.output.write_all(b"status=error")?;
@@ -74,13 +77,13 @@ impl<P: GitFilterProcessor, R: std::io::Read, W: std::io::Write> GitFilterServer
         }
     }
 
-    fn send_processing_success(&mut self, success: String) -> Result<(), miette::Error> {
+    fn send_processing_success(&mut self, success: &[u8]) -> Result<(), miette::Error> {
         self.output
             .write_all(b"status=success")
             .context("failed to send status=success")?;
         self.output.send_flush()?;
         self.output
-            .write_all(success.as_bytes())
+            .write_all(success)
             .context("Failed to write processing output")?;
         self.output.send_flush()?;
         self.output.send_flush()?;

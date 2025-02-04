@@ -1,7 +1,7 @@
 use assert_cmd::Command;
 use assert_fs::{
     assert::PathAssert as _,
-    prelude::{FileWriteStr as _, PathChild},
+    prelude::{FileWriteBin, FileWriteStr as _, PathChild},
 };
 
 use crate::{
@@ -73,6 +73,8 @@ fn test_git_add() -> TestResult {
     env.eggs
         .child("foo/file")
         .write_str(r#"foo=1 # {< replace_value(LOCAL.to_string())>}"#)?;
+    // 0x80 is a utf-8 control byte that, by itself, is not valid unicode.
+    env.eggs.child("foo/binary").write_binary(&[0x80])?;
     env.eggs.child("foo/non-template").write_str(r#"{<1+1>}"#)?;
     env.eggs
         .child("bar/file")
