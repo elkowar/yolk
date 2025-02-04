@@ -176,15 +176,15 @@ fn read_bin_until_flush(read: &mut impl std::io::Read) -> miette::Result<Vec<u8>
 }
 
 fn read_text_packet(read: &mut impl std::io::Read) -> miette::Result<Option<String>> {
-    let Some(bin) = read_bin_packet(read).context("Failed to read binary text data")? else {
+    let Some(mut bin) = read_bin_packet(read).context("Failed to read binary text data")? else {
         return Ok(None);
     };
 
-    if !bin.ends_with(b"\n") {
-        miette::bail!("Expected text packet to end with a newline");
+    if bin.ends_with(b"\n") {
+        bin.pop();
     }
     Ok(Some(
-        String::from_utf8(bin[..bin.len() - 1].to_vec()).into_diagnostic()?,
+        String::from_utf8(bin[..bin.len()].to_vec()).into_diagnostic()?,
     ))
 }
 
