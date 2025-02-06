@@ -6,6 +6,7 @@ use std::{
 };
 
 use clap::{Parser, Subcommand};
+use fs_err::PathExt;
 use miette::{IntoDiagnostic, Result};
 use notify_debouncer_full::{new_debouncer, DebounceEventResult};
 use owo_colors::OwoColorize as _;
@@ -14,11 +15,12 @@ use tracing_subscriber::{
     filter, fmt::format::FmtSpan, layer::SubscriberExt as _, util::SubscriberInitExt as _,
     EnvFilter, Layer,
 };
+use yolk::script::eval_ctx::EvalCtx;
 use yolk::{
     git_filter_server::{self, GitFilterMode},
+    util::PathExt as _,
     yolk::{EvalMode, Yolk},
 };
-use yolk::{script::eval_ctx::EvalCtx, util::PathExt};
 
 #[derive(clap::Parser, Debug)]
 #[command(version, about)]
@@ -254,11 +256,21 @@ fn run_command(args: Args) -> Result<()> {
                     let cd_path = egg
                         .find_first_deployed_symlink()?
                         .unwrap_or_else(|| yolk.paths().egg_path(egg_name));
-                    let _ = std::env::set_current_dir(yolk.paths().root_path());
-                    if let Some(ref main_file) = egg.config().main_file {
+                    let _ = std::env::set_current_dir(&cd_path);
+                    let mut main_file = egg.config().main_file.clone();
+                    // If no main_file is specified and there's exactly one file in the egg directory, use that
+                    if main_file.is_none() {
+                        let mut files = egg.path().fs_err_read_dir().into_diagnostic()?;
+                        if let Some(first_file) = files.next() {
+                            if files.next().is_none() {
+                                main_file = Some(first_file.into_diagnostic()?.path());
+                            }
+                        }
+                    }
+                    if let Some(ref main_file) = main_file {
                         edit::edit_file(egg.path().join(main_file)).into_diagnostic()?;
                     } else {
-                        edit::edit_file(cd_path).into_diagnostic()?;
+                        edit::edit_file(&cd_path).into_diagnostic()?;
                     }
                 }
                 None => {
@@ -451,3 +463,15 @@ impl git_filter_server::GitFilterProcessor for GitFilterProcessor<'_> {
         Ok(evaluated.as_bytes().to_vec())
     }
 }
+
+// fn open_editor(cwd: impl AsRef<Path>, file: impl AsRef<Path>) -> Result<()> {
+//     let editor = edit::get_editor().into_diagnostic()?;
+//     std::process::Command::new(editor)
+//         .current_dir(cwd)
+//         .arg(file.as_ref())
+//         .spawn()
+//         .into_diagnostic()?
+//         .wait()
+//         .into_diagnostic()?;
+//     Ok(())
+// }
