@@ -8,6 +8,7 @@ use std::{
 use clap::{Parser, Subcommand};
 use fs_err::PathExt;
 use miette::{IntoDiagnostic, Result};
+use normalize_path::NormalizePath;
 use notify_debouncer_full::{new_debouncer, DebounceEventResult};
 use owo_colors::OwoColorize as _;
 use rhai::Dynamic;
@@ -135,7 +136,8 @@ fn init_logging(args: &Args) {
         .without_time()
         .with_ansi(true)
         .with_target(false)
-        .with_level(true);
+        .with_level(true)
+        .with_writer(std::io::stderr);
     let mut include_span_info = false;
     if args.debug > 1 {
         format_layer = format_layer.with_target(true).with_level(true);
@@ -429,6 +431,7 @@ impl git_filter_server::GitFilterProcessor for GitFilterProcessor<'_> {
                 GitFilterMode::Smudge => EvalMode::Local,
             })?;
             self.eval_ctx = Some(eval_ctx);
+            tracing::trace!("eval_ctx initialized for mode {:?}", mode);
         }
         let eval_ctx = self.eval_ctx.as_mut().unwrap();
 
@@ -441,20 +444,38 @@ impl git_filter_server::GitFilterProcessor for GitFilterProcessor<'_> {
                 })
                 .collect::<miette::Result<Vec<Vec<PathBuf>>>>()?;
             self.templated_files = Some(result.into_iter().flatten().collect());
+            tracing::trace!(
+                "Templated files found and expanded: {:?}",
+                self.templated_files
+            );
         }
 
         if !self.validated {
             self.validated = true;
             if mode == GitFilterMode::Smudge {
+                tracing::trace!("Running validation logic");
                 self.yolk.validate_config_invariants()?;
             }
         }
 
+        // TODO: What if, in the version git sees, the templates are actually
+        // different from what we have here?
+        // Can that happen?
+        // In that case, we'd have the problem that we might miss certain templates, or try to evaluate as templates things that aren't actually templates.
+        // This might force us to move to some other way of indicating that a file is a template _within_ the file, rather than in a list on the outside..
+        // which kind of sucks for performance.
         let templated_files = self.templated_files.as_ref().unwrap();
-        let canonical_file_path = self.yolk.paths().root_path().join(pathname).canonical()?;
+        tracing::trace!(
+            "Checking filepath requested by git is a template: {} ({})",
+            pathname,
+            self.yolk.paths().root_path().join(pathname).display(),
+        );
+        let canonical_file_path = self.yolk.paths().root_path().join(pathname).normalize();
+        // let canonical_file_path = self.yolk.paths().root_path().join(pathname).canonical()?;
         if !templated_files.contains(&canonical_file_path) {
             return Ok(input);
         }
+        tracing::trace!("Evaluating template");
 
         let input = String::from_utf8(input).into_diagnostic()?;
         let evaluated = self
@@ -463,15 +484,3 @@ impl git_filter_server::GitFilterProcessor for GitFilterProcessor<'_> {
         Ok(evaluated.as_bytes().to_vec())
     }
 }
-
-// fn open_editor(cwd: impl AsRef<Path>, file: impl AsRef<Path>) -> Result<()> {
-//     let editor = edit::get_editor().into_diagnostic()?;
-//     std::process::Command::new(editor)
-//         .current_dir(cwd)
-//         .arg(file.as_ref())
-//         .spawn()
-//         .into_diagnostic()?
-//         .wait()
-//         .into_diagnostic()?;
-//     Ok(())
-// }

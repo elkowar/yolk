@@ -18,10 +18,22 @@ struct TestEnv {
 impl TestEnv {
     pub fn init() -> miette::Result<Self> {
         let (home, yolk, eggs) = setup_and_init_test_yolk()?;
+
         Ok(Self { home, yolk, eggs })
     }
     pub fn yolk_root(&self) -> assert_fs::fixture::ChildPath {
         self.home.child("yolk")
+    }
+
+    pub fn config_git(&self) {
+        self.start_git_command()
+            .args(["config", "--local", "user.name", "test"])
+            .assert()
+            .success();
+        self.start_git_command()
+            .args(["config", "--local", "user.email", "test@test.test"])
+            .assert()
+            .success();
     }
 
     pub fn start_git_command(&self) -> Command {
@@ -33,6 +45,9 @@ impl TestEnv {
 
     pub fn git_add_all(&self) -> assert_cmd::assert::Assert {
         self.start_git_command().args(["add", "--all"]).assert()
+    }
+    pub fn git_reset_hard(&self) -> assert_cmd::assert::Assert {
+        self.start_git_command().args(["reset", "--hard"]).assert()
     }
     pub fn git_show_staged(&self, path: impl ToString) -> assert_cmd::assert::Assert {
         self.start_git_command()
@@ -122,5 +137,40 @@ fn test_git_add_with_error() -> TestResult {
     env.git_add_all().failure();
     env.git_show_staged("eggs/foo/bar").failure();
     env.git_show_staged("eggs/bar/file").failure();
+    Ok(())
+}
+
+#[test]
+fn test_git_reset_weird_case() -> TestResult {
+    let env = TestEnv::init()?;
+    env.config_git();
+
+    env.home
+        .child("yolk/yolk.rhai")
+        .write_str(indoc::indoc! {r#"
+        export let eggs = #{
+            foo: #{ targets: `~/foo`, strategy: "put", templates: ["file"]},
+        };
+    "#})?;
+    env.eggs
+        .child("foo/file")
+        .write_str(r#"foo # {< if false >}"#)?;
+    env.git_add_all().success();
+    env.start_git_command()
+        .args(["commit", "-m", "commit 1"])
+        .assert()
+        .success();
+
+    env.yolk.sync_to_mode(EvalMode::Local)?;
+    env.eggs
+        .child("foo/file")
+        .assert("#<yolk> foo # {< if false >}");
+
+    env.git_reset_hard().success();
+    env.git_show_staged("eggs/foo/file")
+        .stdout("#<yolk> foo # {< if false >}");
+    env.eggs
+        .child("foo/file")
+        .assert("#<yolk> foo # {< if false >}");
     Ok(())
 }
