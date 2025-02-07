@@ -49,6 +49,21 @@ impl TestEnv {
     pub fn git_reset_hard(&self) -> assert_cmd::assert::Assert {
         self.start_git_command().args(["reset", "--hard"]).assert()
     }
+    pub fn git_switch_new(&self, branch_name: &str) -> assert_cmd::assert::Assert {
+        self.start_git_command()
+            .args(["switch", "-c", branch_name])
+            .assert()
+    }
+    pub fn git_commit(&self, msg: &str) -> assert_cmd::assert::Assert {
+        self.start_git_command()
+            .args(["commit", "-m", msg])
+            .assert()
+    }
+    pub fn git_switch(&self, branch_name: &str) -> assert_cmd::assert::Assert {
+        self.start_git_command()
+            .args(["switch", branch_name])
+            .assert()
+    }
     pub fn git_show_staged(&self, path: impl ToString) -> assert_cmd::assert::Assert {
         self.start_git_command()
             .args(["show", &format!(":{}", path.to_string())])
@@ -156,10 +171,7 @@ fn test_git_reset_weird_case() -> TestResult {
         .child("foo/file")
         .write_str(r#"foo # {< if false >}"#)?;
     env.git_add_all().success();
-    env.start_git_command()
-        .args(["commit", "-m", "commit 1"])
-        .assert()
-        .success();
+    env.git_commit("commit 1").success();
 
     env.yolk.sync_to_mode(EvalMode::Local)?;
     env.eggs
@@ -174,3 +186,77 @@ fn test_git_reset_weird_case() -> TestResult {
         .assert("#<yolk> foo # {< if false >}");
     Ok(())
 }
+
+#[test]
+fn test_git_switch_issues() -> TestResult {
+    let env = TestEnv::init()?;
+    env.config_git();
+    env.git_switch_new("main").success();
+
+    env.home
+        .child("yolk/yolk.rhai")
+        .write_str(indoc::indoc! {r#"
+        export let eggs = #{
+            foo: #{ targets: `~/foo`, strategy: "put", templates: ["file"]},
+        };
+    "#})?;
+    env.eggs
+        .child("foo/file")
+        .write_str(r#"foo # {< if false >}"#)?;
+    env.yolk.sync_to_mode(EvalMode::Local)?;
+    env.git_add_all().success();
+    env.git_commit("commit 1").success();
+    env.git_switch_new("other").success();
+    env.eggs
+        .child("foo/file")
+        .write_str(r#"foo # {< if true >}"#)?;
+    env.git_add_all().success();
+    env.git_commit("commit other").success();
+    // TODO: this should succeed once the bug is fixed
+    env.git_switch("main").success();
+    Ok(())
+}
+
+// #[test]
+// fn test_git_merge_issues() -> TestResult {
+//     let env = TestEnv::init()?;
+//     env.config_git();
+//     env.git_switch_new("main").success();
+
+//     env.home
+//         .child("yolk/yolk.rhai")
+//         .write_str(indoc::indoc! {r#"
+//         export let eggs = #{
+//             foo: #{ targets: `~/foo`, strategy: "put", templates: ["file"]},
+//         };
+//     "#})?;
+//     env.eggs
+//         .child("foo/file")
+//         .write_str(r#"foo # {< if false >}"#)?;
+//     env.yolk.sync_to_mode(EvalMode::Local)?;
+//     println!("1");
+//     env.git_add_all().success();
+//     env.git_commit("commit 1").success();
+//     env.git_switch_new("other").success();
+//     env.eggs
+//         .child("foo/file")
+//         .write_str(r#"foo # {< if true >}"#)?;
+//     env.git_add_all().success();
+//     env.git_commit("commit other").success();
+//     env.git_switch("main").success();
+//     println!("switched back");
+//     env.eggs
+//         .child("foo/file")
+//         .write_str(r#"#<yolk> bar # {< if false >}"#)?;
+//     env.git_add_all().success();
+//     env.git_commit("commit 2").success();
+//     env.start_git_command()
+//         .args(&["merge", "other"])
+//         .assert()
+//         .success();
+
+//     env.eggs
+//         .child("foo/file")
+//         .assert("#<yolk> foo # {< if false >}");
+//     Ok(())
+// }

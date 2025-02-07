@@ -482,5 +482,6 @@ impl git_filter_server::GitFilterProcessor for GitFilterProcessor<'_> {
             .yolk
             .eval_template(eval_ctx, &canonical_file_path.abbr(), &input)?;
         Ok(evaluated.as_bytes().to_vec())
+        // TODO: maybe I do just need to git update-index --cacheinfo manually here...
     }
 }
