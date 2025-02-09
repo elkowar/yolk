@@ -2,7 +2,6 @@
 mod doc_generator;
 
 pub mod eggs_config;
-pub mod git_filter_server;
 #[cfg(test)]
 pub mod git_tests;
 pub mod multi_error;

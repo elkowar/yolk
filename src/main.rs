@@ -8,7 +8,6 @@ use std::{
 use clap::{Parser, Subcommand};
 use fs_err::PathExt;
 use miette::{IntoDiagnostic, Result};
-use normalize_path::NormalizePath;
 use notify_debouncer_full::{new_debouncer, DebounceEventResult};
 use owo_colors::OwoColorize as _;
 use rhai::Dynamic;
@@ -16,9 +15,8 @@ use tracing_subscriber::{
     filter, fmt::format::FmtSpan, layer::SubscriberExt as _, util::SubscriberInitExt as _,
     EnvFilter, Layer,
 };
-use yolk::script::eval_ctx::EvalCtx;
+
 use yolk::{
-    git_filter_server::{self, GitFilterMode},
     util::PathExt as _,
     yolk::{EvalMode, Yolk},
 };
@@ -78,13 +76,6 @@ enum Command {
         canonical: bool,
     },
 
-    /// Run a git-command within the yolk directory.
-    #[clap(alias = "g")]
-    Git {
-        #[clap(allow_hyphen_values = true)]
-        command: Vec<String>,
-    },
-
     /// Evaluate a given templated file, or read a templated string from stdin.
     #[clap(name = "eval-template")]
     EvalTemplate {
@@ -110,8 +101,12 @@ enum Command {
         no_sync: bool,
     },
 
-    #[command(hide(true))]
-    GitFilter,
+    /// Run a git-command within the yolk directory.
+    #[clap(alias = "g")]
+    Git {
+        #[clap(allow_hyphen_values = true)]
+        command: Vec<String>,
+    },
 
     #[cfg(feature = "docgen")]
     #[command(hide(true))]
@@ -391,14 +386,6 @@ fn run_command(args: Args) -> Result<()> {
                 std::thread::sleep(std::time::Duration::from_secs(1));
             }
         }
-        Command::GitFilter => {
-            let mut server = git_filter_server::GitFilterServer::new(
-                std::io::stdin(),
-                std::io::stdout(),
-                GitFilterProcessor::new(&yolk),
-            );
-            server.run()?;
-        }
 
         #[cfg(feature = "docgen")]
         Command::Docs { dir } => {
@@ -409,91 +396,4 @@ fn run_command(args: Args) -> Result<()> {
         }
     }
     Ok(())
-}
-
-struct GitFilterProcessor<'a> {
-    yolk: &'a Yolk,
-    eval_ctx: Option<EvalCtx>,
-    templated_files: Option<HashSet<PathBuf>>,
-    mode: GitFilterMode,
-    validated: bool,
-}
-impl<'a> GitFilterProcessor<'a> {
-    pub fn new(yolk: &'a Yolk) -> Self {
-        Self {
-            yolk,
-            eval_ctx: None,
-            templated_files: None,
-            mode: GitFilterMode::Clean,
-            validated: false,
-        }
-    }
-}
-
-impl git_filter_server::GitFilterProcessor for GitFilterProcessor<'_> {
-    fn process(
-        &mut self,
-        pathname: &str,
-        mode: git_filter_server::GitFilterMode,
-        input: Vec<u8>,
-    ) -> Result<Vec<u8>> {
-        if self.mode != mode || self.eval_ctx.is_none() {
-            let eval_ctx = self.yolk.prepare_eval_ctx_for_templates(match mode {
-                GitFilterMode::Clean => EvalMode::Canonical,
-                GitFilterMode::Smudge => EvalMode::Local,
-            })?;
-            self.eval_ctx = Some(eval_ctx);
-            tracing::trace!("eval_ctx initialized for mode {:?}", mode);
-        }
-        let eval_ctx = self.eval_ctx.as_mut().unwrap();
-
-        if self.templated_files.is_none() {
-            let egg_configs = self.yolk.load_egg_configs(eval_ctx)?;
-            let result = egg_configs
-                .iter()
-                .map(|(name, config)| {
-                    config.templates_globexpanded(self.yolk.paths().egg_path(name))
-                })
-                .collect::<miette::Result<Vec<Vec<PathBuf>>>>()?;
-            self.templated_files = Some(result.into_iter().flatten().collect());
-            tracing::trace!(
-                "Templated files found and expanded: {:?}",
-                self.templated_files
-            );
-        }
-
-        if !self.validated {
-            self.validated = true;
-            if mode == GitFilterMode::Smudge {
-                tracing::trace!("Running validation logic");
-                self.yolk.validate_config_invariants()?;
-            }
-        }
-
-        // TODO: What if, in the version git sees, the templates are actually
-        // different from what we have here?
-        // Can that happen?
-        // In that case, we'd have the problem that we might miss certain templates, or try to evaluate as templates things that aren't actually templates.
-        // This might force us to move to some other way of indicating that a file is a template _within_ the file, rather than in a list on the outside..
-        // which kind of sucks for performance.
-        let templated_files = self.templated_files.as_ref().unwrap();
-        tracing::trace!(
-            "Checking filepath requested by git is a template: {} ({})",
-            pathname,
-            self.yolk.paths().root_path().join(pathname).display(),
-        );
-        let canonical_file_path = self.yolk.paths().root_path().join(pathname).normalize();
-        // let canonical_file_path = self.yolk.paths().root_path().join(pathname).canonical()?;
-        if !templated_files.contains(&canonical_file_path) {
-            return Ok(input);
-        }
-        tracing::trace!("Evaluating template");
-
-        let input = String::from_utf8(input).into_diagnostic()?;
-        let evaluated = self
-            .yolk
-            .eval_template(eval_ctx, &canonical_file_path.abbr(), &input)?;
-        Ok(evaluated.as_bytes().to_vec())
-        // TODO: maybe I do just need to git update-index --cacheinfo manually here...
-    }
 }
