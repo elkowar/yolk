@@ -6,9 +6,8 @@ use std::{
 };
 
 use clap::{Parser, Subcommand};
-use fs_err::PathExt;
-use miette::{IntoDiagnostic, Result};
-use normalize_path::NormalizePath;
+use fs_err::PathExt as _;
+use miette::{Context as _, IntoDiagnostic, Result};
 use notify_debouncer_full::{new_debouncer, DebounceEventResult};
 use owo_colors::OwoColorize as _;
 use rhai::Dynamic;
@@ -16,11 +15,11 @@ use tracing_subscriber::{
     filter, fmt::format::FmtSpan, layer::SubscriberExt as _, util::SubscriberInitExt as _,
     EnvFilter, Layer,
 };
-use yolk::script::eval_ctx::EvalCtx;
+
 use yolk::{
-    git_filter_server::{self, GitFilterMode},
     util::PathExt as _,
     yolk::{EvalMode, Yolk},
+    yolk_paths,
 };
 
 #[derive(clap::Parser, Debug)]
@@ -50,6 +49,11 @@ enum Command {
     Init,
     /// Show the current state of your yolk eggs.
     Status,
+
+    /// Make sure you don't accidentally commit your local egg states.
+    ///
+    /// This renames `.git` to `.yolk_git` to ensure that git interaction happens through the yolk CLI
+    Safeguard,
     /// Make sure you don't accidentally commit your local egg states
     ///
     /// Evaluate a rhai expression.
@@ -71,13 +75,6 @@ enum Command {
         /// Sync to canonical state. This should only be necessary for debugging purposes.
         #[arg(long)]
         canonical: bool,
-    },
-
-    /// Run a git-command within the yolk directory.
-    #[clap(alias = "g")]
-    Git {
-        #[clap(allow_hyphen_values = true)]
-        command: Vec<String>,
     },
 
     /// Evaluate a given templated file, or read a templated string from stdin.
@@ -105,8 +102,15 @@ enum Command {
         no_sync: bool,
     },
 
-    #[command(hide(true))]
-    GitFilter,
+    /// Run a git-command within the yolk directory.
+    #[clap(alias = "g")]
+    Git {
+        #[clap(allow_hyphen_values = true)]
+        command: Vec<String>,
+        /// Force yolk to run the command with canonicalized files, regardless of what command it is.
+        #[arg(long)]
+        force_canonical: bool,
+    },
 
     #[cfg(feature = "docgen")]
     #[command(hide(true))]
@@ -119,6 +123,7 @@ pub(crate) fn main() -> Result<()> {
     init_logging(&args);
     if let Err(err) = run_command(args) {
         eprintln!("{:?}", err);
+        std::process::exit(1);
     }
     Ok(())
 }
@@ -162,28 +167,35 @@ fn init_logging(args: &Args) {
 }
 
 fn run_command(args: Args) -> Result<()> {
-    let mut yolk_paths = yolk::yolk_paths::YolkPaths::from_env();
-    if let Some(d) = args.yolk_dir {
-        tracing::trace!("Setting yolk dir to {}", d.display());
-        yolk_paths.set_yolk_dir(d);
-    }
-    if let Some(d) = args.home_dir {
-        tracing::trace!("Setting home dir to {}", d.display());
-        yolk_paths.set_home_dir(d);
-    }
+    let yolk_dir = args.yolk_dir.unwrap_or_else(yolk_paths::default_yolk_dir);
+    let home_dir = args
+        .home_dir
+        .or_else(dirs::home_dir)
+        .wrap_err("No home dir could be found")?;
+    tracing::trace!("Setting yolk dir to {}", yolk_dir.display());
+    tracing::trace!("Setting home dir to {}", home_dir.display());
+    let yolk_paths = yolk::yolk_paths::YolkPaths::new(yolk_dir, home_dir);
 
     let yolk = Yolk::new(yolk_paths);
     match &args.command {
         Command::Init => yolk.init_yolk(None)?,
+        // TODO: we shoul likely also do this as part of init, maybe
+        Command::Safeguard => yolk.paths().safeguard_git_dir()?,
         Command::Status => {
             yolk.init_git_config(None)?;
             yolk.paths().check()?;
             yolk.validate_config_invariants()?;
-            yolk.paths()
-                .start_git_command_builder()
-                .args(["status", "--short"])
-                .status()
-                .into_diagnostic()?;
+            if yolk.paths().active_yolk_git_dir()? == yolk.paths().yolk_default_git_path() {
+                println!("Yolk git is not safeguarded. It is recommended to run `yolk safeguard`.");
+            }
+            yolk.with_canonical_state(|| {
+                yolk.paths()
+                    .start_git()?
+                    .start_git_command_builder()
+                    .args(["status", "--short"])
+                    .status()
+                    .into_diagnostic()
+            })?;
         }
         Command::List => {
             let mut eggs = yolk.list_eggs()?;
@@ -208,10 +220,13 @@ fn run_command(args: Args) -> Result<()> {
             // This should later be replaced with some sort of version-aware compatibility check.
             yolk.init_git_config(None)?;
 
-            yolk.sync_to_mode(match *canonical {
-                true => EvalMode::Canonical,
-                false => EvalMode::Local,
-            })?
+            yolk.sync_to_mode(
+                match *canonical {
+                    true => EvalMode::Canonical,
+                    false => EvalMode::Local,
+                },
+                true,
+            )?
         }
         Command::Eval { expr, canonical } => {
             let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(match *canonical {
@@ -223,15 +238,35 @@ fn run_command(args: Args) -> Result<()> {
                 .map_err(|e| e.into_report("<inline>", expr))?;
             println!("{result}");
         }
-        Command::Git { command } => {
-            yolk.init_git_config(None)?;
-            yolk.validate_config_invariants()?;
-            yolk.paths()
-                .start_git_command_builder()
-                .args(command)
-                .status()
-                .into_diagnostic()?;
+        Command::Git {
+            command,
+            force_canonical,
+        } => {
+            // TODO: Do I really want this? probably not, tbh
+            // yolk.validate_config_invariants()?;
+            //
+            let mut cmd = yolk.paths().start_git()?.start_git_command_builder();
+            cmd.args(command);
+            // if the command is `git push`, we don't need to enter canonical state
+            // before executing it
+
+            let first_cmd = command.first().map(|x| x.as_ref());
+            if !force_canonical
+                && (first_cmd == Some("push") || first_cmd == Some("init") || first_cmd.is_none())
+            {
+                cmd.status().into_diagnostic()?;
+            } else {
+                // TODO: Ensure that, in something goes wrong during the sync, the git command is _not_ run.
+                // Even if, normally, the sync call would only emit warnings, we must _never_ commit a failed syc.
+                // This also means there should potentially be slightly more separation between syncing templates and deployment,
+                // as deployment errors are not fatal for git usage.
+                let status = yolk.with_canonical_state(|| cmd.status().into_diagnostic())?;
+                if !status.success() {
+                    miette::bail!("Git command failed with status {}", status);
+                }
+            }
         }
+
         Command::EvalTemplate { path, canonical } => {
             let text = match path {
                 Some(path) => std::fs::read_to_string(path).into_diagnostic()?,
@@ -349,7 +384,7 @@ fn run_command(args: Args) -> Result<()> {
                                     for file in files_to_watch.iter() {
                                         on_file_updated(file);
                                     }
-                                } else if let Err(e) = yolk.sync_to_mode(mode) {
+                                } else if let Err(e) = yolk.sync_to_mode(mode, true) {
                                     eprintln!("Error: {e:?}");
                                 }
                             } else {
@@ -379,14 +414,6 @@ fn run_command(args: Args) -> Result<()> {
                 std::thread::sleep(std::time::Duration::from_secs(1));
             }
         }
-        Command::GitFilter => {
-            let mut server = git_filter_server::GitFilterServer::new(
-                std::io::stdin(),
-                std::io::stdout(),
-                GitFilterProcessor::new(&yolk),
-            );
-            server.run()?;
-        }
 
         #[cfg(feature = "docgen")]
         Command::Docs { dir } => {
@@ -397,91 +424,4 @@ fn run_command(args: Args) -> Result<()> {
         }
     }
     Ok(())
-}
-
-struct GitFilterProcessor<'a> {
-    yolk: &'a Yolk,
-    eval_ctx: Option<EvalCtx>,
-    templated_files: Option<HashSet<PathBuf>>,
-    mode: GitFilterMode,
-    validated: bool,
-}
-impl<'a> GitFilterProcessor<'a> {
-    pub fn new(yolk: &'a Yolk) -> Self {
-        Self {
-            yolk,
-            eval_ctx: None,
-            templated_files: None,
-            mode: GitFilterMode::Clean,
-            validated: false,
-        }
-    }
-}
-
-impl git_filter_server::GitFilterProcessor for GitFilterProcessor<'_> {
-    fn process(
-        &mut self,
-        pathname: &str,
-        mode: git_filter_server::GitFilterMode,
-        input: Vec<u8>,
-    ) -> Result<Vec<u8>> {
-        if self.mode != mode || self.eval_ctx.is_none() {
-            let eval_ctx = self.yolk.prepare_eval_ctx_for_templates(match mode {
-                GitFilterMode::Clean => EvalMode::Canonical,
-                GitFilterMode::Smudge => EvalMode::Local,
-            })?;
-            self.eval_ctx = Some(eval_ctx);
-            tracing::trace!("eval_ctx initialized for mode {:?}", mode);
-        }
-        let eval_ctx = self.eval_ctx.as_mut().unwrap();
-
-        if self.templated_files.is_none() {
-            let egg_configs = self.yolk.load_egg_configs(eval_ctx)?;
-            let result = egg_configs
-                .iter()
-                .map(|(name, config)| {
-                    config.templates_globexpanded(self.yolk.paths().egg_path(name))
-                })
-                .collect::<miette::Result<Vec<Vec<PathBuf>>>>()?;
-            self.templated_files = Some(result.into_iter().flatten().collect());
-            tracing::trace!(
-                "Templated files found and expanded: {:?}",
-                self.templated_files
-            );
-        }
-
-        if !self.validated {
-            self.validated = true;
-            if mode == GitFilterMode::Smudge {
-                tracing::trace!("Running validation logic");
-                self.yolk.validate_config_invariants()?;
-            }
-        }
-
-        // TODO: What if, in the version git sees, the templates are actually
-        // different from what we have here?
-        // Can that happen?
-        // In that case, we'd have the problem that we might miss certain templates, or try to evaluate as templates things that aren't actually templates.
-        // This might force us to move to some other way of indicating that a file is a template _within_ the file, rather than in a list on the outside..
-        // which kind of sucks for performance.
-        let templated_files = self.templated_files.as_ref().unwrap();
-        tracing::trace!(
-            "Checking filepath requested by git is a template: {} ({})",
-            pathname,
-            self.yolk.paths().root_path().join(pathname).display(),
-        );
-        let canonical_file_path = self.yolk.paths().root_path().join(pathname).normalize();
-        // let canonical_file_path = self.yolk.paths().root_path().join(pathname).canonical()?;
-        if !templated_files.contains(&canonical_file_path) {
-            return Ok(input);
-        }
-        tracing::trace!("Evaluating template");
-
-        let input = String::from_utf8(input).into_diagnostic()?;
-        let evaluated = self
-            .yolk
-            .eval_template(eval_ctx, &canonical_file_path.abbr(), &input)?;
-        Ok(evaluated.as_bytes().to_vec())
-        // TODO: maybe I do just need to git update-index --cacheinfo manually here...
-    }
 }

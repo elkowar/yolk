@@ -70,6 +70,16 @@ pub fn remove_symlink(path: impl AsRef<Path>) -> miette::Result<()> {
     Ok(())
 }
 
+pub fn file_entries_recursive(
+    path: impl AsRef<Path>,
+) -> impl Iterator<Item = miette::Result<PathBuf>> {
+    walkdir::WalkDir::new(path)
+        .into_iter()
+        .filter(|x| x.as_ref().map_or(true, |x| !x.path().is_dir()))
+        .map(|x| x.map(|x| x.into_path()))
+        .map(|x| x.into_diagnostic())
+}
+
 /// Ensure that a file contains the given lines, appending them if they are missing. If the file does not yet exist, it will be created.
 pub fn ensure_file_contains_lines(path: impl AsRef<Path>, lines: &[&str]) -> miette::Result<()> {
     let path = path.as_ref();
@@ -98,6 +108,33 @@ pub fn ensure_file_contains_lines(path: impl AsRef<Path>, lines: &[&str]) -> mie
     for line in missing_lines {
         writeln!(file, "{}", line).into_diagnostic()?;
     }
+    Ok(())
+}
+
+/// Ensure that a file does not contain the given lines, removing them if they are present.
+pub fn ensure_file_doesnt_contain_lines(
+    path: impl AsRef<Path>,
+    lines: &[&str],
+) -> miette::Result<()> {
+    let path = path.as_ref();
+    if !path.exists() {
+        return Ok(());
+    }
+    let content = fs_err::read_to_string(path).into_diagnostic()?;
+    let trailing_newline_exists = content.ends_with('\n');
+    let remaining_lines = content
+        .lines()
+        .filter(|x| !lines.contains(x))
+        .collect::<Vec<_>>();
+    if remaining_lines.len() == content.lines().count() {
+        return Ok(());
+    }
+    let new_content = format!(
+        "{}{}",
+        remaining_lines.join("\n"),
+        if trailing_newline_exists { "\n" } else { "" }
+    );
+    fs_err::write(path, new_content).into_diagnostic()?;
     Ok(())
 }
 
