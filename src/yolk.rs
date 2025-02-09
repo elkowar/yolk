@@ -35,77 +35,33 @@ impl Yolk {
     /// However, for tests, it should explicitly be provided to ensure that the correct yolk binary is being used.
     pub fn init_yolk(&self, yolk_binary: Option<&str>) -> Result<()> {
         self.yolk_paths.create()?;
-        if !self.yolk_paths.root_path().join(".git").exists() {
-            if self.yolk_paths.root_path().join(".yolk_git").exists() {
-                fs_err::rename(
-                    self.yolk_paths.root_path().join(".yolk_git"),
-                    self.yolk_paths.root_path().join(".git"),
-                )
-                .into_diagnostic()?;
-            } else {
-                std::process::Command::new("git")
-                    .arg("init")
-                    .current_dir(self.yolk_paths.root_path())
-                    .status()
-                    .into_diagnostic()?;
-            }
-        }
         self.init_git_config(yolk_binary)?;
-
         Ok(())
     }
 
     #[tracing::instrument(skip_all, fields(yolk_dir = self.yolk_paths.root_path().abbr()))]
-    pub fn init_git_config(&self, yolk_binary: Option<&str>) -> Result<()> {
+    pub fn init_git_config(&self, _yolk_binary: Option<&str>) -> Result<()> {
+        // TODO: check if it's worthwhile to use the yolk-binary in some hooks.
+        // if not, we can remove the yolk_binary argument
         if !self.yolk_paths.root_path().exists() {
             miette::bail!("Yolk directory is not initialized. Please run `yolk init` first.");
         }
         tracing::trace!("Ensuring git repo is initialized");
 
-        if !self.yolk_paths.root_path().join(".git").exists() {
-            if self.yolk_paths.root_path().join(".yolk_git").exists() {
-                fs_err::rename(
-                    self.yolk_paths.root_path().join(".yolk_git"),
-                    self.yolk_paths.root_path().join(".git"),
-                )
+        if self.yolk_paths.active_yolk_git_dir().is_err() {
+            std::process::Command::new("git")
+                .arg("init")
+                .current_dir(self.yolk_paths.root_path())
+                .status()
                 .into_diagnostic()?;
-            } else {
-                std::process::Command::new("git")
-                    .arg("init")
-                    .current_dir(self.yolk_paths.root_path())
-                    .status()
-                    .into_diagnostic()?;
-            }
+            self.yolk_paths.safeguard_git_dir()?;
         }
-
         tracing::trace!("Ensuring that git config is properly set up");
-
         util::ensure_file_contains_lines(
             self.paths().root_path().join(".gitignore"),
             GITIGNORE_ENTRIES,
         )
         .context("Failed to ensure .gitignore is configured correctly")?;
-
-        let yolk_process_cmd = &format!(
-            r#"'{}' --yolk-dir '{}' --home-dir '{}' git-filter"#,
-            yolk_binary.unwrap_or("yolk"),
-            self.yolk_paths.root_path().canonical()?.display(),
-            self.yolk_paths.home_path().canonical()?.display(),
-        );
-        self.paths()
-            .start_git_command_builder()
-            .args(["config", "filter.yolk.process", yolk_process_cmd])
-            .status()
-            .into_diagnostic()?;
-        self.paths()
-            .start_git_command_builder()
-            .args(["config", "filter.yolk.required", "true"])
-            .status()
-            .into_diagnostic()?;
-
-        let git_attrs_path = self.yolk_paths.root_path().join(".gitattributes");
-        util::ensure_file_contains_lines(git_attrs_path, &["* filter=yolk"])
-            .context("Failed to ensure .gitattributes file is configured correctly")?;
         Ok(())
     }
 

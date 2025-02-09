@@ -50,6 +50,11 @@ enum Command {
     Init,
     /// Show the current state of your yolk eggs.
     Status,
+
+    /// Make sure you don't accidentally commit your local egg states.
+    ///
+    /// This renames `.git` to `.yolk_git` to ensure that git interaction happens through the yolk CLI
+    Safeguard,
     /// Make sure you don't accidentally commit your local egg states
     ///
     /// Evaluate a rhai expression.
@@ -175,15 +180,22 @@ fn run_command(args: Args) -> Result<()> {
     let yolk = Yolk::new(yolk_paths);
     match &args.command {
         Command::Init => yolk.init_yolk(None)?,
+        // TODO: we shoul likely also do this as part of init, maybe
+        Command::Safeguard => yolk.paths().safeguard_git_dir()?,
         Command::Status => {
             yolk.init_git_config(None)?;
             yolk.paths().check()?;
             yolk.validate_config_invariants()?;
-            yolk.paths()
-                .start_git_command_builder()
-                .args(["status", "--short"])
-                .status()
-                .into_diagnostic()?;
+            if yolk.paths().active_yolk_git_dir()? == yolk.paths().yolk_default_git_path() {
+                println!("Yolk git is not safeguarded. It is recommended to run `yolk safeguard`.");
+            }
+            yolk.with_canonical_state(|| {
+                yolk.paths()
+                    .start_git_command_builder()?
+                    .args(["status", "--short"])
+                    .status()
+                    .into_diagnostic()
+            })?;
         }
         Command::List => {
             let mut eggs = yolk.list_eggs()?;
@@ -227,7 +239,7 @@ fn run_command(args: Args) -> Result<()> {
             yolk.init_git_config(None)?;
             yolk.validate_config_invariants()?;
             yolk.paths()
-                .start_git_command_builder()
+                .start_git_command_builder()?
                 .args(command)
                 .status()
                 .into_diagnostic()?;
