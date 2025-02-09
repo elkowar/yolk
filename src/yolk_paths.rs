@@ -6,6 +6,7 @@ use normalize_path::NormalizePath;
 
 use crate::{
     eggs_config::EggConfig,
+    git_utils::Git,
     util::{self, PathExt as _},
 };
 
@@ -146,16 +147,9 @@ impl YolkPaths {
         Ok(())
     }
 
-    /// Start an invocation of the `git` command with the `--git-dir` and `--work-tree` set to the yolk git and root path.
-    pub fn start_git_command_builder(&self) -> Result<std::process::Command> {
-        let mut cmd = std::process::Command::new("git");
-        cmd.current_dir(self.root_path()).args([
-            "--git-dir",
-            &self.active_yolk_git_dir()?.to_string_lossy(),
-            "--work-tree",
-            &self.root_path().to_string_lossy(),
-        ]);
-        Ok(cmd)
+    /// Start a [Git] command helper with the paths correctly set for this yolk repository
+    pub fn start_git(&self) -> Result<Git> {
+        Ok(Git::new(self.root_path(), self.active_yolk_git_dir()?))
     }
     pub fn root_path(&self) -> &std::path::Path {
         &self.root_path

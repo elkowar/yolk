@@ -383,6 +383,33 @@ impl Yolk {
         Ok(eggs)
     }
 
+    /// Run the yolk.rhai script, load the egg configs and return a list of all template file paths.
+    pub fn list_templates(&self) -> Result<Vec<PathBuf>> {
+        let mut eval_ctx = self.prepare_eval_ctx_for_templates(EvalMode::Local)?;
+        let egg_configs = self.load_egg_configs(&mut eval_ctx)?;
+        let template_paths: Vec<PathBuf> = egg_configs
+            .into_iter()
+            .map(|(name, config)| {
+                self.yolk_paths
+                    .get_egg(&name, config)
+                    .with_context(|| format!("Failed to find egg dir for configured egg {}", name))
+            })
+            .map(|egg| {
+                egg.and_then(|egg| {
+                    egg.config()
+                        .templates_globexpanded(egg.path())
+                        .with_context(|| {
+                            format!("Failed to globexpand template dirs for egg {}", egg.name())
+                        })
+                })
+            })
+            .collect::<Result<Vec<Vec<PathBuf>>>>()?
+            .into_iter()
+            .flatten()
+            .collect();
+        Ok(template_paths)
+    }
+
     /// Run the yolk.rhai script, load the egg configs and return the requested egg.
     pub fn load_egg(&self, egg_name: &str) -> Result<Egg> {
         let mut eval_ctx = self.prepare_eval_ctx_for_templates(EvalMode::Local)?;
@@ -439,6 +466,44 @@ impl Yolk {
                     help = "Make sure that template configuration does not depend on the LOCAL or CANONICAL mode",
                     "Egg {name} has a different set of templated files in canonical mode compared to local mode"
                 );
+            }
+        }
+        Ok(())
+    }
+
+    pub fn git_add(&self, all: bool, paths: &[PathBuf]) -> Result<()> {
+        let git = self.paths().start_git()?;
+        let all_template_paths = self.list_templates()?;
+        let paths = if all {
+            &vec![self.paths().root_path().to_path_buf()]
+        } else {
+            paths
+        };
+        let paths = paths
+            .into_iter()
+            .flat_map(|x| util::file_entries_recursive(x))
+            .collect::<Result<Vec<_>>>()?;
+
+        // TODO: only do this when there actually is at least one template file in the list
+        let mut eval_ctx = self.prepare_eval_ctx_for_templates(EvalMode::Canonical)?;
+
+        for path in paths {
+            let path = path.canonical()?;
+            let path_in_repo = path
+                .strip_prefix(self.paths().root_path())
+                .into_diagnostic()
+                .context("Cannot add paths outside of the yolk repository")?;
+            if all_template_paths.contains(&path) {
+                let canonical_content = self.eval_template(
+                    &mut eval_ctx,
+                    &path_in_repo.to_string_lossy(),
+                    &fs_err::read_to_string(&path).into_diagnostic()?,
+                )?;
+                let sha1 = git.hash_object(canonical_content.as_bytes())?;
+                git.update_index(&sha1, path)?;
+            } else {
+                // TODO: This can be optimized by combining all the non-template files into a single git add.
+                git.add(path)?;
             }
         }
         Ok(())

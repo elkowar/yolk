@@ -6,7 +6,7 @@ use std::{
 };
 
 use clap::{Parser, Subcommand};
-use fs_err::PathExt;
+use fs_err::PathExt as _;
 use miette::{IntoDiagnostic, Result};
 use notify_debouncer_full::{new_debouncer, DebounceEventResult};
 use owo_colors::OwoColorize as _;
@@ -106,6 +106,20 @@ enum Command {
     Git {
         #[clap(allow_hyphen_values = true)]
         command: Vec<String>,
+        /// Force yolk to run the command with canonicalized files, regardless of what command it is.
+        #[arg(long)]
+        force_canonical: bool,
+    },
+
+    /// Add changes to the git staging area.
+    ///
+    /// This is basically the same as running `yolk git add`,
+    /// except that it uses git update-index to add the canonicalized version
+    /// of each file to the staging area without needing to modify the files on disk.
+    GitAdd {
+        #[arg(long)]
+        all: bool,
+        paths: Vec<PathBuf>,
     },
 
     #[cfg(feature = "docgen")]
@@ -186,7 +200,8 @@ fn run_command(args: Args) -> Result<()> {
             }
             yolk.with_canonical_state(|| {
                 yolk.paths()
-                    .start_git_command_builder()?
+                    .start_git()?
+                    .start_git_command_builder()
                     .args(["status", "--short"])
                     .status()
                     .into_diagnostic()
@@ -230,14 +245,36 @@ fn run_command(args: Args) -> Result<()> {
                 .map_err(|e| e.into_report("<inline>", expr))?;
             println!("{result}");
         }
-        Command::Git { command } => {
-            yolk.init_git_config(None)?;
-            yolk.validate_config_invariants()?;
-            yolk.paths()
-                .start_git_command_builder()?
-                .args(command)
-                .status()
-                .into_diagnostic()?;
+        Command::Git {
+            command,
+            force_canonical,
+        } => {
+            // TODO: Do I really want this? probably not, tbh
+            // yolk.validate_config_invariants()?;
+            //
+            let mut cmd = yolk.paths().start_git()?.start_git_command_builder();
+            cmd.args(command);
+            // if the command is `git push`, we don't need to enter canonical state
+            // before executing it
+
+            let first_cmd = command.first().map(|x| x.as_ref());
+            if !force_canonical
+                && (first_cmd == Some("push") || first_cmd == Some("init") || first_cmd.is_none())
+            {
+                cmd.status().into_diagnostic()?;
+            } else {
+                // TODO: Ensure that, in something goes wrong during the sync, the git command is _not_ run.
+                // Even if, normally, the sync call would only emit warnings, we must _never_ commit a failed syc.
+                // This also means there should potentially be slightly more separation between syncing templates and deployment,
+                // as deployment errors are not fatal for git usage.
+                yolk.with_canonical_state(|| {
+                    cmd.status().into_diagnostic()?;
+                    Ok(())
+                })?;
+            }
+        }
+        Command::GitAdd { all, paths } => {
+            yolk.git_add(*all, paths)?;
         }
         Command::EvalTemplate { path, canonical } => {
             let text = match path {

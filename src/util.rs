@@ -70,6 +70,16 @@ pub fn remove_symlink(path: impl AsRef<Path>) -> miette::Result<()> {
     Ok(())
 }
 
+pub fn file_entries_recursive(
+    path: impl AsRef<Path>,
+) -> impl Iterator<Item = miette::Result<PathBuf>> {
+    walkdir::WalkDir::new(path)
+        .into_iter()
+        .filter(|x| x.as_ref().map_or(true, |x| !x.path().is_dir()))
+        .map(|x| x.map(|x| x.into_path()))
+        .map(|x| x.into_diagnostic())
+}
+
 /// Ensure that a file contains the given lines, appending them if they are missing. If the file does not yet exist, it will be created.
 pub fn ensure_file_contains_lines(path: impl AsRef<Path>, lines: &[&str]) -> miette::Result<()> {
     let path = path.as_ref();
