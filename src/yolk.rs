@@ -17,7 +17,7 @@ use crate::{
     yolk_paths::{Egg, YolkPaths},
 };
 
-const GITIGNORE_ENTRIES: &[&str] = &["/.git", "/.deployed_cache"];
+const GITIGNORE_ENTRIES: &[&str] = &["/.git", "/.deployed_cache", "/.yolk_git"];
 
 pub struct Yolk {
     yolk_paths: YolkPaths,
@@ -35,77 +35,41 @@ impl Yolk {
     /// However, for tests, it should explicitly be provided to ensure that the correct yolk binary is being used.
     pub fn init_yolk(&self, yolk_binary: Option<&str>) -> Result<()> {
         self.yolk_paths.create()?;
-        if !self.yolk_paths.root_path().join(".git").exists() {
-            if self.yolk_paths.root_path().join(".yolk_git").exists() {
-                fs_err::rename(
-                    self.yolk_paths.root_path().join(".yolk_git"),
-                    self.yolk_paths.root_path().join(".git"),
-                )
-                .into_diagnostic()?;
-            } else {
-                std::process::Command::new("git")
-                    .arg("init")
-                    .current_dir(self.yolk_paths.root_path())
-                    .status()
-                    .into_diagnostic()?;
-            }
-        }
         self.init_git_config(yolk_binary)?;
-
         Ok(())
     }
 
     #[tracing::instrument(skip_all, fields(yolk_dir = self.yolk_paths.root_path().abbr()))]
-    pub fn init_git_config(&self, yolk_binary: Option<&str>) -> Result<()> {
+    pub fn init_git_config(&self, _yolk_binary: Option<&str>) -> Result<()> {
+        // TODO: check if it's worthwhile to use the yolk-binary in some hooks.
+        // if not, we can remove the yolk_binary argument
         if !self.yolk_paths.root_path().exists() {
             miette::bail!("Yolk directory is not initialized. Please run `yolk init` first.");
         }
         tracing::trace!("Ensuring git repo is initialized");
 
-        if !self.yolk_paths.root_path().join(".git").exists() {
-            if self.yolk_paths.root_path().join(".yolk_git").exists() {
-                fs_err::rename(
-                    self.yolk_paths.root_path().join(".yolk_git"),
-                    self.yolk_paths.root_path().join(".git"),
-                )
+        if self.yolk_paths.active_yolk_git_dir().is_err() {
+            std::process::Command::new("git")
+                .arg("init")
+                .current_dir(self.yolk_paths.root_path())
+                .status()
                 .into_diagnostic()?;
-            } else {
-                std::process::Command::new("git")
-                    .arg("init")
-                    .current_dir(self.yolk_paths.root_path())
-                    .status()
-                    .into_diagnostic()?;
-            }
+            self.yolk_paths.safeguard_git_dir()?;
         }
-
         tracing::trace!("Ensuring that git config is properly set up");
-
         util::ensure_file_contains_lines(
             self.paths().root_path().join(".gitignore"),
             GITIGNORE_ENTRIES,
         )
         .context("Failed to ensure .gitignore is configured correctly")?;
 
-        let yolk_process_cmd = &format!(
-            r#"'{}' --yolk-dir '{}' --home-dir '{}' git-filter"#,
-            yolk_binary.unwrap_or("yolk"),
-            self.yolk_paths.root_path().canonical()?.display(),
-            self.yolk_paths.home_path().canonical()?.display(),
-        );
-        self.paths()
-            .start_git_command_builder()
-            .args(["config", "filter.yolk.process", yolk_process_cmd])
-            .status()
-            .into_diagnostic()?;
-        self.paths()
-            .start_git_command_builder()
-            .args(["config", "filter.yolk.required", "true"])
-            .status()
-            .into_diagnostic()?;
+        // Remove git-filter configuration from gitattributes
+        util::ensure_file_doesnt_contain_lines(
+            self.paths().root_path().join(".gitattributes"),
+            &["* filter=yolk"],
+        )
+        .context("Failed to clean up .gitattributes")?;
 
-        let git_attrs_path = self.yolk_paths.root_path().join(".gitattributes");
-        util::ensure_file_contains_lines(git_attrs_path, &["* filter=yolk"])
-            .context("Failed to ensure .gitattributes file is configured correctly")?;
         Ok(())
     }
 
@@ -302,7 +266,8 @@ impl Yolk {
 
     /// First, sync the deployment of all eggs to the local system.
     /// Then, update any templated files in the eggs to the given mode.
-    pub fn sync_to_mode(&self, mode: EvalMode) -> Result<(), MultiError> {
+    #[tracing::instrument(skip_all, fields(?mode, %update_deployments))]
+    pub fn sync_to_mode(&self, mode: EvalMode, update_deployments: bool) -> Result<(), MultiError> {
         let mut eval_ctx = self
             .prepare_eval_ctx_for_templates(mode)
             .context("Failed to prepare evaluation context")?;
@@ -312,7 +277,7 @@ impl Yolk {
 
         for (name, egg_config) in egg_configs.into_iter() {
             if let Err(e) = self
-                .sync_egg_to_mode(&mut eval_ctx, &name, egg_config)
+                .sync_egg_to_mode(&mut eval_ctx, &name, egg_config, update_deployments)
                 .wrap_err_with(|| format!("Failed to sync egg `{name}`"))
             {
                 errs.push(e);
@@ -325,14 +290,18 @@ impl Yolk {
         }
     }
 
+    #[tracing::instrument(skip_all, fields(%name, %sync_deployment, ?egg_config))]
     fn sync_egg_to_mode(
         &self,
         eval_ctx: &mut EvalCtx,
         name: &str,
         egg_config: EggConfig,
+        sync_deployment: bool,
     ) -> Result<()> {
         let egg = self.yolk_paths.get_egg(name, egg_config)?;
-        self.sync_egg_deployment(&egg)?;
+        if sync_deployment {
+            self.sync_egg_deployment(&egg)?;
+        }
         let templates_expanded = egg.config().templates_globexpanded(egg.path())?;
         for tmpl_path in templates_expanded {
             if tmpl_path.is_file() {
@@ -408,10 +377,10 @@ impl Yolk {
     /// First syncs them to canonical then runs the closure, then syncs them back to local.
     pub fn with_canonical_state<T>(&self, f: impl FnOnce() -> Result<T>) -> Result<T> {
         tracing::info!("Converting all templates into their canonical state");
-        self.sync_to_mode(EvalMode::Canonical)?;
+        self.sync_to_mode(EvalMode::Canonical, false)?;
         let result = f();
         tracing::info!("Converting all templates back to the local state");
-        self.sync_to_mode(EvalMode::Local)?;
+        self.sync_to_mode(EvalMode::Local, false)?;
         result
     }
 
@@ -425,6 +394,33 @@ impl Yolk {
             .collect::<Result<_>>()
             .context("Failed to find egg that was configured in yolk.rhai")?;
         Ok(eggs)
+    }
+
+    /// Run the yolk.rhai script, load the egg configs and return a list of all template file paths.
+    pub fn list_templates(&self) -> Result<Vec<PathBuf>> {
+        let mut eval_ctx = self.prepare_eval_ctx_for_templates(EvalMode::Local)?;
+        let egg_configs = self.load_egg_configs(&mut eval_ctx)?;
+        let template_paths: Vec<PathBuf> = egg_configs
+            .into_iter()
+            .map(|(name, config)| {
+                self.yolk_paths
+                    .get_egg(&name, config)
+                    .with_context(|| format!("Failed to find egg dir for configured egg {}", name))
+            })
+            .map(|egg| {
+                egg.and_then(|egg| {
+                    egg.config()
+                        .templates_globexpanded(egg.path())
+                        .with_context(|| {
+                            format!("Failed to globexpand template dirs for egg {}", egg.name())
+                        })
+                })
+            })
+            .collect::<Result<Vec<Vec<PathBuf>>>>()?
+            .into_iter()
+            .flatten()
+            .collect();
+        Ok(template_paths)
     }
 
     /// Run the yolk.rhai script, load the egg configs and return the requested egg.
@@ -653,7 +649,6 @@ pub enum EvalMode {
 
 #[cfg(test)]
 mod test {
-
     use std::path::PathBuf;
 
     use crate::{
@@ -930,7 +925,7 @@ mod test {
             export let eggs = #{foo: #{ targets: `~`, strategy: "merge"}};
         "#})?;
         eggs.child("foo/foo.toml").write_str(foo_toml_initial)?;
-        yolk.sync_to_mode(EvalMode::Local)?;
+        yolk.sync_to_mode(EvalMode::Local, true)?;
         // No template set in eggs.rhai, so no templating should happen
         home.child("foo.toml").assert(is_symlink());
         eggs.child("foo/foo.toml").assert(foo_toml_initial);
@@ -941,7 +936,7 @@ mod test {
             export let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"], strategy: "merge"}};
         "#})?;
 
-        yolk.sync_to_mode(EvalMode::Local)?;
+        yolk.sync_to_mode(EvalMode::Local, true)?;
         eggs.child("foo/foo.toml").assert("{# data.value #}\nlocal");
 
         // Update the state, to see if applying again just works :tm:
@@ -949,7 +944,7 @@ mod test {
             export const data = if LOCAL {#{value: "new local"}} else {#{value: "new canonical"}};
             export let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"], strategy: "merge"}};
         "#})?;
-        yolk.sync_to_mode(EvalMode::Local)?;
+        yolk.sync_to_mode(EvalMode::Local, true)?;
         home.child("foo.toml").assert("{# data.value #}\nnew local");
         yolk.with_canonical_state(|| {
             eggs.child("foo/foo.toml")
@@ -971,7 +966,7 @@ mod test {
         "#})?;
         eggs.child("foo/foo").write_str(r#"{< invalid rhai >}"#)?;
         eggs.child("bar/bar").write_str(r#"foo # {<if false>}"#)?;
-        let result = yolk.sync_to_mode(EvalMode::Local);
+        let result = yolk.sync_to_mode(EvalMode::Local, true);
         eggs.child("foo/foo").assert(r#"{< invalid rhai >}"#);
         eggs.child("bar/bar")
             .assert(r#"#<yolk> foo # {<if false>}"#);
@@ -990,7 +985,7 @@ mod test {
         )?;
         eggs.child("foo/foo.toml")
             .write_str("{< `host=${hostname}|${SYSTEM.hostname}` >}")?;
-        yolk.sync_to_mode(EvalMode::Local)?;
+        yolk.sync_to_mode(EvalMode::Local, true)?;
         eggs.child("foo/foo.toml").assert(
             "host=canonical-hostname|canonical-hostname{< `host=${hostname}|${SYSTEM.hostname}` >}",
         );

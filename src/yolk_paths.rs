@@ -4,7 +4,11 @@ use fs_err::PathExt;
 use miette::{Context as _, IntoDiagnostic, Result};
 use normalize_path::NormalizePath;
 
-use crate::{eggs_config::EggConfig, util::PathExt as _};
+use crate::{
+    eggs_config::EggConfig,
+    git_utils::Git,
+    util::{self, PathExt as _},
+};
 
 const DEFAULT_YOLK_RHAI: &str = indoc::indoc! {r#"
     export let data = #{
@@ -50,13 +54,6 @@ impl YolkPaths {
         }
     }
 
-    pub fn from_env() -> Self {
-        Self::new(
-            default_yolk_dir(),
-            dirs::home_dir().expect("No home dir available"),
-        )
-    }
-
     pub fn set_yolk_dir(&mut self, path: PathBuf) {
         tracing::trace!("Updating oylk-dir to {}", path.display());
         self.root_path = path;
@@ -88,13 +85,53 @@ impl YolkPaths {
         Ok(())
     }
 
+    /// Safeguard git directory by renaming it to `.yolk_git`
+    pub fn safeguard_git_dir(&self) -> Result<()> {
+        if self.root_path().join(".git").exists() {
+            miette::ensure!(
+                !self.yolk_safeguarded_git_path().exists(),
+                help = "Safeguarded Yolk renames .git to .yolk_git to ensure you don't accidentally commit without yolks processing",
+                "Yolk directory contains both a .git directory and a .yolk_git directory"
+            );
+            util::rename_safely(
+                self.root_path().join(".git"),
+                self.yolk_safeguarded_git_path(),
+            )?;
+        } else {
+            miette::ensure!(
+                self.yolk_safeguarded_git_path().exists(),
+                help = "Run yolk init first",
+                "Failed to safeguard yolk git directory, as no .git directory was found"
+            );
+        }
+        Ok(())
+    }
+
+    /// Return the path to the active git directory,
+    /// which is either the [`yolk_default_git_path`] (`.git`) or the [`yolk_safeguarded_git_path`] (`.yolk_git`) if it exists.
+    pub fn active_yolk_git_dir(&self) -> Result<PathBuf> {
+        let default_git_dir = self.yolk_default_git_path();
+        let safeguarded_git_dir = self.yolk_safeguarded_git_path();
+        if safeguarded_git_dir.exists() {
+            Ok(safeguarded_git_dir)
+        } else if default_git_dir.exists() {
+            Ok(default_git_dir)
+        } else {
+            miette::bail!(
+                help = "Run `yolk init`, then try again!",
+                "No git directory initialized"
+            )
+        }
+    }
+
     pub fn create(&self) -> Result<()> {
         let path = self.root_path();
         if path.exists()
             && path.is_dir()
             && fs_err::read_dir(path).into_diagnostic()?.next().is_some()
         {
-            miette::bail!("Yolk directory already exists at {}", path.abbr());
+            tracing::info!("Yolk directory already exists at {}", path.abbr());
+            return Ok(());
         }
         fs_err::create_dir_all(path).into_diagnostic()?;
         fs_err::create_dir_all(self.eggs_dir_path()).into_diagnostic()?;
@@ -103,16 +140,9 @@ impl YolkPaths {
         Ok(())
     }
 
-    /// Start an invocation of the `git` command with the `--git-dir` and `--work-tree` set to the yolk git and root path.
-    pub fn start_git_command_builder(&self) -> std::process::Command {
-        let mut cmd = std::process::Command::new("git");
-        cmd.current_dir(self.root_path()).args([
-            "--git-dir",
-            &self.yolk_default_git_path().to_string_lossy(),
-            "--work-tree",
-            &self.root_path().to_string_lossy(),
-        ]);
-        cmd
+    /// Start a [Git] command helper with the paths correctly set for this yolk repository
+    pub fn start_git(&self) -> Result<Git> {
+        Ok(Git::new(self.root_path(), self.active_yolk_git_dir()?))
     }
     pub fn root_path(&self) -> &std::path::Path {
         &self.root_path
@@ -122,6 +152,9 @@ impl YolkPaths {
     }
     pub fn yolk_default_git_path(&self) -> PathBuf {
         self.root_path.join(".git")
+    }
+    pub fn yolk_safeguarded_git_path(&self) -> PathBuf {
+        self.root_path.join(".yolk_git")
     }
 
     /// Path to the `yolk.rhai` file
@@ -220,6 +253,9 @@ impl Egg {
     /// Check if the egg is _fully_ deployed (-> All contained entries have corresponding symlinks)
     #[tracing::instrument(skip_all, fields(egg.name = self.name()))]
     pub fn is_deployed(&self) -> Result<bool> {
+        if self.config.targets.is_empty() {
+            return Ok(false);
+        }
         for x in self.find_deployed_symlinks()? {
             if x.context("Got error while iterating through deployed files or egg")?
                 .is_err()
