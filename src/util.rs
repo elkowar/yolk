@@ -111,6 +111,33 @@ pub fn ensure_file_contains_lines(path: impl AsRef<Path>, lines: &[&str]) -> mie
     Ok(())
 }
 
+/// Ensure that a file does not contain the given lines, removing them if they are present.
+pub fn ensure_file_doesnt_contain_lines(
+    path: impl AsRef<Path>,
+    lines: &[&str],
+) -> miette::Result<()> {
+    let path = path.as_ref();
+    if !path.exists() {
+        return Ok(());
+    }
+    let content = fs_err::read_to_string(path).into_diagnostic()?;
+    let trailing_newline_exists = content.ends_with('\n');
+    let remaining_lines = content
+        .lines()
+        .filter(|x| !lines.contains(x))
+        .collect::<Vec<_>>();
+    if remaining_lines.len() == content.lines().count() {
+        return Ok(());
+    }
+    let new_content = format!(
+        "{}{}",
+        remaining_lines.join("\n"),
+        if trailing_newline_exists { "\n" } else { "" }
+    );
+    fs_err::write(path, new_content).into_diagnostic()?;
+    Ok(())
+}
+
 #[extend::ext(pub)]
 impl Path {
     /// [`fs_err::canonicalize`] but on windows it doesn't return UNC paths.

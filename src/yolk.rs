@@ -62,6 +62,14 @@ impl Yolk {
             GITIGNORE_ENTRIES,
         )
         .context("Failed to ensure .gitignore is configured correctly")?;
+
+        // Remove git-filter configuration from gitattributes
+        util::ensure_file_doesnt_contain_lines(
+            self.paths().root_path().join(".gitattributes"),
+            &["* filter=yolk"],
+        )
+        .context("Failed to clean up .gitattributes")?;
+
         Ok(())
     }
 
@@ -674,7 +682,6 @@ pub enum EvalMode {
 
 #[cfg(test)]
 mod test {
-
     use std::path::PathBuf;
 
     use crate::{

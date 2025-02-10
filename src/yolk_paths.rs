@@ -260,6 +260,9 @@ impl Egg {
     /// Check if the egg is _fully_ deployed (-> All contained entries have corresponding symlinks)
     #[tracing::instrument(skip_all, fields(egg.name = self.name()))]
     pub fn is_deployed(&self) -> Result<bool> {
+        if self.config.targets.is_empty() {
+            return Ok(false);
+        }
         for x in self.find_deployed_symlinks()? {
             if x.context("Got error while iterating through deployed files or egg")?
                 .is_err()
