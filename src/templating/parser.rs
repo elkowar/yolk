@@ -12,7 +12,7 @@ use winnow::{
     },
     stream::{Location, Recoverable, Stream},
     token::{any, literal},
-    Located, Parser, RecoverableParser,
+    LocatingSlice, Parser, RecoverableParser,
 };
 
 use super::{
@@ -20,9 +20,9 @@ use super::{
     error::{cx, YolkParseError, YolkParseFailure},
 };
 
-// type Input<'a> = winnow::Located<&'a str>;
-type Input<'a> = Recoverable<Located<&'a str>, YolkParseError>;
-type PResult<T> = winnow::PResult<T, YolkParseError>;
+// type Input<'a> = winnow::LocatingSlice<&'a str>;
+type Input<'a> = Recoverable<LocatingSlice<&'a str>, YolkParseError>;
+type PResult<T> = winnow::ModalResult<T, YolkParseError>;
 
 #[derive(Eq, PartialEq, arbitrary::Arbitrary)]
 pub struct Sp<T> {
@@ -75,7 +75,7 @@ pub fn try_parse<'a, P: Parser<Input<'a>, T, YolkParseError>, T>(
     mut parser: P,
     input: &'a str,
 ) -> Result<T, YolkParseFailure> {
-    let (_, maybe_val, errs) = parser.recoverable_parse(Located::new(input));
+    let (_, maybe_val, errs) = parser.recoverable_parse(LocatingSlice::new(input));
     if let (Some(v), true) = (maybe_val, errs.is_empty()) {
         Ok(v)
     } else {
@@ -355,8 +355,8 @@ fn wsp1(input: &mut Input<'_>) -> PResult<()> {
 
 #[cfg(test)]
 fn new_input(s: &str) -> Input<'_> {
-    use winnow::{stream::Recoverable, Located};
-    Recoverable::new(Located::new(s))
+    use winnow::{stream::Recoverable, LocatingSlice};
+    Recoverable::new(LocatingSlice::new(s))
 }
 
 #[allow(unused)]
