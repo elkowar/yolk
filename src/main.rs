@@ -375,7 +375,10 @@ fn run_command(args: Args) -> Result<()> {
                                 .into_iter()
                                 .filter(|evt| {
                                     evt.paths.iter().any(|x| files_to_watch.contains(x))
-                                        && (!matches!(evt.kind, notify::EventKind::Access(_)))
+                                        && (!matches!(
+                                            evt.kind,
+                                            notify_debouncer_full::notify::EventKind::Access(_)
+                                        ))
                                 })
                                 .flat_map(|x| x.paths.clone().into_iter())
                                 .collect::<HashSet<_>>();
@@ -402,12 +405,18 @@ fn run_command(args: Args) -> Result<()> {
             for dir in dirs_to_watch {
                 tracing::info!("Watching {}", dir.abbr());
                 debouncer
-                    .watch(&dir, notify::RecursiveMode::Recursive)
+                    .watch(
+                        &dir,
+                        notify_debouncer_full::notify::RecursiveMode::Recursive,
+                    )
                     .into_diagnostic()?;
             }
             // Watch the yolk dir non-recursively to catch updates to yolk.rhai
             debouncer
-                .watch(&script_path, notify::RecursiveMode::NonRecursive)
+                .watch(
+                    &script_path,
+                    notify_debouncer_full::notify::RecursiveMode::NonRecursive,
+                )
                 .into_diagnostic()?;
 
             loop {
