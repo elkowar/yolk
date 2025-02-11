@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.3.0](https://github.com/elkowar/yolk/compare/v0.2.3...v0.3.1) - 2025-02-11
+## [0.3.1](https://github.com/elkowar/yolk/compare/v0.2.3...v0.3.1) - 2025-02-11
 
 ### BREAKING
 - Move back to `yolk git` git wrapper based solution, because git filters sadly don't quite work out for all of our needs. See #42, for example.
