@@ -251,7 +251,7 @@ impl Egg {
     }
 
     /// Check if the egg is _fully_ deployed (-> All contained entries have corresponding symlinks)
-    #[tracing::instrument(skip_all, fields(egg.name = self.name()))]
+    #[tracing::instrument(skip_all, fields(egg.name = %self.name()))]
     pub fn is_deployed(&self) -> Result<bool> {
         if self.config.targets.is_empty() {
             return Ok(false);
@@ -375,10 +375,8 @@ impl Iterator for TraverseDeployment {
 #[cfg(test)]
 mod test {
     use crate::{
-        util::{
-            self,
-            test_util::{setup_and_init_test_yolk, TestResult},
-        },
+        deploy::remove_symlink,
+        util::test_util::{setup_and_init_test_yolk, TestResult},
         yolk_paths::{Egg, DEFAULT_YOLK_RHAI},
     };
     use assert_fs::{
@@ -437,7 +435,7 @@ mod test {
         assert!(!(egg.is_deployed()?));
         yolk.sync_egg_deployment(&egg)?;
         assert!(egg.is_deployed()?);
-        util::remove_symlink(home.child("target"))?;
+        remove_symlink(home.child("target"))?;
         assert!(!(egg.is_deployed()?));
         Ok(())
     }

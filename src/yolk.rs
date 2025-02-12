@@ -8,8 +8,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::deploy::Deployer;
 use crate::multi_error::MultiError;
-use crate::util::DeploymentPriviledgeTracker;
 use crate::{
     eggs_config::{DeploymentStrategy, EggConfig},
     script::{eval_ctx::EvalCtx, rhai_error::RhaiError, sysinfo::SystemInfo},
@@ -82,25 +82,24 @@ impl Yolk {
     #[tracing::instrument(skip_all, fields(egg = ?egg.name()))]
     fn deploy_egg(
         &self,
-        created_symlinks: &mut Vec<PathBuf>,
+        deployer: &mut Deployer,
         egg: &Egg,
         mappings: &HashMap<PathBuf, PathBuf>,
     ) -> Result<(), MultiError> {
         let mut errs = Vec::new();
-        let mut deployment_priviledge_tracker = DeploymentPriviledgeTracker::new();
         for (in_egg, deployed) in mappings {
             let mut deploy_mapping = || -> miette::Result<()> {
                 match egg.config().strategy {
                     DeploymentStrategy::Merge => {
                         cov_mark::hit!(deploy_merge);
-                        symlink_recursive(created_symlinks, egg.path(), in_egg, &deployed)?;
+                        symlink_recursive(deployer, egg.path(), in_egg, deployed)?;
                     }
                     DeploymentStrategy::Put => {
                         cov_mark::hit!(deploy_put);
                         if deployed.is_symlink() {
                             let target = deployed.fs_err_read_link().into_diagnostic()?;
                             if target.starts_with(egg.path()) {
-                                deployment_priviledge_tracker.delete_symlink(deployed)?;
+                                deployer.delete_symlink(deployed)?;
                                 tracing::info!("Removed dead symlink {}", deployed.abbr());
                             }
                         }
@@ -113,8 +112,7 @@ impl Yolk {
                                 )
                             })?;
                         }
-                        deployment_priviledge_tracker.create_symlink(in_egg, deployed)?;
-                        created_symlinks.push(deployed.clone());
+                        deployer.create_symlink(in_egg, deployed)?;
                     }
                 }
                 Result::Ok(())
@@ -123,8 +121,6 @@ impl Yolk {
                 errs.push(e.wrap_err(format!("Failed to deploy {}", in_egg.abbr())));
             }
         }
-
-        deployment_priviledge_tracker.try_run_elevated()?;
 
         if !errs.is_empty() {
             return Err(MultiError::new(
@@ -141,12 +137,13 @@ impl Yolk {
 
     fn undeploy_egg(
         &self,
+        deployer: &mut Deployer,
         egg: &Egg,
         mappings: &HashMap<PathBuf, PathBuf>,
     ) -> Result<(), MultiError> {
         let mut errs = Vec::new();
         for (in_egg, deployed) in mappings {
-            if let Err(e) = remove_symlink_recursive(in_egg, &deployed) {
+            if let Err(e) = remove_symlink_recursive(deployer, in_egg, &deployed) {
                 errs.push(e.wrap_err(format!("Failed to remove deployment of {}", in_egg.abbr())));
             }
         }
@@ -182,29 +179,37 @@ impl Yolk {
             .context("Failed to expand targets config for egg")?;
 
         if egg.config().enabled && !deployed {
+            let mut deployer = Deployer::new();
             tracing::debug!("Deploying egg {}", egg.name());
 
-            let mut deployed_symlinks = Vec::new();
-            let result = self.deploy_egg(&mut deployed_symlinks, egg, &mappings);
+            let result = self.deploy_egg(&mut deployer, egg, &mappings);
             if result.is_ok() {
                 tracing::info!("Successfully deployed egg {}", egg.name());
             }
 
-            if let Err(e) = self.cleanup_stale_symlinks_for(egg.name(), &deployed_symlinks) {
+            let deployed_symlinks = deployer.created_symlinks().clone();
+            if let Err(e) =
+                self.cleanup_stale_symlinks_for(&mut deployer, egg.name(), &deployed_symlinks)
+            {
                 tracing::error!("{e:?}");
             }
+            deployer.try_run_elevated()?;
             result.map(|()| true)
         } else if !egg.config().enabled && deployed {
+            let mut deployer = Deployer::new();
             cov_mark::hit!(undeploy);
             tracing::debug!("Removing egg {}", egg.name());
-            let result = self.undeploy_egg(egg, &mappings);
+            let result = self.undeploy_egg(&mut deployer, egg, &mappings);
             if result.is_ok() {
                 tracing::info!("Successfully undeployed egg {}", egg.name());
             }
 
-            if let Err(e) = self.cleanup_stale_symlinks_for(egg.name(), &[]) {
+            deployer.try_run_elevated()?;
+            let mut deployer = Deployer::new();
+            if let Err(e) = self.cleanup_stale_symlinks_for(&mut deployer, egg.name(), &[]) {
                 tracing::error!("{e:?}");
             }
+            deployer.try_run_elevated()?;
 
             result.map(|()| false)
         } else {
@@ -216,6 +221,7 @@ impl Yolk {
     /// and remove any that are not included in the `deployed_symlinks` list.
     pub fn cleanup_stale_symlinks_for(
         &self,
+        deployer: &mut Deployer,
         egg_name: &str,
         deployed_symlinks: &[PathBuf],
     ) -> Result<(), MultiError> {
@@ -241,7 +247,7 @@ impl Yolk {
                 if is_symlink_to_egg {
                     tracing::info!("Removing stale symlink at {}", old_symlink.abbr());
                     cov_mark::hit!(delete_stale_symlink);
-                    if let Err(e) = util::remove_symlink(&old_symlink) {
+                    if let Err(e) = deployer.delete_symlink(&old_symlink) {
                         errs.push(e.wrap_err(format!(
                             "Failed to remove old symlink {}",
                             old_symlink.abbr()
@@ -505,13 +511,13 @@ impl Yolk {
 /// - If `actual_path` is a directory that does not exist in `link_path`, symlink it.
 /// - If `actual_path` is a directory that already exists in `link_path`, recurse into it and `symlink_recursive` `actual_path`s children.
 fn symlink_recursive(
-    created_symlinks: &mut Vec<PathBuf>,
+    deployer: &mut Deployer,
     egg_root: impl AsRef<Path>,
     actual_path: impl AsRef<Path>,
     link_path: &impl AsRef<Path>,
 ) -> Result<()> {
     fn inner(
-        created_symlinks: &mut Vec<PathBuf>,
+        deployer: &mut Deployer,
         egg_root: PathBuf,
         actual_path: PathBuf,
         link_path: PathBuf,
@@ -553,7 +559,7 @@ fn symlink_recursive(
                 link_target.abbr()
             );
             if link_target == actual_path {
-                created_symlinks.push(link_path);
+                deployer.add_created_symlink(link_path);
                 return Ok(());
             } else if link_target.exists() {
                 miette::bail!(
@@ -567,7 +573,7 @@ fn symlink_recursive(
                     link_path.abbr(),
                     link_target.abbr()
                 );
-                util::remove_symlink(&link_path)?;
+                deployer.delete_symlink(&link_path)?;
                 cov_mark::hit!(remove_dead_symlink);
                 // After we've removed that file, creating the symlink later will succeed!
             } else {
@@ -582,7 +588,7 @@ fn symlink_recursive(
                 for entry in actual_path.fs_err_read_dir().into_diagnostic()? {
                     let entry = entry.into_diagnostic()?;
                     symlink_recursive(
-                        created_symlinks,
+                        deployer,
                         &egg_root,
                         entry.path(),
                         &link_path.join(entry.file_name()),
@@ -597,17 +603,16 @@ fn symlink_recursive(
                 );
             }
         }
-        util::create_symlink(&actual_path, &link_path)?;
+        deployer.create_symlink(&actual_path, &link_path)?;
         tracing::info!(
             "created symlink {} -> {}",
             link_path.abbr(),
             actual_path.abbr(),
         );
-        created_symlinks.push(link_path);
         Ok(())
     }
     inner(
-        created_symlinks,
+        deployer,
         egg_root.as_ref().to_path_buf(),
         actual_path.as_ref().to_path_buf(),
         link_path.as_ref().to_path_buf(),
@@ -619,6 +624,7 @@ fn symlink_recursive(
     link_path = link_path.as_ref().abbr()
 ))]
 fn remove_symlink_recursive(
+    deployer: &mut Deployer,
     actual_path: impl AsRef<Path>,
     link_path: &impl AsRef<Path>,
 ) -> Result<()> {
@@ -630,11 +636,11 @@ fn remove_symlink_recursive(
             link_path.abbr(),
             actual_path.abbr(),
         );
-        util::remove_symlink(link_path)?;
+        deployer.delete_symlink(link_path)?;
     } else if link_path.is_dir() && actual_path.is_dir() {
         for entry in actual_path.fs_err_read_dir().into_diagnostic()? {
             let entry = entry.into_diagnostic()?;
-            remove_symlink_recursive(entry.path(), &link_path.join(entry.file_name()))?;
+            remove_symlink_recursive(deployer, entry.path(), &link_path.join(entry.file_name()))?;
         }
     } else if link_path.exists() {
         miette::bail!(

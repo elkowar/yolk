@@ -1,6 +1,7 @@
 #[cfg(feature = "docgen")]
 mod doc_generator;
 
+pub mod deploy;
 pub mod eggs_config;
 pub mod git_utils;
 pub mod multi_error;
