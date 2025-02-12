@@ -8,16 +8,17 @@ use std::{
 use clap::{Parser, Subcommand};
 use fs_err::PathExt as _;
 use miette::{Context as _, IntoDiagnostic, Result};
-use notify_debouncer_full::{new_debouncer, DebounceEventResult};
+use notify_debouncer_full::{new_debouncer, notify::RecursiveMode, DebounceEventResult};
 use owo_colors::OwoColorize as _;
 use rhai::Dynamic;
 use tracing_subscriber::{
     filter, fmt::format::FmtSpan, layer::SubscriberExt as _, util::SubscriberInitExt as _,
-    EnvFilter, Layer,
+    EnvFilter, Layer, Registry,
 };
 
+use tracing_tree::HierarchicalLayer;
 use yolk::{
-    util::PathExt as _,
+    util::{DeploymentPriviledgeTracker, PathExt as _},
     yolk::{EvalMode, Yolk},
     yolk_paths,
 };
@@ -39,6 +40,10 @@ struct Args {
     /// Enable debug logging
     #[arg(long, short = 'v', global = true, action = clap::ArgAction::Count)]
     debug: u8,
+
+    /// Enable displaying logs as a tree
+    #[arg(long, global = true)]
+    tracing_tree: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -112,9 +117,26 @@ enum Command {
         force_canonical: bool,
     },
 
+    #[command(hide(true))]
+    RootManageSymlinks {
+        #[arg(long, value_names = ["ORIGINAL::::SYMLINK_PATH"], required = false, value_parser=parse_symlink_pair)]
+        create_symlink: Vec<(PathBuf, PathBuf)>,
+        #[arg(long, value_names = ["SYMLINK_PATH"], required = false)]
+        delete_symlink: Vec<PathBuf>,
+    },
+
     #[cfg(feature = "docgen")]
     #[command(hide(true))]
     Docs { dir: PathBuf },
+}
+
+fn parse_symlink_pair(s: &str) -> Result<(PathBuf, PathBuf), String> {
+    let parts: Vec<&str> = s.splitn(2, "::::").collect();
+    if parts.len() != 2 {
+        Err(format!("Invalid symlink pair: {}", s))
+    } else {
+        Ok((PathBuf::from(parts[0]), PathBuf::from(parts[1])))
+    }
 }
 
 pub(crate) fn main() -> Result<()> {
@@ -137,6 +159,19 @@ fn init_logging(args: &Args) {
         1 => EnvFilter::from_str("yolk=debug").unwrap(),
         _ => EnvFilter::from_str("yolk=trace").unwrap(),
     };
+    if args.tracing_tree {
+        tracing::subscriber::set_global_default(
+            Registry::default().with(
+                HierarchicalLayer::new(2)
+                    .with_deferred_spans(true)
+                    .with_targets(true)
+                    .with_filter(env_filter),
+            ),
+        )
+        .unwrap();
+        return;
+    }
+
     let mut format_layer = tracing_subscriber::fmt::layer()
         .without_time()
         .with_ansi(true)
@@ -405,22 +440,38 @@ fn run_command(args: Args) -> Result<()> {
             for dir in dirs_to_watch {
                 tracing::info!("Watching {}", dir.abbr());
                 debouncer
-                    .watch(
-                        &dir,
-                        notify_debouncer_full::notify::RecursiveMode::Recursive,
-                    )
+                    .watch(&dir, RecursiveMode::Recursive)
                     .into_diagnostic()?;
             }
             // Watch the yolk dir non-recursively to catch updates to yolk.rhai
             debouncer
-                .watch(
-                    &script_path,
-                    notify_debouncer_full::notify::RecursiveMode::NonRecursive,
-                )
+                .watch(&script_path, RecursiveMode::NonRecursive)
                 .into_diagnostic()?;
 
             loop {
                 std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+        }
+        Command::RootManageSymlinks {
+            create_symlink,
+            delete_symlink,
+        } => {
+            let mut tracker = DeploymentPriviledgeTracker::new();
+            for (original_path, symlink_path) in create_symlink {
+                tracker.create_symlink(original_path, symlink_path)?;
+            }
+            for symlink_path in delete_symlink {
+                tracker.delete_symlink(symlink_path)?;
+            }
+            if tracker.failed_creations().is_empty() {
+                tracing::info!("All symlinks created successfully");
+            } else {
+                tracing::error!("Failed to create some symlinks");
+            }
+            if tracker.failed_deletions().is_empty() {
+                tracing::info!("All symlinks deleted successfully");
+            } else {
+                tracing::error!("Failed to delete some symlinks");
             }
         }
 

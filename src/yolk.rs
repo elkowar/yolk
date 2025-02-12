@@ -9,6 +9,7 @@ use std::{
 };
 
 use crate::multi_error::MultiError;
+use crate::util::DeploymentPriviledgeTracker;
 use crate::{
     eggs_config::{DeploymentStrategy, EggConfig},
     script::{eval_ctx::EvalCtx, rhai_error::RhaiError, sysinfo::SystemInfo},
@@ -86,6 +87,7 @@ impl Yolk {
         mappings: &HashMap<PathBuf, PathBuf>,
     ) -> Result<(), MultiError> {
         let mut errs = Vec::new();
+        let mut deployment_priviledge_tracker = DeploymentPriviledgeTracker::new();
         for (in_egg, deployed) in mappings {
             let mut deploy_mapping = || -> miette::Result<()> {
                 match egg.config().strategy {
@@ -98,7 +100,7 @@ impl Yolk {
                         if deployed.is_symlink() {
                             let target = deployed.fs_err_read_link().into_diagnostic()?;
                             if target.starts_with(egg.path()) {
-                                util::remove_symlink(deployed)?;
+                                deployment_priviledge_tracker.delete_symlink(deployed)?;
                                 tracing::info!("Removed dead symlink {}", deployed.abbr());
                             }
                         }
@@ -111,7 +113,7 @@ impl Yolk {
                                 )
                             })?;
                         }
-                        util::create_symlink(in_egg, deployed)?;
+                        deployment_priviledge_tracker.create_symlink(in_egg, deployed)?;
                         created_symlinks.push(deployed.clone());
                     }
                 }
@@ -121,6 +123,9 @@ impl Yolk {
                 errs.push(e.wrap_err(format!("Failed to deploy {}", in_egg.abbr())));
             }
         }
+
+        deployment_priviledge_tracker.try_run_elevated()?;
+
         if !errs.is_empty() {
             return Err(MultiError::new(
                 format!("Failed to deploy egg {}", egg.name()),
@@ -268,6 +273,7 @@ impl Yolk {
     /// Then, update any templated files in the eggs to the given mode.
     #[tracing::instrument(skip_all, fields(?mode, %update_deployments))]
     pub fn sync_to_mode(&self, mode: EvalMode, update_deployments: bool) -> Result<(), MultiError> {
+        tracing::debug!("Syncing eggs to {mode:?}");
         let mut eval_ctx = self
             .prepare_eval_ctx_for_templates(mode)
             .context("Failed to prepare evaluation context")?;

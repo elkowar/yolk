@@ -53,6 +53,7 @@ arbitrary = { version = "1.4.1", features = ["derive"] }
 symlink = "0.1.0"
 hex = "0.4.3"
 walkdir = "2.5.0"
+tracing-tree = "0.4.0"
 # rhai-autodocs = { version = "0.7.0", path = "../../clones/rhai-autodocs" }
 
 [dev-dependencies]
