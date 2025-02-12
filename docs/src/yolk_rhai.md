@@ -46,7 +46,16 @@ export let eggs = #{
     // will merge the directory structures during deployment,
     // allowing a stow-style pattern
     // of mirroring your home directory structure in your egg dir
-    zed: { targets: "~", strategy: "merge" }
+    zed: #{ targets: "~", strategy: "merge" }
+    
+    another_example: #{
+        targets: "~",
+        strategy: "merge",
+        unsafe_shell_hooks: #{
+            post_deploy: "some shellscript",
+            post_undeploy: "another shellscript",
+        }
+    }
 }
 ```
 
@@ -85,8 +94,11 @@ Files that are not listed here will not be edited by yolk during `yolk sync`!
 #### `main_file`
 A path, relative to the egg directory, that will be opened when you run `yolk edit <eggname>`.
 
+#### `unsafe_shell_hooks`
+An object that may declare two scripts, which get ran when the egg is deployed or un-deployed.
+The `post_deploy` script gets executed after the egg has been deployed, the `post_undeploy` script gets executed after the egg has been un-deployed.
 
-
+Note that these scripts should optimally be idempodent, so running them twice should not change anything compared to running them once.
 
 ## Available variables
 
