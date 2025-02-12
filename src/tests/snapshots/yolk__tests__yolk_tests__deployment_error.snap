@@ -1,0 +1,15 @@
+---
+source: src/tests/yolk_tests.rs
+expression: "test_util::render_error(yolk.sync_egg_deployment(&egg).unwrap_err())"
+---
+  × Failed to deploy egg bar
+
+Error: 
+  × Failed to deploy /tmp/[tmp-dir]/yolk/eggs/bar/[filename]
+  ├─▶ Failed to create symlink at /tmp/[tmp-dir]/[filename] -> /tmp/[tmp-dir]/yolk/eggs/bar/[filename]
+  ╰─▶ File exists (os error 17)
+
+Error: 
+  × Failed to deploy /tmp/[tmp-dir]/yolk/eggs/bar/[filename]
+  ├─▶ Failed to create symlink at /tmp/[tmp-dir]/[filename] -> /tmp/[tmp-dir]/yolk/eggs/bar/[filename]
+  ╰─▶ File exists (os error 17)

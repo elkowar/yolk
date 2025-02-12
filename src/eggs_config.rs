@@ -2,6 +2,7 @@ use normalize_path::NormalizePath;
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
+    process::Command,
     str::FromStr,
 };
 
@@ -43,6 +44,55 @@ impl FromStr for DeploymentStrategy {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ShellHooks {
+    pub post_deploy: Option<String>,
+    pub post_undeploy: Option<String>,
+    // pub post_sync: Option<String>,
+}
+
+impl ShellHooks {
+    pub fn run_post_deploy(&self) -> miette::Result<()> {
+        if let Some(command) = &self.post_deploy {
+            tracing::debug!("Running post-deploy script");
+            run_hook(command)?;
+        }
+        Ok(())
+    }
+
+    pub fn run_post_undeploy(&self) -> miette::Result<()> {
+        if let Some(command) = &self.post_undeploy {
+            tracing::debug!("Running post-undeploy script");
+            run_hook(command)?;
+        }
+        Ok(())
+    }
+
+    // pub fn run_post_sync(&self) -> miette::Result<()> {
+    //     if let Some(command) = &self.post_sync {
+    //         tracing::debug!("Running post-sync script");
+    //         run_hook(command)?;
+    //     }
+    //     Ok(())
+    // }
+}
+
+fn run_hook(command: &str) -> miette::Result<()> {
+    let status = Command::new("sh")
+        .arg("-c")
+        .arg(command)
+        .status()
+        .map_err(|e| miette::miette!("Failed to run post-deploy hook: {}", e))?;
+
+    if !status.success() {
+        miette::bail!(
+            "Post-deploy hook failed with status {}",
+            status.code().unwrap_or(-1)
+        );
+    }
+    Ok(())
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct EggConfig {
     /// The targets map is a map from `path-relative-to-egg-dir` -> `path-where-it-should-go`.
@@ -52,6 +102,7 @@ pub struct EggConfig {
     /// The "main" file of this egg -- currently used to determine which path should be opened by `yolk edit`.
     pub main_file: Option<PathBuf>,
     pub strategy: DeploymentStrategy,
+    pub unsafe_shell_hooks: ShellHooks,
 }
 
 impl Default for EggConfig {
@@ -62,6 +113,10 @@ impl Default for EggConfig {
             templates: HashSet::new(),
             main_file: None,
             strategy: Default::default(),
+            unsafe_shell_hooks: ShellHooks {
+                post_deploy: None,
+                post_undeploy: None,
+            },
         }
     }
 }
@@ -77,10 +132,20 @@ impl EggConfig {
             templates: HashSet::new(),
             main_file: None,
             strategy: DeploymentStrategy::default(),
+            unsafe_shell_hooks: ShellHooks {
+                post_deploy: None,
+                post_undeploy: None,
+            },
         }
     }
+
     pub fn new_merge(in_egg: impl AsRef<Path>, deployed_to: impl AsRef<Path>) -> Self {
         Self::new(in_egg, deployed_to).with_strategy(DeploymentStrategy::Merge)
+    }
+
+    pub fn with_unsafe_hooks(mut self, unsafe_shell_hooks: ShellHooks) -> Self {
+        self.unsafe_shell_hooks = unsafe_shell_hooks;
+        self
     }
 
     pub fn with_enabled(mut self, enabled: bool) -> Self {
@@ -218,12 +283,26 @@ impl EggConfig {
         } else {
             true
         };
+
+        let unsafe_shell_hooks = if let Some(x) = map.get("unsafe_shell_hooks") {
+            let shell_hooks = x
+                .as_map_ref()
+                .map_err(|t| rhai_error!("`unsafe_shell_hooks` must be a map, but got {t}"))?;
+            ShellHooks {
+                post_deploy: shell_hooks.get("post_deploy").map(|v| v.to_string()),
+                post_undeploy: shell_hooks.get("post_undeploy").map(|v| v.to_string()),
+            }
+        } else {
+            ShellHooks::default()
+        };
+
         Ok(EggConfig {
             targets,
             enabled,
             templates,
             main_file,
             strategy,
+            unsafe_shell_hooks,
         })
     }
 }
@@ -241,12 +320,11 @@ mod test {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        eggs_config::{DeploymentStrategy, EggConfig},
+        eggs_config::{DeploymentStrategy, EggConfig, ShellHooks},
         util::test_util::TestResult,
     };
 
     use rstest::rstest;
-
     #[rstest]
     #[case(
         indoc::indoc! {r#"
@@ -256,6 +334,10 @@ mod test {
                 templates: ["foo"],
                 main_file: "foo",
                 strategy: "merge",
+                unsafe_shell_hooks: #{
+                    post_deploy: "run after deploy",
+                    post_undeploy: "run after undeploy",
+                }
             }
         "#},
         EggConfig::new_merge("foo", "~/bar")
@@ -263,6 +345,10 @@ mod test {
             .with_template("foo")
             .with_strategy(DeploymentStrategy::Merge)
             .with_main_file("foo")
+            .with_unsafe_hooks(ShellHooks {
+                post_deploy: Some("run after deploy".to_string()),
+                post_undeploy: Some("run after undeploy".to_string()),
+            })
     )]
     #[case(r#"#{ targets: "~/bar" }"#, EggConfig::new(".", "~/bar"))]
     #[case(r#""~/bar""#, EggConfig::new(".", "~/bar"))]
