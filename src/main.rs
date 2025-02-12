@@ -18,7 +18,8 @@ use tracing_subscriber::{
 
 use tracing_tree::HierarchicalLayer;
 use yolk::{
-    util::{DeploymentPriviledgeTracker, PathExt as _},
+    deploy::Deployer,
+    util::PathExt as _,
     yolk::{EvalMode, Yolk},
     yolk_paths,
 };
@@ -456,7 +457,7 @@ fn run_command(args: Args) -> Result<()> {
             create_symlink,
             delete_symlink,
         } => {
-            let mut tracker = DeploymentPriviledgeTracker::new();
+            let mut tracker = Deployer::new();
             for (original_path, symlink_path) in create_symlink {
                 tracker.create_symlink(original_path, symlink_path)?;
             }
