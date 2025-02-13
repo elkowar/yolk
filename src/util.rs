@@ -137,6 +137,27 @@ impl Path {
         }
         self.to_path_buf()
     }
+
+    #[track_caller]
+    fn assert_absolute(&self, name: &str) {
+        assert!(
+            self.is_absolute(),
+            "Path {} must be absolute, but was: {}",
+            name,
+            self.display()
+        );
+    }
+
+    #[track_caller]
+    fn assert_starts_with(&self, start: impl AsRef<Path>, name: &str) {
+        assert!(
+            self.starts_with(start.as_ref()),
+            "Path {} must be inside {}, but was: {}",
+            name,
+            start.as_ref().display(),
+            self.display()
+        );
+    }
 }
 
 pub fn create_regex(s: impl AsRef<str>) -> miette::Result<Regex> {

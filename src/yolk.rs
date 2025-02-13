@@ -1,7 +1,6 @@
 use fs_err::PathExt;
 use miette::miette;
 use miette::{Context, IntoDiagnostic, Result, Severity};
-use normalize_path::NormalizePath;
 
 use std::{
     collections::HashMap,
@@ -92,7 +91,7 @@ impl Yolk {
                 match egg.config().strategy {
                     DeploymentStrategy::Merge => {
                         cov_mark::hit!(deploy_merge);
-                        symlink_recursive(deployer, egg.path(), in_egg, deployed)?;
+                        deployer.symlink_recursive(egg.path(), in_egg, deployed)?;
                     }
                     DeploymentStrategy::Put => {
                         cov_mark::hit!(deploy_put);
@@ -144,7 +143,7 @@ impl Yolk {
     ) -> Result<(), MultiError> {
         let mut errs = Vec::new();
         for (in_egg, deployed) in mappings {
-            if let Err(e) = remove_symlink_recursive(deployer, in_egg, &deployed) {
+            if let Err(e) = deployer.remove_symlink_recursive(in_egg, &deployed) {
                 errs.push(e.wrap_err(format!("Failed to remove deployment of {}", in_egg.abbr())));
             }
         }
@@ -283,9 +282,7 @@ impl Yolk {
     #[tracing::instrument(skip_all, fields(?mode, %update_deployments))]
     pub fn sync_to_mode(&self, mode: EvalMode, update_deployments: bool) -> Result<(), MultiError> {
         tracing::debug!("Syncing eggs to {mode:?}");
-        let mut eval_ctx = self
-            .prepare_eval_ctx_for_templates(mode)
-            .context("Failed to prepare evaluation context")?;
+        let mut eval_ctx = self.prepare_eval_ctx_for_templates(mode)?;
 
         let mut errs = Vec::new();
         let egg_configs = self.load_egg_configs(&mut eval_ctx)?;
@@ -338,8 +335,9 @@ impl Yolk {
         };
         let mut eval_ctx = EvalCtx::new_in_mode(mode)?;
         eval_ctx.set_module_path(self.yolk_paths.root_path());
-        let yolk_file =
-            fs_err::read_to_string(self.yolk_paths.yolk_rhai_path()).into_diagnostic()?;
+        let yolk_file = fs_err::read_to_string(self.yolk_paths.yolk_rhai_path())
+            .into_diagnostic()
+            .context("Failed to read yolk.rhai")?;
 
         eval_ctx.set_global("SYSTEM", sysinfo);
         eval_ctx.set_global("LOCAL", mode == EvalMode::Local);
@@ -463,197 +461,38 @@ impl Yolk {
         for dir in eggs_dir_entries {
             count += 1;
             let dir = dir.into_diagnostic()?;
-            if !local_egg_configs.contains_key(&dir.file_name().to_string_lossy().to_string()) {
-                miette::bail!(
-                    "Egg {} is not configured in local yolk.rhai",
-                    dir.file_name().to_string_lossy()
-                );
-            }
-            if !canonical_egg_configs.contains_key(&dir.file_name().to_string_lossy().to_string()) {
-                miette::bail!(
-                    "Egg {} is not configured in canonical yolk.rhai",
-                    dir.file_name().to_string_lossy()
-                );
-            }
-        }
-        if local_egg_configs.len() != canonical_egg_configs.len() {
-            miette::bail!(
-                help = "Always configure all eggs regardless of the LOCAL/CANONICAL state. Use the `enabled` field in the egg config to toggle eggs on and off instead.",
-                "canonical and local version of yolk.rhai have different egg configurations.",
+            miette::ensure!(
+                local_egg_configs.contains_key(&dir.file_name().to_string_lossy().to_string()),
+                "Egg {} is not configured in local yolk.rhai",
+                dir.file_name().to_string_lossy()
+            );
+            miette::ensure!(
+                canonical_egg_configs.contains_key(&dir.file_name().to_string_lossy().to_string()),
+                "Egg {} is not configured in canonical yolk.rhai",
+                dir.file_name().to_string_lossy()
             );
         }
-        if count != local_egg_configs.len() {
-            miette::bail!("Not all configured eggs were found in the eggs directory");
-        }
+        miette::ensure!(
+            local_egg_configs.len() == canonical_egg_configs.len() ,
+            help = "Always configure all eggs regardless of the LOCAL/CANONICAL state. Use the `enabled` field in the egg config to toggle eggs on and off instead.",
+            "canonical and local version of yolk.rhai have different egg configurations.",
+        );
+        miette::ensure!(
+            count == local_egg_configs.len(),
+            "Not all configured eggs were found in the eggs directory"
+        );
         for (name, local_config) in local_egg_configs {
             let canonical_config = canonical_egg_configs
                 .get(&name)
                 .ok_or_else(|| miette!("Egg {name} was not found in canonical yolk.rhai"))?;
-            if local_config.templates != canonical_config.templates {
-                miette::bail!(
-                    help = "Make sure that template configuration does not depend on the LOCAL or CANONICAL mode",
-                    "Egg {name} has a different set of templated files in canonical mode compared to local mode"
-                );
-            }
-        }
-        Ok(())
-    }
-}
-
-/// Set up a symlink from the given `link_path` to the given `actual_path`, recursively.
-/// Also takes the `egg_root` dir, to ensure we can safely delete any stale symlinks on the way there.
-///
-/// Also takes a mutable list that all encountered or created symlinks will be added to.
-///
-/// Requires all paths to be absolute.
-///
-/// This means:
-/// - If `link_path` exists and is a file, abort
-/// - If `link_path` exists and is a symlink into the egg dir, remove the symlink and then continue.
-/// - If `actual_path` is a file, symlink.
-/// - If `actual_path` is a directory that does not exist in `link_path`, symlink it.
-/// - If `actual_path` is a directory that already exists in `link_path`, recurse into it and `symlink_recursive` `actual_path`s children.
-fn symlink_recursive(
-    deployer: &mut Deployer,
-    egg_root: impl AsRef<Path>,
-    actual_path: impl AsRef<Path>,
-    link_path: &impl AsRef<Path>,
-) -> Result<()> {
-    fn inner(
-        deployer: &mut Deployer,
-        egg_root: PathBuf,
-        actual_path: PathBuf,
-        link_path: PathBuf,
-    ) -> Result<()> {
-        let actual_path = actual_path.normalize();
-        let link_path = link_path.normalize();
-        let egg_root = egg_root.normalize();
-        assert!(
-            link_path.is_absolute(),
-            "link_path must be absolute, but was {}",
-            link_path.display()
-        );
-        assert!(
-            actual_path.is_absolute(),
-            "actual_path must be absolute, but was {}",
-            actual_path.display()
-        );
-        assert!(
-            actual_path.starts_with(&egg_root),
-            "actual_path must be inside egg_root: {} not in {}",
-            actual_path.display(),
-            egg_root.display(),
-        );
-        tracing::trace!(
-            "symlink_recursive({}, {})",
-            actual_path.abbr(),
-            link_path.abbr()
-        );
-
-        let actual_path = actual_path.canonical()?;
-
-        tracing::trace!("Checking {}", link_path.abbr());
-
-        if link_path.is_symlink() {
-            let link_target = link_path.fs_err_read_link().into_diagnostic()?;
-            tracing::trace!(
-                "link_path exists as symlink at {} -> {}",
-                link_path.abbr(),
-                link_target.abbr()
+            miette::ensure!(
+                local_config.templates == canonical_config.templates ,
+                help = "Make sure that template configuration does not depend on the LOCAL or CANONICAL mode",
+                "Egg {name} has a different set of templated files in canonical mode compared to local mode"
             );
-            if link_target == actual_path {
-                deployer.add_created_symlink(link_path);
-                return Ok(());
-            } else if link_target.exists() {
-                miette::bail!(
-                    "Failed to create symlink {} -> {}, as a file already exists there",
-                    link_path.abbr(),
-                    actual_path.abbr(),
-                );
-            } else if link_target.starts_with(&egg_root) {
-                tracing::info!(
-                    "Removing dead symlink {} -> {}",
-                    link_path.abbr(),
-                    link_target.abbr()
-                );
-                deployer.delete_symlink(&link_path)?;
-                cov_mark::hit!(remove_dead_symlink);
-                // After we've removed that file, creating the symlink later will succeed!
-            } else {
-                miette::bail!(
-                    "Encountered dead symlink, but it doesn't target the egg dir: {}",
-                    link_path.abbr(),
-                );
-            }
-        } else if link_path.exists() {
-            tracing::trace!("link_path exists as non-symlink {}", link_path.abbr(),);
-            if link_path.is_dir() && actual_path.is_dir() {
-                for entry in actual_path.fs_err_read_dir().into_diagnostic()? {
-                    let entry = entry.into_diagnostic()?;
-                    symlink_recursive(
-                        deployer,
-                        &egg_root,
-                        entry.path(),
-                        &link_path.join(entry.file_name()),
-                    )?;
-                }
-                return Ok(());
-            } else if link_path.is_dir() || actual_path.is_dir() {
-                miette::bail!(
-                    "Conflicting file or directory {} with {}",
-                    actual_path.abbr(),
-                    link_path.abbr()
-                );
-            }
         }
-        deployer.create_symlink(&actual_path, &link_path)?;
-        tracing::info!(
-            "created symlink {} -> {}",
-            link_path.abbr(),
-            actual_path.abbr(),
-        );
         Ok(())
     }
-    inner(
-        deployer,
-        egg_root.as_ref().to_path_buf(),
-        actual_path.as_ref().to_path_buf(),
-        link_path.as_ref().to_path_buf(),
-    )
-}
-
-#[tracing::instrument(skip(actual_path, link_path), fields(
-    actual_path = actual_path.as_ref().abbr(),
-    link_path = link_path.as_ref().abbr()
-))]
-fn remove_symlink_recursive(
-    deployer: &mut Deployer,
-    actual_path: impl AsRef<Path>,
-    link_path: &impl AsRef<Path>,
-) -> Result<()> {
-    let actual_path = actual_path.as_ref();
-    let link_path = link_path.as_ref();
-    if link_path.is_symlink() && link_path.canonical()? == actual_path {
-        tracing::info!(
-            "Removing symlink {} -> {}",
-            link_path.abbr(),
-            actual_path.abbr(),
-        );
-        deployer.delete_symlink(link_path)?;
-    } else if link_path.is_dir() && actual_path.is_dir() {
-        for entry in actual_path.fs_err_read_dir().into_diagnostic()? {
-            let entry = entry.into_diagnostic()?;
-            remove_symlink_recursive(deployer, entry.path(), &link_path.join(entry.file_name()))?;
-        }
-    } else if link_path.exists() {
-        miette::bail!(
-            help = "Yolk will only try to remove files that are symlinks pointing into the corresponding egg.",
-            "Tried to remove deployment of {}, but {} doesn't link to it",
-            actual_path.abbr(),
-            link_path.abbr()
-        );
-    }
-    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

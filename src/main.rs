@@ -238,17 +238,14 @@ fn run_command(args: Args) -> Result<()> {
             eggs.sort_by_key(|egg| egg.name().to_string());
             for egg in eggs {
                 let deployed = egg.is_deployed()?;
-                println!(
-                    "{}",
-                    format!("{} {}", if deployed { "✓" } else { "✗" }, egg.name(),)
-                        .if_supports_color(owo_colors::Stream::Stdout, |text| {
-                            text.color(if deployed {
-                                owo_colors::AnsiColors::Green
-                            } else {
-                                owo_colors::AnsiColors::Default
-                            })
-                        })
-                );
+                let text = format!("{} {}", if deployed { "✓" } else { "✗" }, egg.name());
+                let text = text.if_supports_color(owo_colors::Stream::Stdout, |text| {
+                    text.color(match deployed {
+                        true => owo_colors::AnsiColors::Green,
+                        false => owo_colors::AnsiColors::Default,
+                    })
+                });
+                println!("{}", text);
             }
         }
         Command::Sync { canonical } => {
@@ -278,9 +275,6 @@ fn run_command(args: Args) -> Result<()> {
             command,
             force_canonical,
         } => {
-            // TODO: Do I really want this? probably not, tbh
-            // yolk.validate_config_invariants()?;
-            //
             let mut cmd = yolk.paths().start_git()?.start_git_command_builder();
             cmd.args(command);
             // if the command is `git push`, we don't need to enter canonical state
@@ -380,7 +374,7 @@ fn run_command(args: Args) -> Result<()> {
             let mut debouncer = new_debouncer(
                 std::time::Duration::from_millis(800),
                 None,
-                move |res: DebounceEventResult| {
+                move |debounce_event_res: DebounceEventResult| {
                     let mut eval_ctx = match yolk.prepare_eval_ctx_for_templates(mode) {
                         Ok(x) => x,
                         Err(e) => {
@@ -405,7 +399,7 @@ fn run_command(args: Args) -> Result<()> {
                         }
                     };
 
-                    match res {
+                    match debounce_event_res {
                         Ok(events) => {
                             let changed = events
                                 .into_iter()
@@ -418,18 +412,16 @@ fn run_command(args: Args) -> Result<()> {
                                 })
                                 .flat_map(|x| x.paths.clone().into_iter())
                                 .collect::<HashSet<_>>();
+                            // If yolk.rhai changed, we need to re-evaluate all files.
+                            // This means either just sync_to_mode, or, if no_sync is set, manually calling on_file_updated for each file.
                             if changed.contains(&yolk.paths().yolk_rhai_path()) {
                                 if no_sync {
-                                    for file in files_to_watch.iter() {
-                                        on_file_updated(file);
-                                    }
+                                    files_to_watch.iter().for_each(|file| on_file_updated(file));
                                 } else if let Err(e) = yolk.sync_to_mode(mode, true) {
                                     eprintln!("Error: {e:?}");
                                 }
                             } else {
-                                for path in changed {
-                                    on_file_updated(&path);
-                                }
+                                changed.iter().for_each(|path| on_file_updated(&path));
                             }
                         }
                         Err(error) => tracing::error!("Error: {error:?}"),
