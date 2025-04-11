@@ -194,13 +194,19 @@ fn p_nextline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
         opt((literal("if"), wsp1)).map(|x| x.is_some()),
         p_regular_tag_inner("#}"),
     );
-    let (tagged_line, expr) = p_tag_line("{#", p_inner, "#}", true).parse_next(input)?;
-    let next_line = till_line_ending.spanned().parse_next(input)?;
+
+    let (((tagged_line, expr), next_line), full_span) = (
+        p_tag_line("{#", p_inner, "#}", true),
+        till_line_ending.spanned(),
+    )
+        .with_spanned()
+        .parse_next(input)?;
     Ok(Element::NextLine {
         tagged_line,
         is_if: expr.content().0,
         expr: expr.map(|x| x.1),
         next_line,
+        full_span,
     })
 }
 
@@ -240,7 +246,7 @@ fn p_multiline_body<'a>(
 /// Parses a regular multiline block start tag (no if, elif, else, end), then parses a [`p_multiline_body`], then a regular end tag.
 fn p_multiline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     peek(any).parse_next(input)?;
-    let (tagged_line, expr) = p_tag_line(
+    let p_start_tag_line = p_tag_line(
         "{%",
         preceded(
             not(alt(("if", "elif", "else", "end"))),
@@ -248,17 +254,19 @@ fn p_multiline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
         ),
         "%}",
         true,
-    )
-    .parse_next(input)?;
-    let body = cut_err(p_multiline_body("end")).parse_next(input)?;
-    let (end, _) = cut_err(
+    );
+    let p_body = cut_err(p_multiline_body("end"));
+    let p_end = cut_err(
         p_tag_line("{%", "end", "%}", false).context(
             cx().msg("Expected block to end here")
                 .lbl("block end")
                 .hlp("Did you forget an `{% end %}` tag?"),
         ),
-    )
-    .parse_next(input)?;
+    );
+
+    let (((tagged_line, expr), body, (end, _)), full_span) = (p_start_tag_line, p_body, p_end)
+        .with_spanned()
+        .parse_next(input)?;
 
     Ok(Element::MultiLine {
         block: Block {
@@ -267,6 +275,7 @@ fn p_multiline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
             body,
         },
         end,
+        full_span,
     })
 }
 
@@ -286,6 +295,7 @@ fn p_block<'a, Expr>(
 
 fn p_conditional_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     peek(any).parse_next(input)?;
+
     let p_if = p_block::<Sp<&'a str>>(
         p_tag_line(
             "{%",
@@ -318,7 +328,10 @@ fn p_conditional_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
         p_multiline_body("end"),
     );
     let p_end = p_tag_line("{%", "end", "%}", false);
-    let (if_body, elif_bodies, else_block, end_line): (_, Vec<_>, Option<Block<'a, _>>, _) = (
+    let ((if_body, elif_bodies, else_block, end_line), full_span): (
+        (_, Vec<_>, Option<Block<'a, _>>, _),
+        _,
+    ) = (
         p_if.context(cx().msg("Failed to parse if block").lbl("if block")),
         cut_err(repeat(
             0..,
@@ -329,6 +342,7 @@ fn p_conditional_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
         ))),
         cut_err(p_end.context(cx().msg("Failed to parse end tag").lbl("end tag"))),
     )
+        .with_spanned()
         .parse_next(input)?;
 
     let mut blocks = Vec::new();
@@ -338,6 +352,7 @@ fn p_conditional_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
         blocks,
         else_block: else_block.map(|x| x.map_expr(|_| ())),
         end: end_line.0,
+        full_span,
     })
 }
 

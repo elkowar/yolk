@@ -62,5 +62,6 @@ Ok(
             right: "\n",
             full_line: [66..79]"// {% end %}\n",
         },
+        full_span: [0..79]"// {% if a %}\na\nb\n// {% elif b %}\n// {% elif c %}\n// {% else %}\nc\n// {% end %}\n",
     },
 )

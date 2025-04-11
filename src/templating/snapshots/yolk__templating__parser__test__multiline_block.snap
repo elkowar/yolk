@@ -1,7 +1,6 @@
 ---
 source: src/templating/parser.rs
 expression: "p_multiline_element(&mut new_input(\"/* {% test %} */\\nfoo\\n/* {% end %} */\"))?"
-snapshot_kind: text
 ---
 MultiLine {
     block: Block {
@@ -24,4 +23,5 @@ MultiLine {
         right: " */",
         full_line: [21..36]"/* {% end %} */",
     },
+    full_span: [0..36]"/* {% test %} */\nfoo\n/* {% end %} */",
 }

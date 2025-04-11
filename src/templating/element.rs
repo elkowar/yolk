@@ -48,15 +48,18 @@ pub enum Element<'a> {
         expr: Sp<&'a str>,
         next_line: Sp<&'a str>,
         is_if: bool,
+        full_span: Sp<&'a str>,
     },
     MultiLine {
         block: Block<'a, Sp<&'a str>>,
         end: TaggedLine<'a>,
+        full_span: Sp<&'a str>,
     },
     Conditional {
         blocks: Vec<Block<'a, Sp<&'a str>>>,
         else_block: Option<Block<'a, ()>>,
         end: TaggedLine<'a>,
+        full_span: Sp<&'a str>,
     },
 }
 
@@ -66,6 +69,16 @@ impl<'a> Element<'a> {
         use crate::templating::parser;
         use miette::IntoDiagnostic as _;
         parser::parse_element(s).into_diagnostic()
+    }
+
+    pub fn full_span(&self) -> &Sp<&str> {
+        match self {
+            Element::Plain(sp) => &sp,
+            Element::Inline { line, .. } => &line.full_line,
+            Element::NextLine { full_span, .. } => full_span,
+            Element::MultiLine { full_span, .. } => full_span,
+            Element::Conditional { full_span, .. } => full_span,
+        }
     }
 
     pub fn render(
@@ -94,6 +107,7 @@ impl<'a> Element<'a> {
                 expr,
                 next_line,
                 is_if,
+                ..
             } => match is_if {
                 true => Ok(format!(
                     "{}{}",
@@ -111,7 +125,7 @@ impl<'a> Element<'a> {
                     run_transformation_expr(eval_ctx, next_line.as_str(), expr)?
                 )),
             },
-            Element::MultiLine { block, end } => {
+            Element::MultiLine { block, end, .. } => {
                 let rendered_body = render_elements(comment_style, eval_ctx, &block.body)?;
                 Ok(format!(
                     "{}{}{}",
@@ -124,6 +138,7 @@ impl<'a> Element<'a> {
                 blocks,
                 else_block,
                 end,
+                ..
             } => {
                 let mut output = String::new();
                 let mut had_true = false;
@@ -137,7 +152,11 @@ impl<'a> Element<'a> {
                             .map_err(|e| TemplateError::from_rhai(e, block.expr.range()))?;
                     had_true = had_true || expr_true;
 
-                    let rendered_body = render_elements(comment_style, eval_ctx, &block.body)?;
+                    let rendered_body = if expr_true {
+                        render_elements(comment_style, eval_ctx, &block.body)?
+                    } else {
+                        render_no_eval(&block.body)
+                    };
                     output.push_str(block.tagged_line.full_line.as_str());
                     output.push_str(&comment_style.toggle_string(&rendered_body, expr_true));
                 }
@@ -172,6 +191,10 @@ pub fn render_elements(
     } else {
         Err(TemplateError::Multiple(errs))
     }
+}
+
+pub fn render_no_eval(elements: &[Element<'_>]) -> String {
+    elements.iter().map(|x| x.full_span().as_str()).collect()
 }
 
 fn run_transformation_expr(

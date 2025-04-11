@@ -1,6 +1,6 @@
 ---
 source: src/templating/parser.rs
-expression: "parse_document(&mut\nnew_input(indoc::indoc!\n{\n    r#\"\n            # {# replace_re(`'.*'`, `'{data.value}'`) #}\n            value = 'foo'\n        \"#\n}))"
+expression: "parse_document(indoc::indoc!\n{\n    r#\"\n            # {# replace_re(`'.*'`, `'{data.value}'`) #}\n            value = 'foo'\n        \"#\n})"
 ---
 Ok(
     [
@@ -14,6 +14,7 @@ Ok(
             expr: [5..42]"replace_re(`'.*'`, `'{data.value}'`) ",
             next_line: [45..58]"value = 'foo'",
             is_if: false,
+            full_span: [0..58]"# {# replace_re(`'.*'`, `'{data.value}'`) #}\nvalue = 'foo'",
         },
         Plain(
             [58..59]"\n",

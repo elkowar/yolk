@@ -1,7 +1,6 @@
 ---
 source: src/templating/parser.rs
 expression: "parse_document(\"foo \\n/* \\n{#\\ntest\\ntest\\n#} */\\nbar\")"
-snapshot_kind: text
 ---
 Ok(
     [
@@ -18,6 +17,7 @@ Ok(
             expr: [12..22]"test\ntest\n",
             next_line: [28..31]"bar",
             is_if: false,
+            full_span: [9..31]"{#\ntest\ntest\n#} */\nbar",
         },
     ],
 )

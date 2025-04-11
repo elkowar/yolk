@@ -31,6 +31,7 @@ Ok(
                 right: "\n",
                 full_line: [34..47]"// {% end %}\n",
             },
+            full_span: [8..47]"// {% if a %}\nfoo\nbar\nbaz\n// {% end %}\n",
         },
         Plain(
             [47..55]"foo\nbar\n",

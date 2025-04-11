@@ -1,7 +1,6 @@
 ---
 source: src/templating/parser.rs
-expression: "p_conditional_element(&mut new_input(indoc::indoc! {\n                    r#\"\n            // {% if foo %}\n            // {% if foo %}\n            // {% end %}\n            // {% end %}\n        \"#\n                }))"
-snapshot_kind: text
+expression: "p_conditional_element(&mut\nnew_input(indoc::indoc!\n{\n    r#\"\n            // {% if foo %}\n            // {% if foo %}\n            // {% end %}\n            // {% end %}\n        \"#\n}))"
 ---
 Ok(
     Conditional {
@@ -35,6 +34,7 @@ Ok(
                             right: "\n",
                             full_line: [32..45]"// {% end %}\n",
                         },
+                        full_span: [16..45]"// {% if foo %}\n// {% end %}\n",
                     },
                 ],
             },
@@ -46,5 +46,6 @@ Ok(
             right: "\n",
             full_line: [45..58]"// {% end %}\n",
         },
+        full_span: [0..58]"// {% if foo %}\n// {% if foo %}\n// {% end %}\n// {% end %}\n",
     },
 )
