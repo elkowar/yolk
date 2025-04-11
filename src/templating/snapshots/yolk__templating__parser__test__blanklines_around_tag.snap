@@ -1,6 +1,6 @@
 ---
 source: src/templating/parser.rs
-expression: "parse_document(&mut new_input(\"a\\n\\n{%a%}\\n{%end%}\\n\\na\"))"
+expression: "parse_document(\"a\\n\\n{%a%}\\n{%end%}\\n\\na\")"
 ---
 Ok(
     [
@@ -24,6 +24,7 @@ Ok(
                 right: "\n",
                 full_line: [9..17]"{%end%}\n",
             },
+            full_span: [3..17]"{%a%}\n{%end%}\n",
         },
         Plain(
             [17..19]"\na",

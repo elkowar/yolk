@@ -483,3 +483,29 @@ pub fn test_deployment_error() -> TestResult {
     });
     Ok(())
 }
+
+#[test]
+pub fn test_only_active_sections_get_evaluated() -> TestResult {
+    let (_home, yolk, _) = setup_and_init_test_yolk()?;
+    let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(EvalMode::Local)?;
+
+    let template = indoc::indoc! {r#"
+        {% if false %}
+        {< bad_code() >}
+        {% else %}
+        {< "1" >}
+        {% end %}
+    "#};
+    assert_str_eq!(
+        indoc::indoc! {r#"
+            {% if false %}
+            #<yolk> {< bad_code() >}
+            {% else %}
+            1{< "1" >}
+            {% end %}
+        "#},
+        yolk.eval_template(&mut eval_ctx, "", template)?
+    );
+
+    Ok(())
+}
