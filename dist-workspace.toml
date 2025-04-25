@@ -16,13 +16,21 @@ tap = "elkowar/homebrew-tap"
 publish-jobs = ["homebrew"]
 formula = "yolk"
 targets = [
-  # "aarch64-apple-darwin",
-  "x86_64-apple-darwin",
-  "x86_64-unknown-linux-gnu",
-  "x86_64-pc-windows-msvc",
-  "x86_64-unknown-linux-musl",
+    # "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "x86_64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+    "x86_64-unknown-linux-musl",
 ]
 install-path = "CARGO_HOME"
 install-updater = false
 
 # include = ["yolk.man"]
+
+
+[dist.github-custom-runners]
+# Use an `ubuntu-latest` runner for all "global" steps of the release process,
+# rather than cargo-dist's default of using the oldest possible Linux runner.
+# This includes `plan`, `build-global-artifacts`, `host`, and `announce`, none
+# of which actually rely on the specific Linux version.
+global = "ubuntu-latest"
