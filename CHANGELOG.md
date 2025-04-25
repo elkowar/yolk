@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3](https://github.com/elkowar/yolk/compare/v0.3.2...v0.3.3) - 2025-04-25
+
+### Added
+
+- only evaluate the active block of a conditional
+
+### Fixed
+
+- Remove broken git tests
+
 ### Added
 
 - Only evaluate true branch of conditional blocks
