@@ -495,6 +495,8 @@ pub fn test_only_active_sections_get_evaluated() -> TestResult {
         {% else %}
         {< "1" >}
         {% end %}
+        {# if false #}
+        {< bad_code() >}
     "#};
     assert_str_eq!(
         indoc::indoc! {r#"
@@ -503,6 +505,8 @@ pub fn test_only_active_sections_get_evaluated() -> TestResult {
             {% else %}
             1{< "1" >}
             {% end %}
+            {# if false #}
+            #<yolk> {< bad_code() >}
         "#},
         yolk.eval_template(&mut eval_ctx, "", template)?
     );
