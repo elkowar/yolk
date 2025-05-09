@@ -1,5 +1,4 @@
 use rhai::{CustomType, TypeBuilder};
-use std::path::PathBuf;
 
 #[derive(Debug, Clone, CustomType)]
 pub struct SystemInfo {
@@ -24,11 +23,11 @@ pub struct SystemInfo {
 #[derive(Debug, Clone, CustomType)]
 pub struct SystemInfoPaths {
     #[rhai_type(readonly)]
-    cache_dir: PathBuf,
+    cache_dir: String,
     #[rhai_type(readonly)]
-    config_dir: PathBuf,
+    config_dir: String,
     #[rhai_type(readonly)]
-    home_dir: PathBuf,
+    home_dir: String,
 }
 
 impl SystemInfo {
@@ -45,9 +44,15 @@ impl SystemInfo {
             desktop_env: whoami::desktop_env().to_string(),
             platform: whoami::platform().to_string(),
             paths: SystemInfoPaths {
-                cache_dir: dirs::cache_dir().unwrap_or_else(|| "unknown".into()),
-                config_dir: dirs::config_dir().unwrap_or_else(|| "unknown".into()),
-                home_dir: dirs::home_dir().unwrap_or_else(|| "unknown".into()),
+                cache_dir: dirs::cache_dir()
+                    .map(|x| x.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "unknown".into()),
+                config_dir: dirs::config_dir()
+                    .map(|x| x.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "unknown".into()),
+                home_dir: dirs::home_dir()
+                    .map(|x| x.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "unknown".into()),
             },
         }
     }
@@ -57,9 +62,9 @@ impl SystemInfo {
             hostname: "canonical-hostname".to_string(),
             username: "canonical-username".to_string(),
             paths: SystemInfoPaths {
-                cache_dir: (PathBuf::from("/canonical/cache")),
-                config_dir: (PathBuf::from("/canonical/config")),
-                home_dir: (PathBuf::from("/canonical/home")),
+                cache_dir: "/canonical/cache".to_string(),
+                config_dir: "/canonical/config".to_string(),
+                home_dir: "/canonical/home".to_string(),
             },
             distro: "distro".to_string(),
             device_name: "devicename".to_string(),
