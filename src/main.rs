@@ -282,7 +282,10 @@ fn run_command(args: Args) -> Result<()> {
 
             let first_cmd = command.first().map(|x| x.as_ref());
             if !force_canonical
-                && (first_cmd == Some("push") || first_cmd == Some("init") || first_cmd.is_none())
+                && (first_cmd == Some("push")
+                    || first_cmd == Some("init")
+                    || first_cmd == Some("fetch")
+                    || first_cmd.is_none())
             {
                 cmd.status().into_diagnostic()?;
             } else {
