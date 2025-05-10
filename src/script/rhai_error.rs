@@ -14,9 +14,10 @@ pub enum RhaiError {
     #[error(transparent)]
     RhaiError(#[from] rhai::EvalAltResult),
     #[error("No function found matching signature: {}", .signature)]
-    #[diagnostic(help("Candidates:\n{}", candidates.join("\n")))]
+    #[diagnostic(help("{}:\n{}", if *perfect_match {"Candidates"} else {"Did you mean"}, candidates.join("\n")))]
     RhaiFunctionNotFound {
         signature: String,
+        perfect_match: bool,
         candidates: Vec<String>,
     },
     #[error("{}", .0)]
@@ -95,19 +96,33 @@ fn enhance_rhai_error(engine: &rhai::Engine, err: rhai::EvalAltResult) -> RhaiEr
         return RhaiError::RhaiError(err);
     };
     let actual_fn_name = signature.split(['(', ' ']).next().unwrap_or("");
-    let res = engine.collect_fn_metadata(
+    let mut candidates = engine.collect_fn_metadata(
         None,
         |info| {
-            let name_matches = actual_fn_name == info.metadata.name.as_str();
-            name_matches.then(|| {
-                info.metadata
-                    .gen_signature(|x| engine.map_type_name(x).into())
-            })
+            let distance = strsim::levenshtein(actual_fn_name, info.metadata.name.as_str());
+            if distance < 3 {
+                let candidate = info
+                    .metadata
+                    .gen_signature(|x| engine.map_type_name(x).into());
+                Some((candidate, distance))
+            } else {
+                None
+            }
         },
         true,
     );
+    candidates.sort_by_key(|(_, distance)| *distance);
+    let had_perfect_match = candidates.iter().any(|(_, d)| *d == 0);
+    if had_perfect_match {
+        candidates = candidates
+            .into_iter()
+            .take_while(|(_, distance)| *distance == 0)
+            .collect();
+    }
+
     RhaiError::RhaiFunctionNotFound {
         signature,
-        candidates: res,
+        perfect_match: had_perfect_match,
+        candidates: candidates.into_iter().map(|(x, _)| x).collect(),
     }
 }

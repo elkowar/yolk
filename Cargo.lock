@@ -2165,6 +2165,7 @@ dependencies = [
  "rhai",
  "rhai-autodocs",
  "rstest",
+ "strsim",
  "symlink",
  "test-log",
  "thiserror 2.0.11",
