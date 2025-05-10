@@ -13,6 +13,12 @@ pub enum RhaiError {
     },
     #[error(transparent)]
     RhaiError(#[from] rhai::EvalAltResult),
+    #[error("No function found matching signature: {}", .signature)]
+    #[diagnostic(help("Candidates:\n{}", candidates.join("\n")))]
+    RhaiFunctionNotFound {
+        signature: String,
+        candidates: Vec<String>,
+    },
     #[error("{}", .0)]
     #[diagnostic(transparent)]
     Other(miette::Report),
@@ -32,11 +38,15 @@ impl RhaiError {
         Self::Other(miette::Report::from(err))
     }
 
-    pub fn from_rhai_compile(source_code: &str, err: rhai::ParseError) -> Self {
-        Self::from_rhai(source_code, err.into())
+    pub fn from_rhai_compile(
+        engine: &rhai::Engine,
+        source_code: &str,
+        err: rhai::ParseError,
+    ) -> Self {
+        Self::from_rhai(engine, source_code, err.into())
     }
 
-    pub fn from_rhai(source_code: &str, err: rhai::EvalAltResult) -> Self {
+    pub fn from_rhai(engine: &rhai::Engine, source_code: &str, err: rhai::EvalAltResult) -> Self {
         let position = err.position();
         let mut span = 0..0;
         if let Some(line_nr) = position.line() {
@@ -65,9 +75,10 @@ impl RhaiError {
         if span.start >= source_code.len() {
             span = source_code.len() - 1..source_code.len();
         }
+        let rhai_error = enhance_rhai_error(engine, err);
         Self::SourceError {
             span,
-            origin: Box::new(RhaiError::RhaiError(err)),
+            origin: Box::new(rhai_error),
         }
     }
 
@@ -76,5 +87,27 @@ impl RhaiError {
         miette::Report::from(self).with_source_code(
             miette::NamedSource::new(name.to_string(), source.to_string()).with_language("Rust"),
         )
+    }
+}
+
+fn enhance_rhai_error(engine: &rhai::Engine, err: rhai::EvalAltResult) -> RhaiError {
+    let rhai::EvalAltResult::ErrorFunctionNotFound(signature, _) = err else {
+        return RhaiError::RhaiError(err);
+    };
+    let actual_fn_name = signature.split(['(', ' ']).next().unwrap_or("");
+    let res = engine.collect_fn_metadata(
+        None,
+        |info| {
+            let name_matches = actual_fn_name == info.metadata.name.as_str();
+            name_matches.then(|| {
+                info.metadata
+                    .gen_signature(|x| engine.map_type_name(x).into())
+            })
+        },
+        true,
+    );
+    RhaiError::RhaiFunctionNotFound {
+        signature,
+        candidates: res,
     }
 }

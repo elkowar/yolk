@@ -39,8 +39,15 @@ rhai = { version = "1.21.0", features = [
     "std",
     "internals",
     "no_custom_syntax",
+    "metadata",
     "sync",
 ], default-features = false }
+# rhai = { path = "../rhai", features = [
+#     "std",
+#     "internals",
+#     "no_custom_syntax",
+#     "sync",
+# ], default-features = false }
 tracing = "0.1.41"
 rhai-autodocs = { version = "0.8.0", optional = true }
 thiserror = "2.0.11"
