@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4](https://github.com/elkowar/yolk/compare/v0.3.3...v0.3.4) - 2025-05-10
+
+### Fixed
+
+- paths are now just stored as strings (fixes #55)
+
 ## [0.3.3](https://github.com/elkowar/yolk/compare/v0.3.2...v0.3.3) - 2025-04-25
 
 ### Added
