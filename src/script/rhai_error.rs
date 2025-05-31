@@ -75,15 +75,23 @@ impl RhaiError {
     /// You most definitely want to use [`RhaiError::from_rhai_with_source`] instead, as it also adds span information.
     /// This function is only used internally.
     fn from_rhai_function_not_found(engine: &rhai::Engine, signature: String) -> RhaiError {
-        let actual_fn_name = signature.split(['(', ' ']).next().unwrap_or("");
+        let used_fn_name = signature.split(['(', ' ']).next().unwrap_or("");
+        let used_fn_name = used_fn_name.split("::").last().unwrap_or(used_fn_name);
         let mut candidates = engine.collect_fn_metadata(
             None,
             |info| {
-                let distance = strsim::levenshtein(actual_fn_name, info.metadata.name.as_str());
+                let name = info.metadata.name.as_str();
+                let distance = strsim::levenshtein(used_fn_name, name);
                 (distance < 3).then(|| {
                     let candidate = info
                         .metadata
                         .gen_signature(|x| engine.map_type_name(x).into());
+                    let module_prefix = if info.namespace.is_empty() {
+                        "".to_string()
+                    } else {
+                        format!("{}::", info.namespace)
+                    };
+                    let candidate = format!("{}{}", module_prefix, candidate);
                     (candidate, distance)
                 })
             },

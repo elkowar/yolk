@@ -50,13 +50,17 @@ impl EvalCtx {
         let mut ctx = Self::new_empty();
         ctx.engine
             .register_global_module(Arc::new(stdlib::global_stuff()));
+        let mut utils_module = stdlib::utils_module();
+        utils_module.set_id("utils");
         ctx.engine
-            .register_static_module("utils", Arc::new(stdlib::utils_module()));
+            .register_static_module("utils", Arc::new(utils_module));
+        let mut io_module = stdlib::io_module(mode);
+        io_module.set_id("io");
+        ctx.engine.register_static_module("io", Arc::new(io_module));
+        let mut template_module = stdlib::tag_module();
+        template_module.set_id("template");
         ctx.engine
-            .register_static_module("io", Arc::new(stdlib::io_module(mode)));
-        let template_module = Arc::new(stdlib::tag_module());
-        ctx.engine
-            .register_static_module("template", template_module);
+            .register_static_module("template", Arc::new(template_module));
 
         Ok(ctx)
     }

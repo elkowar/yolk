@@ -19,9 +19,9 @@ checksum = "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627"
 
 [[package]]
 name = "ahash"
-version = "0.8.11"
+version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e89da841a80418a9b391ebaea17f5c112ffaaa96f621d2c285b5174da76b9011"
+checksum = "8b79b82693f705137f8fb9b37871d99e4f9a7df12b917eed79c3d3954830a60b"
 dependencies = [
  "cfg-if",
  "const-random",
@@ -980,8 +980,7 @@ dependencies = [
 [[package]]
 name = "no-std-compat"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b93853da6d84c2e3c7d730d6473e8817692dd89be387eb01b94d7f108ecb5b8c"
+source = "git+https://gitlab.com/jD91mZM2/no-std-compat.git#47a5dfb6b48e8f8bf2fc4f6109c9b75f5c3c0b10"
 dependencies = [
  "spin",
 ]
@@ -1327,8 +1326,6 @@ checksum = "ba39f3699c378cd8970968dcbff9c43159ea4cfbd88d43c00b22f2ef10a435d2"
 [[package]]
 name = "rhai"
 version = "1.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce4d759a4729a655ddfdbb3ff6e77fb9eadd902dae12319455557796e435d2a6"
 dependencies = [
  "ahash",
  "bitflags 2.8.0",
@@ -1336,7 +1333,26 @@ dependencies = [
  "no-std-compat",
  "num-traits",
  "once_cell",
- "rhai_codegen",
+ "rhai_codegen 2.2.0",
+ "serde",
+ "serde_json",
+ "smallvec",
+ "smartstring",
+ "thin-vec",
+]
+
+[[package]]
+name = "rhai"
+version = "1.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce4d759a4729a655ddfdbb3ff6e77fb9eadd902dae12319455557796e435d2a6"
+dependencies = [
+ "ahash",
+ "bitflags 2.8.0",
+ "instant",
+ "num-traits",
+ "once_cell",
+ "rhai_codegen 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "serde_json",
  "smallvec",
@@ -1351,9 +1367,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2ad0c4cbfe21eeda1ecf977914d8dfeaae50331308e0d59323a188090f349953"
 dependencies = [
  "handlebars",
- "rhai",
+ "rhai 1.21.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "rhai_codegen"
+version = "2.2.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -1524,9 +1549,9 @@ dependencies = [
 
 [[package]]
 name = "spin"
-version = "0.5.2"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
+checksum = "13287b4da9d1207a4f4929ac390916d64eacfe236a487e9a9f5b3be392be5162"
 
 [[package]]
 name = "static_assertions"
@@ -2162,7 +2187,7 @@ dependencies = [
  "predicates",
  "pretty_assertions",
  "regex",
- "rhai",
+ "rhai 1.21.0",
  "rhai-autodocs",
  "rstest",
  "strsim",
