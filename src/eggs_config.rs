@@ -48,6 +48,8 @@ impl FromStr for DeploymentStrategy {
 pub struct ShellHooks {
     pub post_deploy: Option<String>,
     pub post_undeploy: Option<String>,
+    pub pre_deploy: Option<String>,
+    pub pre_undeploy: Option<String>,
     // pub post_sync: Option<String>,
 }
 
@@ -63,6 +65,20 @@ impl ShellHooks {
     pub fn run_post_undeploy(&self) -> miette::Result<()> {
         if let Some(command) = &self.post_undeploy {
             tracing::debug!("Running post-undeploy script");
+            run_hook(command)?;
+        }
+        Ok(())
+    }
+    pub fn run_pre_deploy(&self) -> miette::Result<()> {
+        if let Some(command) = &self.pre_deploy {
+            tracing::debug!("Running pre-deploy script");
+            run_hook(command)?;
+        }
+        Ok(())
+    }
+    pub fn run_pre_undeploy(&self) -> miette::Result<()> {
+        if let Some(command) = &self.pre_undeploy {
+            tracing::debug!("Running pre-undeploy script");
             run_hook(command)?;
         }
         Ok(())
@@ -105,6 +121,50 @@ pub struct EggConfig {
     pub unsafe_shell_hooks: ShellHooks,
 }
 
+#[derive(Debug, PartialEq, Eq, Hash)]
+enum EggConfigKey {
+    Targets,
+    MainFile,
+    Strategy,
+    Templates,
+    Enabled,
+    UnsafeShellHooks,
+}
+
+impl EggConfigKey {
+    fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "targets" => Some(EggConfigKey::Targets),
+            "main_file" => Some(EggConfigKey::MainFile),
+            "strategy" => Some(EggConfigKey::Strategy),
+            "templates" => Some(EggConfigKey::Templates),
+            "enabled" => Some(EggConfigKey::Enabled),
+            "unsafe_shell_hooks" => Some(EggConfigKey::UnsafeShellHooks),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash)]
+enum ShellHookKey {
+    PostDeploy,
+    PostUndeploy,
+    PreDeploy,
+    PreUndeploy,
+}
+
+impl ShellHookKey {
+    fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "post_deploy" => Some(ShellHookKey::PostDeploy),
+            "post_undeploy" => Some(ShellHookKey::PostUndeploy),
+            "pre_deploy" => Some(ShellHookKey::PreDeploy),
+            "pre_undeploy" => Some(ShellHookKey::PreUndeploy),
+            _ => None,
+        }
+    }
+}
+
 impl Default for EggConfig {
     fn default() -> Self {
         EggConfig {
@@ -116,6 +176,8 @@ impl Default for EggConfig {
             unsafe_shell_hooks: ShellHooks {
                 post_deploy: None,
                 post_undeploy: None,
+                pre_deploy: None,
+                pre_undeploy: None,
             },
         }
     }
@@ -135,6 +197,8 @@ impl EggConfig {
             unsafe_shell_hooks: ShellHooks {
                 post_deploy: None,
                 post_undeploy: None,
+                pre_deploy: None,
+                pre_undeploy: None,
             },
         }
     }
@@ -222,6 +286,14 @@ impl EggConfig {
         let Ok(map) = value.as_map_ref() else {
             return Err(rhai_error!("egg value must be a string or a map"));
         };
+
+        for (k, _v) in map.iter() {
+            let k: &str = &*k;
+            if EggConfigKey::from_str(k).is_none() {
+                tracing::warn!("unknown egg config key: {}", k);
+            }
+        }
+
         let empty_map = Dynamic::from(rhai::Map::new());
         let targets = map.get("targets").unwrap_or(&empty_map);
 
@@ -288,9 +360,18 @@ impl EggConfig {
             let shell_hooks = x
                 .as_map_ref()
                 .map_err(|t| rhai_error!("`unsafe_shell_hooks` must be a map, but got {t}"))?;
+
+            for (k, _v) in shell_hooks.iter() {
+                let k: &str = &*k;
+                if ShellHookKey::from_str(k).is_none() {
+                    tracing::warn!("unknown key: {}", k);
+                }
+            }
             ShellHooks {
                 post_deploy: shell_hooks.get("post_deploy").map(|v| v.to_string()),
                 post_undeploy: shell_hooks.get("post_undeploy").map(|v| v.to_string()),
+                pre_deploy: shell_hooks.get("pre_deploy").map(|v| v.to_string()),
+                pre_undeploy: shell_hooks.get("pre_undeploy").map(|v| v.to_string()),
             }
         } else {
             ShellHooks::default()
@@ -337,6 +418,8 @@ mod test {
                 unsafe_shell_hooks: #{
                     post_deploy: "run after deploy",
                     post_undeploy: "run after undeploy",
+                    pre_deploy: "run before deploy",
+                    pre_undeploy: "run before undeploy",
                 }
             }
         "#},
@@ -348,6 +431,8 @@ mod test {
             .with_unsafe_hooks(ShellHooks {
                 post_deploy: Some("run after deploy".to_string()),
                 post_undeploy: Some("run after undeploy".to_string()),
+                pre_deploy: Some("run before deploy".to_string()),
+                pre_undeploy: Some("run before undeploy".to_string()),
             })
     )]
     #[case(r#"#{ targets: "~/bar" }"#, EggConfig::new(".", "~/bar"))]
@@ -379,5 +464,37 @@ mod test {
             ]
         );
         Ok(())
+    }
+
+    #[test]
+    fn test_invalid_key_warns_and_parses() {
+        let input = r#"#{ unknown_key: "value" }"#;
+        let result = rhai::Engine::new().eval(input).unwrap();
+        let parsed = EggConfig::from_dynamic(result);
+        assert!(
+            parsed.is_ok(),
+            "Expected parsing to succeed (unknown keys are warnings)"
+        );
+        let cfg = parsed.unwrap();
+        assert_eq!(cfg, EggConfig::default());
+    }
+
+    #[test]
+    fn test_invalid_unsafe_shell_hooks_key_warns_and_parses() {
+        let input = indoc::indoc! {r#"
+            #{
+                unsafe_shell_hooks: #{
+                    not_a_real_hook: "do something"
+                }
+            }
+        "#};
+        let result = rhai::Engine::new().eval(input).unwrap();
+        let parsed = EggConfig::from_dynamic(result);
+        assert!(
+            parsed.is_ok(),
+            "Expected parsing to succeed (unknown hooks are warnings)"
+        );
+        let cfg = parsed.unwrap();
+        assert_eq!(cfg.unsafe_shell_hooks, ShellHooks::default());
     }
 }
