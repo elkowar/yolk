@@ -150,7 +150,7 @@ impl CommentStyle {
         let re = create_regex("^(\\s*)(.*)$").unwrap();
         let (indent, remaining_line) = re
             .captures(line)
-            .and_then(|x| (x.get(1).zip(x.get(2))))
+            .and_then(|x| x.get(1).zip(x.get(2)))
             .map(|(a, b)| (a.as_str(), b.as_str()))
             .unwrap_or_default();
         let right = match self {
