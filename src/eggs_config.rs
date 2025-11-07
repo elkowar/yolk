@@ -48,6 +48,8 @@ impl FromStr for DeploymentStrategy {
 pub struct ShellHooks {
     pub post_deploy: Option<String>,
     pub post_undeploy: Option<String>,
+    pub pre_deploy: Option<String>,
+    pub pre_undeploy: Option<String>,
     // pub post_sync: Option<String>,
 }
 
@@ -63,6 +65,20 @@ impl ShellHooks {
     pub fn run_post_undeploy(&self) -> miette::Result<()> {
         if let Some(command) = &self.post_undeploy {
             tracing::debug!("Running post-undeploy script");
+            run_hook(command)?;
+        }
+        Ok(())
+    }
+    pub fn run_pre_deploy(&self) -> miette::Result<()> {
+        if let Some(command) = &self.pre_deploy {
+            tracing::debug!("Running pre-deploy script");
+            run_hook(command)?;
+        }
+        Ok(())
+    }
+    pub fn run_pre_undeploy(&self) -> miette::Result<()> {
+        if let Some(command) = &self.pre_undeploy {
+            tracing::debug!("Running pre-undeploy script");
             run_hook(command)?;
         }
         Ok(())
@@ -116,6 +132,8 @@ impl Default for EggConfig {
             unsafe_shell_hooks: ShellHooks {
                 post_deploy: None,
                 post_undeploy: None,
+                pre_deploy: None,
+                pre_undeploy: None,
             },
         }
     }
@@ -135,6 +153,8 @@ impl EggConfig {
             unsafe_shell_hooks: ShellHooks {
                 post_deploy: None,
                 post_undeploy: None,
+                pre_deploy: None,
+                pre_undeploy: None,
             },
         }
     }
@@ -291,6 +311,8 @@ impl EggConfig {
             ShellHooks {
                 post_deploy: shell_hooks.get("post_deploy").map(|v| v.to_string()),
                 post_undeploy: shell_hooks.get("post_undeploy").map(|v| v.to_string()),
+                pre_deploy: shell_hooks.get("pre_deploy").map(|v| v.to_string()),
+                pre_undeploy: shell_hooks.get("pre_undeploy").map(|v| v.to_string()),
             }
         } else {
             ShellHooks::default()
@@ -337,6 +359,8 @@ mod test {
                 unsafe_shell_hooks: #{
                     post_deploy: "run after deploy",
                     post_undeploy: "run after undeploy",
+                    pre_deploy: "run before deploy",
+                    pre_undeploy: "run before undeploy",
                 }
             }
         "#},
@@ -348,6 +372,8 @@ mod test {
             .with_unsafe_hooks(ShellHooks {
                 post_deploy: Some("run after deploy".to_string()),
                 post_undeploy: Some("run after undeploy".to_string()),
+                pre_deploy: Some("run before deploy".to_string()),
+                pre_undeploy: Some("run before undeploy".to_string()),
             })
     )]
     #[case(r#"#{ targets: "~/bar" }"#, EggConfig::new(".", "~/bar"))]
