@@ -121,6 +121,50 @@ pub struct EggConfig {
     pub unsafe_shell_hooks: ShellHooks,
 }
 
+#[derive(Debug, PartialEq, Eq, Hash)]
+enum EggConfigKey {
+    Targets,
+    MainFile,
+    Strategy,
+    Templates,
+    Enabled,
+    UnsafeShellHooks,
+}
+
+impl EggConfigKey {
+    fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "targets" => Some(EggConfigKey::Targets),
+            "main_file" => Some(EggConfigKey::MainFile),
+            "strategy" => Some(EggConfigKey::Strategy),
+            "templates" => Some(EggConfigKey::Templates),
+            "enabled" => Some(EggConfigKey::Enabled),
+            "unsafe_shell_hooks" => Some(EggConfigKey::UnsafeShellHooks),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash)]
+enum ShellHookKey {
+    PostDeploy,
+    PostUndeploy,
+    PreDeploy,
+    PreUndeploy,
+}
+
+impl ShellHookKey {
+    fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "post_deploy" => Some(ShellHookKey::PostDeploy),
+            "post_undeploy" => Some(ShellHookKey::PostUndeploy),
+            "pre_deploy" => Some(ShellHookKey::PreDeploy),
+            "pre_undeploy" => Some(ShellHookKey::PreUndeploy),
+            _ => None,
+        }
+    }
+}
+
 impl Default for EggConfig {
     fn default() -> Self {
         EggConfig {
@@ -242,6 +286,14 @@ impl EggConfig {
         let Ok(map) = value.as_map_ref() else {
             return Err(rhai_error!("egg value must be a string or a map"));
         };
+
+        for (k, _v) in map.iter() {
+            let k: &str = &*k;
+            if EggConfigKey::from_str(k).is_none() {
+                return Err(rhai_error!("unknown egg config key: {}", k));
+            }
+        }
+
         let empty_map = Dynamic::from(rhai::Map::new());
         let targets = map.get("targets").unwrap_or(&empty_map);
 
@@ -308,6 +360,13 @@ impl EggConfig {
             let shell_hooks = x
                 .as_map_ref()
                 .map_err(|t| rhai_error!("`unsafe_shell_hooks` must be a map, but got {t}"))?;
+
+            for (k, _v) in shell_hooks.iter() {
+                let k: &str = &*k;
+                if ShellHookKey::from_str(k).is_none() {
+                    return Err(rhai_error!("unknown unsafe_shell_hooks key: {}", k));
+                }
+            }
             ShellHooks {
                 post_deploy: shell_hooks.get("post_deploy").map(|v| v.to_string()),
                 post_undeploy: shell_hooks.get("post_undeploy").map(|v| v.to_string()),
@@ -405,5 +464,30 @@ mod test {
             ]
         );
         Ok(())
+    }
+
+    #[test]
+    fn test_invalid_key_fails() {
+        let input = r#"#{ unknown_key: "value" }"#;
+        let result = rhai::Engine::new().eval(input).unwrap();
+        let parsed = EggConfig::from_dynamic(result);
+        assert!(parsed.is_err(), "Expected parsing to fail for unknown key");
+    }
+
+    #[test]
+    fn test_invalid_unsafe_shell_hooks_key_fails() {
+        let input = indoc::indoc! {r#"
+            #{
+                unsafe_shell_hooks: #{
+                    not_a_real_hook: "do something"
+                }
+            }
+        "#};
+        let result = rhai::Engine::new().eval(input).unwrap();
+        let parsed = EggConfig::from_dynamic(result);
+        assert!(
+            parsed.is_err(),
+            "Expected parsing to fail for invalid unsafe_shell_hooks key"
+        );
     }
 }
