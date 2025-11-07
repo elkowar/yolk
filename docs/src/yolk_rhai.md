@@ -54,6 +54,8 @@ export let eggs = #{
         unsafe_shell_hooks: #{
             post_deploy: "some shellscript",
             post_undeploy: "another shellscript",
+            pre_deploy: "some other shellscript",
+            pre_undeploy: "yet another shellscript",
         }
     }
 }
@@ -96,7 +98,7 @@ A path, relative to the egg directory, that will be opened when you run `yolk ed
 
 #### `unsafe_shell_hooks`
 An object that may declare two scripts, which get ran when the egg is deployed or un-deployed.
-The `post_deploy` script gets executed after the egg has been deployed, the `post_undeploy` script gets executed after the egg has been un-deployed.
+The `pre_deploy` script gets executed before the egg is deployed, the `pre_undeploy` script gets executed before the egg is un-deployed, the `post_deploy` script gets executed after the egg has been deployed, the `post_undeploy` script gets executed after the egg has been un-deployed.
 
 Note that these scripts should optimally be idempodent, so running them twice should not change anything compared to running them once.
 

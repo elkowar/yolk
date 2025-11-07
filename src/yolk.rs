@@ -86,6 +86,7 @@ impl Yolk {
         mappings: &HashMap<PathBuf, PathBuf>,
     ) -> Result<(), MultiError> {
         let mut errs = Vec::new();
+        egg.config().unsafe_shell_hooks.run_pre_deploy()?;
         for (in_egg, deployed) in mappings {
             let mut deploy_mapping = || -> miette::Result<()> {
                 match egg.config().strategy {
@@ -141,6 +142,7 @@ impl Yolk {
         egg: &Egg,
         mappings: &HashMap<PathBuf, PathBuf>,
     ) -> Result<(), MultiError> {
+        egg.config().unsafe_shell_hooks.run_pre_undeploy()?;
         let mut errs = Vec::new();
         for (in_egg, deployed) in mappings {
             if let Err(e) = deployer.remove_symlink_recursive(in_egg, &deployed) {

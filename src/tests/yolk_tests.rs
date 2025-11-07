@@ -55,11 +55,28 @@ fn test_egg_post_deploy_hooks() -> TestResult {
         .with_unsafe_hooks(ShellHooks {
             post_deploy: Some(format!("touch {}/post_deploy_ran", home.display())),
             post_undeploy: Some(format!("touch {}/post_undeploy_ran", home.display())),
+            pre_deploy: Some(format!("touch {}/pre_deploy_ran", home.display())),
+            pre_undeploy: Some(format!("touch {}/pre_undeploy_ran", home.display())),
         });
     let egg_again = egg.clone().with_unsafe_hooks(ShellHooks {
         post_deploy: Some(format!("touch {}/post_deploy_ran_again", home.display())),
         post_undeploy: Some(format!("touch {}/post_undeploy_ran_again", home.display())),
+        pre_deploy: Some(format!("touch {}/pre_deploy_ran_again", home.display())),
+        pre_undeploy: Some(format!("touch {}/pre_undeploy_ran_again", home.display())),
     });
+    yolk.sync_egg_deployment(&Egg::open(
+        home.to_path_buf(),
+        eggs.child("foo").to_path_buf(),
+        egg.clone(),
+    )?)?;
+    home.child("pre_deploy_ran").assert(exists());
+    yolk.sync_egg_deployment(&Egg::open(
+        home.to_path_buf(),
+        eggs.child("foo").to_path_buf(),
+        egg_again.clone(),
+    )?)?;
+    home.child("pre_deploy_ran_again").assert(exists().not());
+
     yolk.sync_egg_deployment(&Egg::open(
         home.to_path_buf(),
         eggs.child("foo").to_path_buf(),
@@ -72,6 +89,19 @@ fn test_egg_post_deploy_hooks() -> TestResult {
         egg_again.clone(),
     )?)?;
     home.child("post_deploy_ran_again").assert(exists().not());
+
+    yolk.sync_egg_deployment(&Egg::open(
+        home.to_path_buf(),
+        eggs.child("foo").to_path_buf(),
+        egg.clone().with_enabled(false),
+    )?)?;
+    home.child("pre_undeploy_ran").assert(exists()); //ERROR: why
+    yolk.sync_egg_deployment(&Egg::open(
+        home.to_path_buf(),
+        eggs.child("foo").to_path_buf(),
+        egg_again.clone().with_enabled(false),
+    )?)?;
+    home.child("pre_undeploy_ran_again").assert(exists().not());
 
     yolk.sync_egg_deployment(&Egg::open(
         home.to_path_buf(),
