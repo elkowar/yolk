@@ -95,7 +95,7 @@ fn test_egg_post_deploy_hooks() -> TestResult {
         eggs.child("foo").to_path_buf(),
         egg.clone().with_enabled(false),
     )?)?;
-    home.child("pre_undeploy_ran").assert(exists()); //ERROR: why
+    home.child("pre_undeploy_ran").assert(exists());
     yolk.sync_egg_deployment(&Egg::open(
         home.to_path_buf(),
         eggs.child("foo").to_path_buf(),
