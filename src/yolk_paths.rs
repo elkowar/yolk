@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 use fs_err::PathExt;
 use miette::{Context as _, IntoDiagnostic, Result};
@@ -138,6 +141,19 @@ impl YolkPaths {
         fs_err::write(self.yolk_rhai_path(), DEFAULT_YOLK_RHAI).into_diagnostic()?;
 
         Ok(())
+    }
+
+    /// Start a [`std::process::Command`] with the `GIT_DIR` variable set to the git directory.
+    pub fn start_command(&self, binary: &str) -> Result<Command> {
+        let mut cmd = Command::new(binary);
+        cmd.env(
+            "GIT_DIR",
+            self.active_yolk_git_dir()?
+                .canonical()?
+                .to_string_lossy()
+                .to_string(),
+        );
+        Ok(cmd)
     }
 
     /// Start a [Git] command helper with the paths correctly set for this yolk repository
