@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.5](https://github.com/elkowar/yolk/compare/v0.3.4...v0.3.5) - 2025-11-11
+
+### Added
+
+- add pre_deploy and pre_undeploy hook
+- Add yolk exec-canonical subcommand
+
+### Ci
+
+- remove homebrew temporarily
+
+### Fixed
+
+- fix documentation of eval command (fixes #65)
+
+### Ref
+
+- remove unnecessary parentheses around closure body
+
 ## [0.3.4](https://github.com/elkowar/yolk/compare/v0.3.3...v0.3.4) - 2025-05-10
 
 ### Fixed
