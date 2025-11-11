@@ -60,6 +60,13 @@ enum Command {
     ///
     /// This renames `.git` to `.yolk_git` to ensure that git interaction happens through the yolk CLI
     Safeguard,
+
+    /// Run a given shell command within a canonical context. I.e.: `yolk exec-canonical gitui`.
+    #[clap(name = "exec-canonical")]
+    ExecCanonical {
+        #[clap(allow_hyphen_values = true)]
+        command: Vec<String>,
+    },
     /// Make sure you don't accidentally commit your local egg states
     ///
     /// Evaluate a rhai expression.
@@ -270,6 +277,17 @@ fn run_command(args: Args) -> Result<()> {
                 .eval_rhai::<Dynamic>(expr)
                 .map_err(|e| e.into_report("<inline>", expr))?;
             println!("{result}");
+        }
+        Command::ExecCanonical { command } => {
+            yolk.with_canonical_state(|| {
+                let mut command = command.iter();
+                let binary = command.next().context("No command to run given")?;
+                yolk.paths()
+                    .start_command(binary)?
+                    .args(command)
+                    .status()
+                    .into_diagnostic()
+            })?;
         }
         Command::Git {
             command,
