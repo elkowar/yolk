@@ -183,6 +183,13 @@ impl Yolk {
             .context("Failed to expand targets config for egg")?;
 
         if egg.config().enabled && !deployed {
+            if mappings.is_empty() {
+                tracing::warn!(
+                    "Egg {} has no deployment targets; skipping deploy",
+                    egg.name()
+                );
+                return Ok(false);
+            }
             let mut deployer = Deployer::new();
             tracing::debug!("Deploying egg {}", egg.name());
 
