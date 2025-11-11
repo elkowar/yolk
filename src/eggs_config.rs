@@ -290,7 +290,7 @@ impl EggConfig {
         for (k, _v) in map.iter() {
             let k: &str = &*k;
             if EggConfigKey::from_str(k).is_none() {
-                return Err(rhai_error!("unknown egg config key: {}", k));
+                tracing::warn!("unknown egg config key: {} (parent: egg)", k);
             }
         }
 
@@ -364,7 +364,7 @@ impl EggConfig {
             for (k, _v) in shell_hooks.iter() {
                 let k: &str = &*k;
                 if ShellHookKey::from_str(k).is_none() {
-                    return Err(rhai_error!("unknown unsafe_shell_hooks key: {}", k));
+                    tracing::warn!("unknown key: {} (parent: unsafe_shell_hooks)", k);
                 }
             }
             ShellHooks {
@@ -467,15 +467,17 @@ mod test {
     }
 
     #[test]
-    fn test_invalid_key_fails() {
+    fn test_invalid_key_warns_and_parses() {
         let input = r#"#{ unknown_key: "value" }"#;
         let result = rhai::Engine::new().eval(input).unwrap();
         let parsed = EggConfig::from_dynamic(result);
-        assert!(parsed.is_err(), "Expected parsing to fail for unknown key");
+        assert!(parsed.is_ok(), "Expected parsing to succeed (unknown keys are warnings)");
+        let cfg = parsed.unwrap();
+        assert_eq!(cfg, EggConfig::default());
     }
 
     #[test]
-    fn test_invalid_unsafe_shell_hooks_key_fails() {
+    fn test_invalid_unsafe_shell_hooks_key_warns_and_parses() {
         let input = indoc::indoc! {r#"
             #{
                 unsafe_shell_hooks: #{
@@ -485,9 +487,8 @@ mod test {
         "#};
         let result = rhai::Engine::new().eval(input).unwrap();
         let parsed = EggConfig::from_dynamic(result);
-        assert!(
-            parsed.is_err(),
-            "Expected parsing to fail for invalid unsafe_shell_hooks key"
-        );
+        assert!(parsed.is_ok(), "Expected parsing to succeed (unknown hooks are warnings)");
+        let cfg = parsed.unwrap();
+        assert_eq!(cfg.unsafe_shell_hooks, ShellHooks::default());
     }
 }
