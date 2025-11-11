@@ -67,8 +67,6 @@ enum Command {
         #[clap(allow_hyphen_values = true)]
         command: Vec<String>,
     },
-    /// Make sure you don't accidentally commit your local egg states
-    ///
     /// Evaluate a rhai expression.
     ///
     /// The expression is executed in the same scope that template tag expression are evaluated in.
