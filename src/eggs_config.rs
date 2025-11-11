@@ -290,7 +290,7 @@ impl EggConfig {
         for (k, _v) in map.iter() {
             let k: &str = &*k;
             if EggConfigKey::from_str(k).is_none() {
-                tracing::warn!("unknown egg config key: {} (parent: egg)", k);
+                tracing::warn!("unknown egg config key: {}", k);
             }
         }
 
@@ -364,7 +364,7 @@ impl EggConfig {
             for (k, _v) in shell_hooks.iter() {
                 let k: &str = &*k;
                 if ShellHookKey::from_str(k).is_none() {
-                    tracing::warn!("unknown key: {} (parent: unsafe_shell_hooks)", k);
+                    tracing::warn!("unknown key: {}", k);
                 }
             }
             ShellHooks {
@@ -471,7 +471,10 @@ mod test {
         let input = r#"#{ unknown_key: "value" }"#;
         let result = rhai::Engine::new().eval(input).unwrap();
         let parsed = EggConfig::from_dynamic(result);
-        assert!(parsed.is_ok(), "Expected parsing to succeed (unknown keys are warnings)");
+        assert!(
+            parsed.is_ok(),
+            "Expected parsing to succeed (unknown keys are warnings)"
+        );
         let cfg = parsed.unwrap();
         assert_eq!(cfg, EggConfig::default());
     }
@@ -487,7 +490,10 @@ mod test {
         "#};
         let result = rhai::Engine::new().eval(input).unwrap();
         let parsed = EggConfig::from_dynamic(result);
-        assert!(parsed.is_ok(), "Expected parsing to succeed (unknown hooks are warnings)");
+        assert!(
+            parsed.is_ok(),
+            "Expected parsing to succeed (unknown hooks are warnings)"
+        );
         let cfg = parsed.unwrap();
         assert_eq!(cfg.unsafe_shell_hooks, ShellHooks::default());
     }
