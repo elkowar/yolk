@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.6](https://github.com/elkowar/yolk/compare/v0.3.5...v0.3.6) - 2025-11-12
+
+### Ci
+
+- update cargo-dist
+- fix cargo dist
+
+### Fixed
+
+- skip deploy when no targets because of missing or typo (refs elkowar/yolk#59)
+
 ## [0.3.5](https://github.com/elkowar/yolk/compare/v0.3.4...v0.3.5) - 2025-11-11
 
 ### Added
