@@ -18,7 +18,7 @@ pr-run-mode = "plan"
 # CI backends to support
 ci = "github"
 # The installers to generate for each app
-installers = ["shell", "powershell"]
+installers = ["shell", "powershell", "homebrew"]
 # Customize the Homebrew formula name
 formula = "yolk"
 # Target platforms to build apps for (Rust target-triple syntax)
@@ -27,8 +27,10 @@ targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-unknown-linux-
 install-path = "CARGO_HOME"
 # Whether to install an updater program
 install-updater = false
-# Skip checking whether the specified configuration files are up to date
-allow-dirty = ["ci"]
+# A GitHub repo to push Homebrew formulas to
+tap = "elkowar/homebrew-tap"
+# Publish jobs to run in CI
+publish-jobs = ["homebrew"]
 
 [dist.github-custom-runners]
 # Use an `ubuntu-latest` runner for all "global" steps of the release process,
