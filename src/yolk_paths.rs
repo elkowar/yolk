@@ -111,7 +111,7 @@ impl YolkPaths {
     }
 
     /// Return the path to the active git directory,
-    /// which is either the [`yolk_default_git_path`] (`.git`) or the [`yolk_safeguarded_git_path`] (`.yolk_git`) if it exists.
+    /// which is either the [`YolkPaths::yolk_default_git_path`] (`.git`) or the [`YolkPaths::yolk_safeguarded_git_path`] (`.yolk_git`) if it exists.
     pub fn active_yolk_git_dir(&self) -> Result<PathBuf> {
         let default_git_dir = self.yolk_default_git_path();
         let safeguarded_git_dir = self.yolk_safeguarded_git_path();
