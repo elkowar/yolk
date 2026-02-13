@@ -5,7 +5,8 @@ use std::{
     str::FromStr,
 };
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::aot::{generate, Shell};
 use fs_err::PathExt as _;
 use miette::{Context as _, IntoDiagnostic, Result};
 use notify_debouncer_full::{new_debouncer, notify::RecursiveMode, DebounceEventResult};
@@ -123,6 +124,9 @@ enum Command {
         force_canonical: bool,
     },
 
+    /// Generate shell completions
+    ShellCompletions { shell: Option<Shell> },
+
     #[command(hide(true))]
     RootManageSymlinks {
         #[arg(long, value_names = ["ORIGINAL::::SYMLINK_PATH"], required = false, value_parser=parse_symlink_pair)]
@@ -220,7 +224,7 @@ fn run_command(args: Args) -> Result<()> {
     let yolk = Yolk::new(yolk_paths);
     match &args.command {
         Command::Init => yolk.init_yolk(None)?,
-        // TODO: we shoul likely also do this as part of init, maybe
+        // TODO: we should likely also do this as part of init, maybe
         Command::Safeguard => yolk.paths().safeguard_git_dir()?,
         Command::Status => {
             yolk.init_git_config(None)?;
@@ -251,6 +255,18 @@ fn run_command(args: Args) -> Result<()> {
                     })
                 });
                 println!("{}", text);
+            }
+        }
+        Command::ShellCompletions { shell } => {
+            if let Some(shell) = shell {
+                generate(*shell, &mut Args::command(), "yolk", &mut std::io::stdout());
+            } else {
+                generate(
+                    Shell::from_env().unwrap_or(Shell::Bash),
+                    &mut Args::command(),
+                    "yolk",
+                    &mut std::io::stdout(),
+                );
             }
         }
         Command::Sync { canonical } => {
