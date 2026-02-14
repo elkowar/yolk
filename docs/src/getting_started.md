@@ -30,6 +30,17 @@ $ yolk init
 
 This will create the yolk directory, with a default `yolk.rhai` file, and an `eggs` directory.
 
+If you installed `yolk` with cargo some other manual method, you may want to generate shell completions.
+```fish
+$ yolk shell-completions fish > ~/.config/fish/completions/yolk.fish
+```
+For `bash` the user completions by default live in `${XDG_DATA_HOME}/bash-completion/completions/` and for `zsh` they
+live in the `$fpath`.
+If you are not sure, see the completion documentation for
+[`bash`](https://www.gnu.org/software/bash/manual/html_node/Programmable-Completion.html) or
+[`zsh`](https://zsh.sourceforge.io/Doc/Release/Completion-System.html) or the documentation for the framework that you
+are using for configuration (e.g. Oh My Zsh).
+
 ### Adding your first egg
 
 let's say we want to manage the configuration for the `alacritty` terminal emulator.
