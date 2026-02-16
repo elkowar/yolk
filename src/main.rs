@@ -65,7 +65,7 @@ enum Command {
     /// Run a given shell command within a canonical context. I.e.: `yolk exec-canonical gitui`.
     #[clap(name = "exec-canonical")]
     ExecCanonical {
-        #[clap(allow_hyphen_values = true)]
+        #[clap(allow_hyphen_values = true, last=true, value_hint=ValueHint::CommandWithArguments)]
         command: Vec<String>,
     },
     /// Evaluate a Rhai expression.
@@ -96,6 +96,7 @@ enum Command {
         canonical: bool,
         /// The path to the file you want to evaluate
         /// If not provided, the program will read from stdin
+        #[arg(value_hint=ValueHint::FilePath)]
         path: Option<PathBuf>,
     },
 
@@ -117,7 +118,9 @@ enum Command {
     /// Run a git-command within the yolk directory.
     #[clap(alias = "g")]
     Git {
-        #[clap(allow_hyphen_values = true)]
+        // TODO: Test whether the command is being completed (works only in bash currently).
+        // Possibly would need to pre-fill with the `git` command  <kunzaatko, 16-02-2026>
+        #[clap(allow_hyphen_values = true, last=true, value_hint=ValueHint::CommandWithArguments)]
         command: Vec<String>,
         /// Force yolk to run the command with canonicalized files, regardless of what command it is.
         #[arg(long)]
@@ -132,13 +135,16 @@ enum Command {
     RootManageSymlinks {
         #[arg(long, value_names = ["ORIGINAL::::SYMLINK_PATH"], required = false, value_parser=parse_symlink_pair)]
         create_symlink: Vec<(PathBuf, PathBuf)>,
-        #[arg(long, value_names = ["SYMLINK_PATH"], required = false)]
+        #[arg(long, value_names = ["SYMLINK_PATH"], required = false, value_hint=ValueHint::AnyPath)]
         delete_symlink: Vec<PathBuf>,
     },
 
     #[cfg(feature = "docgen")]
     #[command(hide(true))]
-    Docs { dir: PathBuf },
+    Docs {
+        #[arg(value_hint=ValueHint::DirPath)]
+        dir: PathBuf,
+    },
 }
 
 fn parse_symlink_pair(s: &str) -> Result<(PathBuf, PathBuf), String> {
