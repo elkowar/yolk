@@ -30,16 +30,29 @@ $ yolk init
 
 This will create the yolk directory, with a default `yolk.rhai` file, and an `eggs` directory.
 
-If you installed `yolk` with cargo some other manual method, you may want to generate shell completions.
-```fish
-$ yolk shell-completions fish > ~/.config/fish/completions/yolk.fish
+### Shell completions
+
+`yolk` comes with built-in shell completions for `bash`, `zsh`, `fish`, `elvish` and `powershell`.
+To enable those, for `bash` run
+```bash
+echo "source <(COMPLETE=bash yolk)" >> ~/.bashrc
 ```
-For `bash` the user completions by default live in `${XDG_DATA_HOME}/bash-completion/completions/` and for `zsh` they
-live in the `$fpath`.
-If you are not sure, see the completion documentation for
-[`bash`](https://www.gnu.org/software/bash/manual/html_node/Programmable-Completion.html) or
-[`zsh`](https://zsh.sourceforge.io/Doc/Release/Completion-System.html) or the documentation for the framework that you
-are using for configuration (e.g. Oh My Zsh).
+for `zsh`, run
+```zsh
+echo "source <(COMPLETE=zsh yolk)" >> ~/.zshrc
+```
+for `fish` run
+```fish
+echo "COMPLETE=fish yolk | source" >> ~/.config/fish/completions/yolk.fish
+```
+for `elvish` run
+```elvish
+echo "eval (E:COMPLETE=elvish yolk | slurp)" >> ~/.elvish/rc.elv
+```
+and for `powershell` run
+```powershell
+echo '$env:COMPLETE = "powershell"; yolk | Out-String | Invoke-Expression; Remove-Item Env:\COMPLETE' >> $PROFILE
+```
 
 ### Adding your first egg
 

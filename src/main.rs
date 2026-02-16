@@ -6,7 +6,7 @@ use std::{
 };
 
 use clap::{CommandFactory, Parser, Subcommand};
-use clap_complete::aot::{generate, Shell};
+use clap_complete::env::CompleteEnv;
 use fs_err::PathExt as _;
 use miette::{Context as _, IntoDiagnostic, Result};
 use notify_debouncer_full::{new_debouncer, notify::RecursiveMode, DebounceEventResult};
@@ -68,7 +68,7 @@ enum Command {
         #[clap(allow_hyphen_values = true)]
         command: Vec<String>,
     },
-    /// Evaluate a rhai expression.
+    /// Evaluate a Rhai expression.
     ///
     /// The expression is executed in the same scope that template tag expression are evaluated in.
     Eval {
@@ -124,9 +124,6 @@ enum Command {
         force_canonical: bool,
     },
 
-    /// Generate shell completions
-    ShellCompletions { shell: Option<Shell> },
-
     #[command(hide(true))]
     RootManageSymlinks {
         #[arg(long, value_names = ["ORIGINAL::::SYMLINK_PATH"], required = false, value_parser=parse_symlink_pair)]
@@ -150,6 +147,9 @@ fn parse_symlink_pair(s: &str) -> Result<(PathBuf, PathBuf), String> {
 }
 
 pub(crate) fn main() -> Result<()> {
+    CompleteEnv::with_factory(Args::command)
+        .bin("yolk")
+        .complete();
     let args = Args::parse();
 
     init_logging(&args);
@@ -255,18 +255,6 @@ fn run_command(args: Args) -> Result<()> {
                     })
                 });
                 println!("{}", text);
-            }
-        }
-        Command::ShellCompletions { shell } => {
-            if let Some(shell) = shell {
-                generate(*shell, &mut Args::command(), "yolk", &mut std::io::stdout());
-            } else {
-                generate(
-                    Shell::from_env().unwrap_or(Shell::Bash),
-                    &mut Args::command(),
-                    "yolk",
-                    &mut std::io::stdout(),
-                );
             }
         }
         Command::Sync { canonical } => {
