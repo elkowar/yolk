@@ -5,8 +5,8 @@ use std::{
     str::FromStr,
 };
 
-use clap::{CommandFactory, Parser, Subcommand};
-use clap_complete::env::CompleteEnv;
+use clap::{CommandFactory, Parser, Subcommand, ValueHint};
+use clap_complete::{env::CompleteEnv, generate, Shell};
 use fs_err::PathExt as _;
 use miette::{Context as _, IntoDiagnostic, Result};
 use notify_debouncer_full::{new_debouncer, notify::RecursiveMode, DebounceEventResult};
@@ -123,6 +123,10 @@ enum Command {
         #[arg(long)]
         force_canonical: bool,
     },
+
+    /// Generate shell completions
+    #[command(hide(true))]
+    ShellCompletions { shell: Option<Shell> },
 
     #[command(hide(true))]
     RootManageSymlinks {
@@ -255,6 +259,18 @@ fn run_command(args: Args) -> Result<()> {
                     })
                 });
                 println!("{}", text);
+            }
+        }
+        Command::ShellCompletions { shell } => {
+            if let Some(shell) = shell {
+                generate(*shell, &mut Args::command(), "yolk", &mut std::io::stdout());
+            } else {
+                generate(
+                    Shell::from_env().unwrap_or(Shell::Bash),
+                    &mut Args::command(),
+                    "yolk",
+                    &mut std::io::stdout(),
+                );
             }
         }
         Command::Sync { canonical } => {

@@ -54,6 +54,11 @@ and for `powershell` run
 echo '$env:COMPLETE = "powershell"; yolk | Out-String | Invoke-Expression; Remove-Item Env:\COMPLETE' >> $PROFILE
 ```
 
+Static completions may also be generated using
+```sh
+yolk shell-completions <SHELL>
+```
+
 ### Adding your first egg
 
 let's say we want to manage the configuration for the `alacritty` terminal emulator.
