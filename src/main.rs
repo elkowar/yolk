@@ -6,7 +6,7 @@ use std::{
 };
 
 use clap::{CommandFactory, Parser, Subcommand, ValueHint};
-use clap_complete::{env::CompleteEnv, generate, Shell};
+use clap_complete::{env::CompleteEnv, generate, ArgValueCompleter, CompletionCandidate, Shell};
 use fs_err::PathExt as _;
 use miette::{Context as _, IntoDiagnostic, Result};
 use notify_debouncer_full::{new_debouncer, notify::RecursiveMode, DebounceEventResult};
@@ -104,7 +104,10 @@ enum Command {
     List,
 
     /// Open your `yolk.rhai` or the given egg in your `$EDITOR` of choice.
-    Edit { egg: Option<String> },
+    Edit {
+        #[arg(add = ArgValueCompleter::new(egg_completer))]
+        egg: Option<String>,
+    },
 
     /// Watch for changes in your templated files and re-sync them when they change.
     Watch {
@@ -145,6 +148,28 @@ enum Command {
         #[arg(value_hint=ValueHint::DirPath)]
         dir: PathBuf,
     },
+}
+
+fn egg_completer(current: &std::ffi::OsStr) -> Vec<CompletionCandidate> {
+    let Some(current) = current.to_str() else {
+        return vec![];
+    };
+
+    let yolk_dir = yolk_paths::default_yolk_dir();
+    let Some(home_dir) = dirs::home_dir() else {
+        return vec![];
+    };
+    let yolk_paths = yolk::yolk_paths::YolkPaths::new(yolk_dir, home_dir);
+    let yolk = Yolk::new(yolk_paths);
+
+    let Ok(eggs) = yolk.list_eggs() else {
+        return vec![];
+    };
+    eggs.iter()
+        .map(|egg| egg.name().to_string())
+        .filter(|name| name.starts_with(current))
+        .map(CompletionCandidate::new)
+        .collect::<Vec<CompletionCandidate>>()
 }
 
 fn parse_symlink_pair(s: &str) -> Result<(PathBuf, PathBuf), String> {
