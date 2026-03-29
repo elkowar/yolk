@@ -396,14 +396,10 @@ fn run_command(args: Args) -> Result<()> {
                 Some(egg_name) => {
                     let egg = yolk.load_egg(egg_name)?;
                     let main_file = egg.edit_path()?;
-                    let cd_path = egg
-                        .find_first_deployed_symlink()?
-                        .unwrap_or_else(|| yolk.paths().egg_path(egg.name()));
+                    let cd_path = egg.edit_dir()?;
                     let _ = std::env::set_current_dir(&cd_path);
                     if let Some(ref main_file) = main_file {
-                        edit::edit_file(egg.path().join(main_file)).into_diagnostic()?;
-                    } else {
-                        edit::edit_file(&cd_path).into_diagnostic()?;
+                        edit::edit_file(main_file).into_diagnostic()?;
                     }
                 }
                 None => {
