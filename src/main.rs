@@ -5,7 +5,7 @@ use std::{
     str::FromStr,
 };
 
-use clap::{CommandFactory, Parser, Subcommand, ValueHint};
+use clap::{builder::StyledStr, CommandFactory, Parser, Subcommand, ValueHint};
 use clap_complete::{env::CompleteEnv, generate, ArgValueCompleter, CompletionCandidate, Shell};
 use fs_err::PathExt as _;
 use miette::{Context as _, IntoDiagnostic, Result};
@@ -22,7 +22,7 @@ use yolk::{
     deploy::Deployer,
     util::PathExt as _,
     yolk::{EvalMode, Yolk},
-    yolk_paths,
+    yolk_paths::{self, Egg},
 };
 
 #[derive(clap::Parser, Debug)]
@@ -166,10 +166,34 @@ fn egg_completer(current: &std::ffi::OsStr) -> Vec<CompletionCandidate> {
         return vec![];
     };
     eggs.iter()
-        .map(|egg| egg.name().to_string())
-        .filter(|name| name.starts_with(current))
-        .map(CompletionCandidate::new)
+        .map(|egg| (egg, egg.name().to_string()))
+        .filter(|(_, name)| name.starts_with(current))
+        .map(|(egg, name)| {
+            let mut completion = CompletionCandidate::new(name);
+            if let Ok(Some(path)) = edit_path(&yolk, egg) {
+                completion = completion.help(Some(StyledStr::from(path.display().to_string())))
+            }
+            completion
+        })
         .collect::<Vec<CompletionCandidate>>()
+}
+
+fn edit_path(yolk: &Yolk, egg: &Egg) -> Result<Option<PathBuf>> {
+    let cd_path = egg
+        .find_first_deployed_symlink()?
+        .unwrap_or_else(|| yolk.paths().egg_path(egg.name()));
+    let _ = std::env::set_current_dir(&cd_path);
+    let mut main_file = egg.config().main_file.clone();
+    // If no main_file is specified and there's exactly one file in the egg directory, use that
+    if main_file.is_none() {
+        let mut files = egg.path().fs_err_read_dir().into_diagnostic()?;
+        if let Some(first_file) = files.next() {
+            if files.next().is_none() {
+                main_file = Some(first_file.into_diagnostic()?.path());
+            }
+        }
+    }
+    Ok(main_file)
 }
 
 fn parse_symlink_pair(s: &str) -> Result<(PathBuf, PathBuf), String> {
@@ -390,20 +414,10 @@ fn run_command(args: Args) -> Result<()> {
             match egg_name {
                 Some(egg_name) => {
                     let egg = yolk.load_egg(egg_name)?;
+                    let main_file = edit_path(&yolk, &egg)?;
                     let cd_path = egg
                         .find_first_deployed_symlink()?
-                        .unwrap_or_else(|| yolk.paths().egg_path(egg_name));
-                    let _ = std::env::set_current_dir(&cd_path);
-                    let mut main_file = egg.config().main_file.clone();
-                    // If no main_file is specified and there's exactly one file in the egg directory, use that
-                    if main_file.is_none() {
-                        let mut files = egg.path().fs_err_read_dir().into_diagnostic()?;
-                        if let Some(first_file) = files.next() {
-                            if files.next().is_none() {
-                                main_file = Some(first_file.into_diagnostic()?.path());
-                            }
-                        }
-                    }
+                        .unwrap_or_else(|| yolk.paths().egg_path(egg.name()));
                     if let Some(ref main_file) = main_file {
                         edit::edit_file(egg.path().join(main_file)).into_diagnostic()?;
                     } else {
