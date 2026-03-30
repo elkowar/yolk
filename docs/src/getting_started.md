@@ -30,35 +30,6 @@ $ yolk init
 
 This will create the yolk directory, with a default `yolk.rhai` file, and an `eggs` directory.
 
-### Shell completions
-
-`yolk` comes with built-in shell completions for `bash`, `zsh`, `fish`, `elvish` and `powershell`.
-To enable those, for `bash` run
-```bash
-echo "source <(COMPLETE=bash yolk)" >> ~/.bashrc
-```
-for `zsh`, run
-```zsh
-echo "source <(COMPLETE=zsh yolk)" >> ~/.zshrc
-```
-for `fish` run
-```fish
-echo "COMPLETE=fish yolk | source" >> ~/.config/fish/completions/yolk.fish
-```
-for `elvish` run
-```elvish
-echo "eval (E:COMPLETE=elvish yolk | slurp)" >> ~/.elvish/rc.elv
-```
-and for `powershell` run
-```powershell
-echo '$env:COMPLETE = "powershell"; yolk | Out-String | Invoke-Expression; Remove-Item Env:\COMPLETE' >> $PROFILE
-```
-
-Static completions may also be generated using
-```sh
-yolk shell-completions <SHELL>
-```
-
 ### Adding your first egg
 
 let's say we want to manage the configuration for the `alacritty` terminal emulator.

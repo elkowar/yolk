@@ -6,7 +6,7 @@ use std::{
 };
 
 use clap::{builder::StyledStr, CommandFactory, Parser, Subcommand, ValueHint};
-use clap_complete::{env::CompleteEnv, generate, ArgValueCompleter, CompletionCandidate, Shell};
+use clap_complete::{env::CompleteEnv, ArgValueCompleter, CompletionCandidate, Shell};
 use miette::{Context as _, IntoDiagnostic, Result};
 use notify_debouncer_full::{new_debouncer, notify::RecursiveMode, DebounceEventResult};
 use owo_colors::OwoColorize as _;
@@ -131,7 +131,10 @@ enum Command {
 
     /// Generate shell completions
     #[command(hide(true))]
-    ShellCompletions { shell: Option<Shell> },
+    ShellCompletions {
+        #[arg(long)]
+        shell: Option<Shell>,
+    },
 
     #[command(hide(true))]
     RootManageSymlinks {
@@ -175,6 +178,28 @@ fn egg_completer(current: &std::ffi::OsStr) -> Vec<CompletionCandidate> {
             completion
         })
         .collect::<Vec<CompletionCandidate>>()
+}
+
+fn print_shell_competions(shell: &Shell) -> Result<()> {
+    match shell {
+        Shell::Fish => {
+            println!("COMPLETE=fish yolk | source");
+        }
+        Shell::Bash => {
+            println!("source <(COMPLETE=bash yolk)");
+        }
+        Shell::Elvish => {
+            println!("eval (E:COMPLETE=elvish yolk | slurp)")
+        }
+        Shell::Zsh => {
+            println!("source <(COMPLETE=zsh yolk)")
+        }
+        Shell::PowerShell => {
+            println!("$env:COMPLETE = \"powershell\"; yolk | Out-String | Invoke-Expression; Remove-Item Env:\\COMPLETE");
+        }
+        _ => unreachable!(),
+    }
+    Ok(())
 }
 
 fn parse_symlink_pair(s: &str) -> Result<(PathBuf, PathBuf), String> {
@@ -299,14 +324,9 @@ fn run_command(args: Args) -> Result<()> {
         }
         Command::ShellCompletions { shell } => {
             if let Some(shell) = shell {
-                generate(*shell, &mut Args::command(), "yolk", &mut std::io::stdout());
+                print_shell_competions(shell)?
             } else {
-                generate(
-                    Shell::from_env().unwrap_or(Shell::Bash),
-                    &mut Args::command(),
-                    "yolk",
-                    &mut std::io::stdout(),
-                );
+                print_shell_competions(&Shell::from_env().unwrap_or(Shell::Bash))?;
             }
         }
         Command::Sync { canonical } => {
@@ -483,7 +503,7 @@ fn run_command(args: Args) -> Result<()> {
                                     eprintln!("Error: {e:?}");
                                 }
                             } else {
-                                changed.iter().for_each(|path| on_file_updated(&path));
+                                changed.iter().for_each(|path| on_file_updated(path));
                             }
                         }
                         Err(error) => tracing::error!("Error: {error:?}"),
