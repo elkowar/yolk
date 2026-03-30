@@ -5,8 +5,8 @@ use std::{
     str::FromStr,
 };
 
-use clap::{Parser, Subcommand};
-use fs_err::PathExt as _;
+use clap::{builder::StyledStr, CommandFactory, Parser, Subcommand, ValueHint};
+use clap_complete::{env::CompleteEnv, ArgValueCompleter, CompletionCandidate, Shell};
 use miette::{Context as _, IntoDiagnostic, Result};
 use notify_debouncer_full::{new_debouncer, notify::RecursiveMode, DebounceEventResult};
 use owo_colors::OwoColorize as _;
@@ -64,10 +64,10 @@ enum Command {
     /// Run a given shell command within a canonical context. I.e.: `yolk exec-canonical gitui`.
     #[clap(name = "exec-canonical")]
     ExecCanonical {
-        #[clap(allow_hyphen_values = true)]
+        #[clap(allow_hyphen_values = true, last=true, value_hint=ValueHint::CommandWithArguments)]
         command: Vec<String>,
     },
-    /// Evaluate a rhai expression.
+    /// Evaluate a Rhai expression.
     ///
     /// The expression is executed in the same scope that template tag expression are evaluated in.
     Eval {
@@ -95,6 +95,7 @@ enum Command {
         canonical: bool,
         /// The path to the file you want to evaluate
         /// If not provided, the program will read from stdin
+        #[arg(value_hint=ValueHint::FilePath)]
         path: Option<PathBuf>,
     },
 
@@ -102,7 +103,10 @@ enum Command {
     List,
 
     /// Open your `yolk.rhai` or the given egg in your `$EDITOR` of choice.
-    Edit { egg: Option<String> },
+    Edit {
+        #[arg(add = ArgValueCompleter::new(egg_completer))]
+        egg: Option<String>,
+    },
 
     /// Watch for changes in your templated files and re-sync them when they change.
     Watch {
@@ -116,24 +120,86 @@ enum Command {
     /// Run a git-command within the yolk directory.
     #[clap(alias = "g")]
     Git {
-        #[clap(allow_hyphen_values = true)]
+        // TODO: Test whether the command is being completed (works only in bash currently).
+        // Possibly would need to pre-fill with the `git` command  <kunzaatko, 16-02-2026>
+        #[clap(allow_hyphen_values = true, last=true, value_hint=ValueHint::CommandWithArguments)]
         command: Vec<String>,
         /// Force yolk to run the command with canonicalized files, regardless of what command it is.
         #[arg(long)]
         force_canonical: bool,
     },
 
+    /// Generate shell completions
+    #[command(hide(true))]
+    ShellCompletions {
+        #[arg(long)]
+        shell: Option<Shell>,
+    },
+
     #[command(hide(true))]
     RootManageSymlinks {
         #[arg(long, value_names = ["ORIGINAL::::SYMLINK_PATH"], required = false, value_parser=parse_symlink_pair)]
         create_symlink: Vec<(PathBuf, PathBuf)>,
-        #[arg(long, value_names = ["SYMLINK_PATH"], required = false)]
+        #[arg(long, value_names = ["SYMLINK_PATH"], required = false, value_hint=ValueHint::AnyPath)]
         delete_symlink: Vec<PathBuf>,
     },
 
     #[cfg(feature = "docgen")]
     #[command(hide(true))]
-    Docs { dir: PathBuf },
+    Docs {
+        #[arg(value_hint=ValueHint::DirPath)]
+        dir: PathBuf,
+    },
+}
+
+fn egg_completer(current: &std::ffi::OsStr) -> Vec<CompletionCandidate> {
+    let Some(current) = current.to_str() else {
+        return vec![];
+    };
+
+    let yolk_dir = yolk_paths::default_yolk_dir();
+    let Some(home_dir) = dirs::home_dir() else {
+        return vec![];
+    };
+    let yolk_paths = yolk::yolk_paths::YolkPaths::new(yolk_dir, home_dir);
+    let yolk = Yolk::new(yolk_paths);
+
+    let Ok(eggs) = yolk.list_eggs() else {
+        return vec![];
+    };
+    eggs.iter()
+        .map(|egg| (egg, egg.name().to_string()))
+        .filter(|(_, name)| name.starts_with(current))
+        .map(|(egg, name)| {
+            let mut completion = CompletionCandidate::new(name);
+            if let Ok(Some(path)) = egg.edit_path() {
+                completion = completion.help(Some(StyledStr::from(path.display().to_string())))
+            }
+            completion
+        })
+        .collect::<Vec<CompletionCandidate>>()
+}
+
+fn print_shell_competions(shell: &Shell) -> Result<()> {
+    match shell {
+        Shell::Fish => {
+            println!("COMPLETE=fish yolk | source");
+        }
+        Shell::Bash => {
+            println!("source <(COMPLETE=bash yolk)");
+        }
+        Shell::Elvish => {
+            println!("eval (E:COMPLETE=elvish yolk | slurp)")
+        }
+        Shell::Zsh => {
+            println!("source <(COMPLETE=zsh yolk)")
+        }
+        Shell::PowerShell => {
+            println!("$env:COMPLETE = \"powershell\"; yolk | Out-String | Invoke-Expression; Remove-Item Env:\\COMPLETE");
+        }
+        _ => unreachable!(),
+    }
+    Ok(())
 }
 
 fn parse_symlink_pair(s: &str) -> Result<(PathBuf, PathBuf), String> {
@@ -146,6 +212,9 @@ fn parse_symlink_pair(s: &str) -> Result<(PathBuf, PathBuf), String> {
 }
 
 pub(crate) fn main() -> Result<()> {
+    CompleteEnv::with_factory(Args::command)
+        .bin("yolk")
+        .complete();
     let args = Args::parse();
 
     init_logging(&args);
@@ -220,7 +289,7 @@ fn run_command(args: Args) -> Result<()> {
     let yolk = Yolk::new(yolk_paths);
     match &args.command {
         Command::Init => yolk.init_yolk(None)?,
-        // TODO: we shoul likely also do this as part of init, maybe
+        // TODO: we should likely also do this as part of init, maybe
         Command::Safeguard => yolk.paths().safeguard_git_dir()?,
         Command::Status => {
             yolk.init_git_config(None)?;
@@ -251,6 +320,13 @@ fn run_command(args: Args) -> Result<()> {
                     })
                 });
                 println!("{}", text);
+            }
+        }
+        Command::ShellCompletions { shell } => {
+            if let Some(shell) = shell {
+                print_shell_competions(shell)?
+            } else {
+                print_shell_competions(&Shell::from_env().unwrap_or(Shell::Bash))?;
             }
         }
         Command::Sync { canonical } => {
@@ -339,24 +415,11 @@ fn run_command(args: Args) -> Result<()> {
             match egg_name {
                 Some(egg_name) => {
                     let egg = yolk.load_egg(egg_name)?;
-                    let cd_path = egg
-                        .find_first_deployed_symlink()?
-                        .unwrap_or_else(|| yolk.paths().egg_path(egg_name));
+                    let main_file = egg.edit_path()?;
+                    let cd_path = egg.edit_dir()?;
                     let _ = std::env::set_current_dir(&cd_path);
-                    let mut main_file = egg.config().main_file.clone();
-                    // If no main_file is specified and there's exactly one file in the egg directory, use that
-                    if main_file.is_none() {
-                        let mut files = egg.path().fs_err_read_dir().into_diagnostic()?;
-                        if let Some(first_file) = files.next() {
-                            if files.next().is_none() {
-                                main_file = Some(first_file.into_diagnostic()?.path());
-                            }
-                        }
-                    }
                     if let Some(ref main_file) = main_file {
-                        edit::edit_file(egg.path().join(main_file)).into_diagnostic()?;
-                    } else {
-                        edit::edit_file(&cd_path).into_diagnostic()?;
+                        edit::edit_file(main_file).into_diagnostic()?;
                     }
                 }
                 None => {
@@ -440,7 +503,7 @@ fn run_command(args: Args) -> Result<()> {
                                     eprintln!("Error: {e:?}");
                                 }
                             } else {
-                                changed.iter().for_each(|path| on_file_updated(&path));
+                                changed.iter().for_each(|path| on_file_updated(path));
                             }
                         }
                         Err(error) => tracing::error!("Error: {error:?}"),

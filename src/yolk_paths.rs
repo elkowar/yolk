@@ -266,6 +266,35 @@ impl Egg {
         &self.egg_dir
     }
 
+    /// Edit directory of the Egg
+    pub fn edit_dir(&self) -> Result<PathBuf> {
+        Ok(self
+            .find_first_deployed_symlink()?
+            .unwrap_or_else(|| self.path().into()))
+    }
+
+    /// Path to the main file of the Egg
+    pub fn edit_path(&self) -> Result<Option<PathBuf>> {
+        let mut edit_path = self
+            .config()
+            .main_file
+            .clone()
+            .map(|file| self.path().join(file));
+        // If no main_file is specified and there's exactly one file in the egg directory, use that
+        if edit_path.is_none() {
+            let mut files = self.path().fs_err_read_dir().into_diagnostic()?;
+            if let Some(first_file) = files.next() {
+                if files.next().is_none() {
+                    edit_path = Some(first_file.into_diagnostic()?.path());
+                }
+            }
+        }
+        if edit_path.is_none() {
+            edit_path = Some(self.edit_dir()?);
+        }
+        Ok(edit_path)
+    }
+
     /// Check if the egg is _fully_ deployed (-> All contained entries have corresponding symlinks)
     #[tracing::instrument(skip_all, fields(egg.name = %self.name()))]
     pub fn is_deployed(&self) -> Result<bool> {
