@@ -58,6 +58,14 @@ export let eggs = #{
             pre_undeploy: "yet another shellscript",
         }
     }
+
+    # Example with fallback hook - runs fallback if primary command fails
+    fragile_egg: #{
+        targets: "~/fragile",
+        unsafe_shell_hooks: #{
+            pre_deploy: #{ shell: "check_prereq", fallback: "echo 'Prereq failed, continuing anyway'" },
+        }
+    }
 }
 ```
 
@@ -97,8 +105,31 @@ Files that are not listed here will not be edited by yolk during `yolk sync`!
 A path, relative to the egg directory, that will be opened when you run `yolk edit <eggname>`.
 
 #### `unsafe_shell_hooks`
-An object that may declare two scripts, which get ran when the egg is deployed or un-deployed.
+An object that may declare scripts, which get ran when the egg is deployed or un-deployed.
 The `pre_deploy` script gets executed before the egg is deployed, the `pre_undeploy` script gets executed before the egg is un-deployed, the `post_deploy` script gets executed after the egg has been deployed, the `post_undeploy` script gets executed after the egg has been un-deployed.
+
+Each hook can be defined in two ways:
+
+**Simple syntax** - just a string:
+```rhai
+unsafe_shell_hooks: #{
+    pre_deploy: "some shellscript",
+}
+```
+
+**With fallback** - a map with `shell` and optional `fallback`:
+```rhai
+unsafe_shell_hooks: #{
+    pre_deploy: #{ shell: "primary_command", fallback: "fallback_command" },
+    post_deploy: #{ shell: "touch ~/.deployed", fallback: "echo 'Post-deploy failed'" },
+}
+```
+
+When using fallback syntax:
+1. The primary `shell` command is executed first
+2. If the primary command fails (non-zero exit), the `fallback` command is executed
+3. If the fallback also fails, the hook fails with an error
+4. If no fallback is defined and the primary command fails, the hook fails with an error
 
 Note that these scripts should optimally be idempodent, so running them twice should not change anything compared to running them once.
 
