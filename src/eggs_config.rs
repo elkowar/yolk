@@ -78,7 +78,7 @@ impl ShellHooks {
     pub fn run_post_deploy(&self) -> miette::Result<()> {
         if let Some(hook) = &self.post_deploy {
             tracing::debug!("Running post-deploy hook");
-            run_hook(hook)?;
+            run_hook_for_test(hook)?;
         }
         Ok(())
     }
@@ -86,7 +86,7 @@ impl ShellHooks {
     pub fn run_post_undeploy(&self) -> miette::Result<()> {
         if let Some(hook) = &self.post_undeploy {
             tracing::debug!("Running post-undeploy hook");
-            run_hook(hook)?;
+            run_hook_for_test(hook)?;
         }
         Ok(())
     }
@@ -94,7 +94,7 @@ impl ShellHooks {
     pub fn run_pre_deploy(&self) -> miette::Result<()> {
         if let Some(hook) = &self.pre_deploy {
             tracing::debug!("Running pre-deploy hook");
-            run_hook(hook)?;
+            run_hook_for_test(hook)?;
         }
         Ok(())
     }
@@ -102,7 +102,7 @@ impl ShellHooks {
     pub fn run_pre_undeploy(&self) -> miette::Result<()> {
         if let Some(hook) = &self.pre_undeploy {
             tracing::debug!("Running pre-undeploy hook");
-            run_hook(hook)?;
+            run_hook_for_test(hook)?;
         }
         Ok(())
     }
@@ -116,7 +116,7 @@ impl ShellHooks {
     // }
 }
 
-fn run_hook(hook: &HookWithFallback) -> miette::Result<()> {
+pub fn run_hook_for_test(hook: &HookWithFallback) -> miette::Result<()> {
     let status = Command::new("sh")
         .arg("-c")
         .arg(&hook.shell)
@@ -503,6 +503,36 @@ mod test {
                 pre_undeploy: Some(HookWithFallback::new("run before undeploy")),
             })
     )]
+    #[case(
+        indoc::indoc! {r#"
+            #{
+                targets: "~/bar",
+                unsafe_shell_hooks: #{
+                    pre_deploy: #{ shell: "check_prereq", fallback: "echo 'fallback'" },
+                }
+            }
+        "#},
+        EggConfig::new(".", "~/bar")
+            .with_unsafe_hooks(ShellHooks {
+                pre_deploy: Some(HookWithFallback::new("check_prereq").with_fallback("echo 'fallback'")),
+                ..Default::default()
+            })
+    )]
+    #[case(
+        indoc::indoc! {r#"
+            #{
+                targets: "~/bar",
+                unsafe_shell_hooks: #{
+                    post_deploy: #{ shell: "primary_cmd" },
+                }
+            }
+        "#},
+        EggConfig::new(".", "~/bar")
+            .with_unsafe_hooks(ShellHooks {
+                post_deploy: Some(HookWithFallback::new("primary_cmd")),
+                ..Default::default()
+            })
+    )]
     #[case(r#"#{ targets: "~/bar" }"#, EggConfig::new(".", "~/bar"))]
     #[case(r#""~/bar""#, EggConfig::new(".", "~/bar"))]
     fn test_read_eggs_config(#[case] input: &str, #[case] expected: EggConfig) -> TestResult {
@@ -564,5 +594,53 @@ mod test {
         );
         let cfg = parsed.unwrap();
         assert_eq!(cfg.unsafe_shell_hooks, ShellHooks::default());
+    }
+
+    #[test]
+    fn test_hook_with_fallback_parsing() {
+        // Test parsing of HookWithFallback with builder pattern
+        let hook = HookWithFallback::new("primary").with_fallback("fallback");
+        assert_eq!(hook.shell, "primary");
+        assert_eq!(hook.fallback, Some("fallback".to_string()));
+
+        // Test parsing without fallback
+        let hook_no_fallback = HookWithFallback::new("primary");
+        assert_eq!(hook_no_fallback.shell, "primary");
+        assert_eq!(hook_no_fallback.fallback, None);
+    }
+
+    #[test]
+    fn test_hook_with_fallback_default() {
+        let hook = HookWithFallback::default();
+        assert_eq!(hook.shell, "");
+        assert_eq!(hook.fallback, None);
+    }
+
+    #[test]
+    fn test_run_hook_success() {
+        let hook = HookWithFallback::new("echo 'success'");
+        let result = crate::eggs_config::run_hook_for_test(&hook);
+        assert!(result.is_ok(), "Hook should succeed with exit code 0");
+    }
+
+    #[test]
+    fn test_run_hook_failure_without_fallback() {
+        let hook = HookWithFallback::new("exit 1");
+        let result = crate::eggs_config::run_hook_for_test(&hook);
+        assert!(result.is_err(), "Hook should fail without fallback");
+    }
+
+    #[test]
+    fn test_run_hook_failure_with_successful_fallback() {
+        let hook = HookWithFallback::new("exit 1").with_fallback("echo 'fallback ran'");
+        let result = crate::eggs_config::run_hook_for_test(&hook);
+        assert!(result.is_ok(), "Hook should succeed when fallback succeeds: {:?}", result);
+    }
+
+    #[test]
+    fn test_run_hook_failure_with_failing_fallback() {
+        let hook = HookWithFallback::new("exit 1").with_fallback("exit 2");
+        let result = crate::eggs_config::run_hook_for_test(&hook);
+        assert!(result.is_err(), "Hook should fail when both primary and fallback fail");
     }
 }
