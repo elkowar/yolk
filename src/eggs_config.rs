@@ -44,42 +44,65 @@ impl FromStr for DeploymentStrategy {
     }
 }
 
+/// A shell hook that can optionally have a fallback command to run if the primary fails.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct HookWithFallback {
+    pub shell: String,
+    pub fallback: Option<String>,
+}
+
+impl HookWithFallback {
+    pub fn new(shell: impl Into<String>) -> Self {
+        Self {
+            shell: shell.into(),
+            fallback: None,
+        }
+    }
+
+    pub fn with_fallback(mut self, fallback: impl Into<String>) -> Self {
+        self.fallback = Some(fallback.into());
+        self
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ShellHooks {
-    pub post_deploy: Option<String>,
-    pub post_undeploy: Option<String>,
-    pub pre_deploy: Option<String>,
-    pub pre_undeploy: Option<String>,
-    // pub post_sync: Option<String>,
+    pub post_deploy: Option<HookWithFallback>,
+    pub post_undeploy: Option<HookWithFallback>,
+    pub pre_deploy: Option<HookWithFallback>,
+    pub pre_undeploy: Option<HookWithFallback>,
+    // pub post_sync: Option<HookWithFallback>,
 }
 
 impl ShellHooks {
     pub fn run_post_deploy(&self) -> miette::Result<()> {
-        if let Some(command) = &self.post_deploy {
-            tracing::debug!("Running post-deploy script");
-            run_hook(command)?;
+        if let Some(hook) = &self.post_deploy {
+            tracing::debug!("Running post-deploy hook");
+            run_hook(hook)?;
         }
         Ok(())
     }
 
     pub fn run_post_undeploy(&self) -> miette::Result<()> {
-        if let Some(command) = &self.post_undeploy {
-            tracing::debug!("Running post-undeploy script");
-            run_hook(command)?;
+        if let Some(hook) = &self.post_undeploy {
+            tracing::debug!("Running post-undeploy hook");
+            run_hook(hook)?;
         }
         Ok(())
     }
+
     pub fn run_pre_deploy(&self) -> miette::Result<()> {
-        if let Some(command) = &self.pre_deploy {
-            tracing::debug!("Running pre-deploy script");
-            run_hook(command)?;
+        if let Some(hook) = &self.pre_deploy {
+            tracing::debug!("Running pre-deploy hook");
+            run_hook(hook)?;
         }
         Ok(())
     }
+
     pub fn run_pre_undeploy(&self) -> miette::Result<()> {
-        if let Some(command) = &self.pre_undeploy {
-            tracing::debug!("Running pre-undeploy script");
-            run_hook(command)?;
+        if let Some(hook) = &self.pre_undeploy {
+            tracing::debug!("Running pre-undeploy hook");
+            run_hook(hook)?;
         }
         Ok(())
     }
@@ -93,18 +116,35 @@ impl ShellHooks {
     // }
 }
 
-fn run_hook(command: &str) -> miette::Result<()> {
+fn run_hook(hook: &HookWithFallback) -> miette::Result<()> {
     let status = Command::new("sh")
         .arg("-c")
-        .arg(command)
+        .arg(&hook.shell)
         .status()
-        .map_err(|e| miette::miette!("Failed to run post-deploy hook: {}", e))?;
+        .map_err(|e| miette::miette!("Failed to run hook: {}", e))?;
 
     if !status.success() {
-        miette::bail!(
-            "Post-deploy hook failed with status {}",
-            status.code().unwrap_or(-1)
-        );
+        if let Some(fallback) = &hook.fallback {
+            tracing::debug!(
+                "Primary command failed (status {}), running fallback: {}",
+                status.code().unwrap_or(-1),
+                fallback
+            );
+            let fallback_status = Command::new("sh")
+                .arg("-c")
+                .arg(fallback)
+                .status()
+                .map_err(|e| miette::miette!("Failed to run fallback hook: {}", e))?;
+
+            if !fallback_status.success() {
+                miette::bail!(
+                    "Fallback hook also failed with status {}",
+                    fallback_status.code().unwrap_or(-1)
+                );
+            }
+        } else {
+            miette::bail!("Hook failed with status {}", status.code().unwrap_or(-1));
+        }
     }
     Ok(())
 }
@@ -181,6 +221,34 @@ impl Default for EggConfig {
             },
         }
     }
+}
+
+
+/// Parse a shell hook from a dynamic value.
+/// Supports both simple string syntax and map syntax with fallback:
+///   - Simple: `pre_deploy: "ls"`
+///   - With fallback: `pre_deploy: #{ shell: "ls", fallback: "echo 'fail'" }`
+fn parse_shell_hook(value: &rhai::Dynamic) -> Option<HookWithFallback> {
+    // Support simple string syntax
+    if let Ok(s) = value.as_immutable_string_ref() {
+        return Some(HookWithFallback::new(s.to_string()));
+    }
+
+    // Support map syntax with shell and optional fallback
+    if let Ok(map) = value.as_map_ref() {
+        let shell = map.get("shell")?.as_immutable_string_ref().ok()?;
+        let fallback = map
+            .get("fallback")
+            .and_then(|v| v.as_immutable_string_ref().ok())
+            .map(|s| s.to_string());
+
+        return Some(HookWithFallback {
+            shell: shell.to_string(),
+            fallback,
+        });
+    }
+
+    None
 }
 
 impl EggConfig {
@@ -368,10 +436,10 @@ impl EggConfig {
                 }
             }
             ShellHooks {
-                post_deploy: shell_hooks.get("post_deploy").map(|v| v.to_string()),
-                post_undeploy: shell_hooks.get("post_undeploy").map(|v| v.to_string()),
-                pre_deploy: shell_hooks.get("pre_deploy").map(|v| v.to_string()),
-                pre_undeploy: shell_hooks.get("pre_undeploy").map(|v| v.to_string()),
+                post_deploy: shell_hooks.get("post_deploy").map(parse_shell_hook).flatten(),
+                post_undeploy: shell_hooks.get("post_undeploy").map(parse_shell_hook).flatten(),
+                pre_deploy: shell_hooks.get("pre_deploy").map(parse_shell_hook).flatten(),
+                pre_undeploy: shell_hooks.get("pre_undeploy").map(parse_shell_hook).flatten(),
             }
         } else {
             ShellHooks::default()
@@ -401,7 +469,7 @@ mod test {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        eggs_config::{DeploymentStrategy, EggConfig, ShellHooks},
+        eggs_config::{DeploymentStrategy, EggConfig, HookWithFallback, ShellHooks},
         util::test_util::TestResult,
     };
 
@@ -429,10 +497,10 @@ mod test {
             .with_strategy(DeploymentStrategy::Merge)
             .with_main_file("foo")
             .with_unsafe_hooks(ShellHooks {
-                post_deploy: Some("run after deploy".to_string()),
-                post_undeploy: Some("run after undeploy".to_string()),
-                pre_deploy: Some("run before deploy".to_string()),
-                pre_undeploy: Some("run before undeploy".to_string()),
+                post_deploy: Some(HookWithFallback::new("run after deploy")),
+                post_undeploy: Some(HookWithFallback::new("run after undeploy")),
+                pre_deploy: Some(HookWithFallback::new("run before deploy")),
+                pre_undeploy: Some(HookWithFallback::new("run before undeploy")),
             })
     )]
     #[case(r#"#{ targets: "~/bar" }"#, EggConfig::new(".", "~/bar"))]

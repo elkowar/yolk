@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::{
-    eggs_config::{DeploymentStrategy, ShellHooks},
+    eggs_config::{DeploymentStrategy, HookWithFallback, ShellHooks},
     util::test_util::{setup_and_init_test_yolk, TestResult},
     yolk::EvalMode,
     yolk_paths::Egg,
@@ -53,16 +53,16 @@ fn test_egg_post_deploy_hooks() -> TestResult {
         .with_strategy(DeploymentStrategy::Put)
         .with_target("foo.toml", home.child("foo.toml"))
         .with_unsafe_hooks(ShellHooks {
-            post_deploy: Some(format!("touch {}/post_deploy_ran", home.display())),
-            post_undeploy: Some(format!("touch {}/post_undeploy_ran", home.display())),
-            pre_deploy: Some(format!("touch {}/pre_deploy_ran", home.display())),
-            pre_undeploy: Some(format!("touch {}/pre_undeploy_ran", home.display())),
+            post_deploy: Some(HookWithFallback::new(format!("touch {}/post_deploy_ran", home.display()))),
+            post_undeploy: Some(HookWithFallback::new(format!("touch {}/post_undeploy_ran", home.display()))),
+            pre_deploy: Some(HookWithFallback::new(format!("touch {}/pre_deploy_ran", home.display()))),
+            pre_undeploy: Some(HookWithFallback::new(format!("touch {}/pre_undeploy_ran", home.display()))),
         });
     let egg_again = egg.clone().with_unsafe_hooks(ShellHooks {
-        post_deploy: Some(format!("touch {}/post_deploy_ran_again", home.display())),
-        post_undeploy: Some(format!("touch {}/post_undeploy_ran_again", home.display())),
-        pre_deploy: Some(format!("touch {}/pre_deploy_ran_again", home.display())),
-        pre_undeploy: Some(format!("touch {}/pre_undeploy_ran_again", home.display())),
+        post_deploy: Some(HookWithFallback::new(format!("touch {}/post_deploy_ran_again", home.display()))),
+        post_undeploy: Some(HookWithFallback::new(format!("touch {}/post_undeploy_ran_again", home.display()))),
+        pre_deploy: Some(HookWithFallback::new(format!("touch {}/pre_deploy_ran_again", home.display()))),
+        pre_undeploy: Some(HookWithFallback::new(format!("touch {}/pre_undeploy_ran_again", home.display()))),
     });
     yolk.sync_egg_deployment(&Egg::open(
         home.to_path_buf(),
