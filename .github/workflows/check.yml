@@ -23,7 +23,7 @@ jobs:
       - name: Install cargo-binstall
         uses: cargo-bins/cargo-binstall@v1.10.16
       - name: Install mdbook, mdbook-linkcheck
-        run: cargo binstall mdbook mdbook-linkcheck
+        run: cargo binstall mdbook@0.4 mdbook-linkcheck
       - name: mdbook linkcheck
         run: |
           echo '[output.linkcheck]' > docs/book.toml
