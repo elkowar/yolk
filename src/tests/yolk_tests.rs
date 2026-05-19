@@ -519,9 +519,18 @@ pub fn test_deployment_error() -> TestResult {
             .with_target("file1", home.child("file1"))
             .with_target("file2", home.child("file2")),
     )?;
+    // Normalize platform-specific temp dir prefixes (e.g. macOS uses
+    // `/var/folders/.../T` and `/private/var/folders/.../T`) so the snapshot
+    // looks the same as on Linux where the prefix is `/tmp`.
+    let tmp = std::env::temp_dir();
+    let tmp_canonical = tmp.canonicalize().unwrap_or_else(|_| tmp.clone());
+    let tmp_re = regex::escape(tmp.to_string_lossy().trim_end_matches('/'));
+    let tmp_canonical_re = regex::escape(tmp_canonical.to_string_lossy().trim_end_matches('/'));
     insta::with_settings!({filters => vec![
+        (tmp_canonical_re.as_str(), "/tmp"),
+        (tmp_re.as_str(), "/tmp"),
         (r"\.tmp[a-zA-Z0-9]{6}", "[tmp-dir]"),
-        (r"file\d", "[filename]")
+        (r"file\d", "[filename]"),
     ]}, {
         insta::assert_snapshot!(test_util::render_error(
             yolk.sync_egg_deployment(&egg).unwrap_err()

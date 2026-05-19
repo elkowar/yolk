@@ -240,13 +240,24 @@ impl Yolk {
         let old_symlinks_db = self.yolk_paths.previous_egg_deployment_locations_db()?;
         let old_symlinks = old_symlinks_db.read(egg_name)?;
 
+        // Compare paths in their canonical form — otherwise on platforms where
+        // the temp/home dir contains symlinks (e.g. macOS `/var` → `/private/var`)
+        // the same on-disk location can be recorded as both `/var/...` and
+        // `/private/var/...` across syncs, leading us to mistakenly treat a
+        // freshly-deployed link as stale or fail to recognize a symlink-to-egg.
+        let canonical_egg_path = self.paths().egg_path(egg_name).canonical().ok();
+        let deployed_canonical: Vec<PathBuf> = deployed_symlinks
+            .iter()
+            .map(|p| canonicalize_parent(p))
+            .collect();
         for old_symlink in old_symlinks {
-            // TODO: This is very,.... reliant on the fact that paths are normalized.
-            // Should be the case, but can we enforce this somehow?
-            if !deployed_symlinks.contains(&old_symlink) {
+            let old_canonical = canonicalize_parent(&old_symlink);
+            if !deployed_canonical.contains(&old_canonical) {
                 let is_symlink_to_egg = if old_symlink.exists() && old_symlink.is_symlink() {
                     match old_symlink.fs_err_read_link() {
-                        Ok(x) => x.starts_with(self.paths().egg_path(egg_name)),
+                        Ok(x) => canonical_egg_path
+                            .as_ref()
+                            .map_or(false, |p| x.starts_with(p)),
                         Err(e) => {
                             errs.push(miette::Report::from_err(e));
                             false
@@ -508,4 +519,19 @@ impl Yolk {
 pub enum EvalMode {
     Local,
     Canonical,
+}
+
+/// Canonicalize the parent of a path, leaving the final component untouched.
+///
+/// This produces a stable form even when the path itself does not exist (e.g.
+/// a symlink we're about to create) — useful for comparing paths whose prefixes
+/// may traverse OS-level symlinks like macOS' `/var` → `/private/var`.
+fn canonicalize_parent(p: &Path) -> PathBuf {
+    match (p.parent(), p.file_name()) {
+        (Some(parent), Some(name)) => match parent.canonical() {
+            Ok(canonical_parent) => canonical_parent.join(name),
+            Err(_) => p.to_path_buf(),
+        },
+        _ => p.to_path_buf(),
+    }
 }
