@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.7](https://github.com/elkowar/yolk/compare/v0.3.6...v0.3.7) - 2026-05-19
+
+### Ci
+
+- pin mdbook version to 0.4
+
+### Fixed
+
+- tests not referencing /tmp files properly on MacOS
+- SYSTEM variable not usable in functions (fixes #71)
+- *(docs)* Links in docs for `YolkPaths::active_yolk_git_dir`
+
 ## [0.3.6](https://github.com/elkowar/yolk/compare/v0.3.5...v0.3.6) - 2025-11-12
 
 ### Ci
