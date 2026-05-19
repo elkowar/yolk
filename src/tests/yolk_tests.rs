@@ -416,6 +416,22 @@ fn test_access_sysinfo() -> TestResult {
 }
 
 #[test]
+fn test_sysinfo_accessible_in_functions() -> TestResult {
+    let (home, yolk, _) = setup_and_init_test_yolk()?;
+    home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
+            fn get_hostname() { SYSTEM.hostname }
+            fn is_local() { LOCAL }
+        "#})?;
+    let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(EvalMode::Local)?;
+    assert_eq!(
+        "canonical-hostname",
+        eval_ctx.eval_rhai::<String>("get_hostname()")?
+    );
+    assert!(eval_ctx.eval_rhai::<bool>("is_local()")?);
+    Ok(())
+}
+
+#[test]
 fn test_imports_work_in_yolk_rhai() -> TestResult {
     let (home, yolk, _) = setup_and_init_test_yolk()?;
     home.child("yolk/foo.rhai").write_str(indoc::indoc! {r#"

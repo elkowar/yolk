@@ -19,6 +19,12 @@ pub const YOLK_TEXT_NAME: &str = "YOLK_TEXT";
 pub struct EvalCtx {
     engine: Engine,
     scope: Scope<'static>,
+    /// Module holding variables registered via [`Self::set_global`].
+    /// Registered on the engine as a global module so its variables are
+    /// accessible inside script-defined functions (rhai's optimizer doesn't
+    /// propagate scope constants through `lhs.rhs` expressions, but module
+    /// variables resolve at runtime).
+    globals_module: Module,
     yolk_file_module: Option<(rhai::AST, Arc<Module>)>,
 }
 
@@ -38,6 +44,7 @@ impl EvalCtx {
         Self {
             engine,
             scope: Scope::new(),
+            globals_module: Module::new(),
             yolk_file_module: None,
         }
     }
@@ -72,6 +79,8 @@ impl EvalCtx {
 
     /// Load a given rhai string as a global module, and store it as the `yolk_file_module`.
     pub fn load_rhai_file_to_module(&mut self, content: &str) -> Result<(), RhaiError> {
+        self.engine
+            .register_global_module(Arc::new(self.globals_module.clone()));
         let ast = self.compile(content)?;
         let module = Module::eval_ast_as_new(self.scope.clone(), &ast, &self.engine)
             .map_err(|e| RhaiError::from_rhai(content, *e))?;
@@ -108,8 +117,11 @@ impl EvalCtx {
         Ok(result.to_string())
     }
 
+    /// Set a global, immutable variable that is accessible both at the top level
+    /// of yolk.rhai and from inside script-defined functions.
     pub fn set_global<T: Variant + Clone>(&mut self, name: &str, value: T) {
-        self.scope.set_or_push(name, value);
+        self.globals_module.set_var(name, value.clone());
+        self.scope.push_constant(name, value);
     }
 
     pub fn engine_mut(&mut self) -> &mut Engine {
