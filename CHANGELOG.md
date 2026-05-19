@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.8](https://github.com/elkowar/yolk/compare/v0.3.7...v0.3.8) - 2026-05-19
+
+### Fixed
+
+- Also pin mdbook-man mdbook version to 0.4
+
 ## [0.3.7](https://github.com/elkowar/yolk/compare/v0.3.6...v0.3.7) - 2026-05-19
 
 ### Ci
