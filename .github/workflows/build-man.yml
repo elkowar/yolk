@@ -19,7 +19,7 @@ jobs:
       - name: Install cargo-binstall
         uses: cargo-bins/cargo-binstall@v1.10.16
       - name: Install mdbook, mdbook-man
-        run: cargo binstall mdbook mdbook-man
+        run: cargo binstall mdbook@0.4 mdbook-man
       - name: Run mdbook build
         run: |
           echo '[output.man]' > docs/book.toml
