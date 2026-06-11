@@ -6,7 +6,7 @@ use std::{
 };
 
 use clap::{builder::StyledStr, CommandFactory, Parser, Subcommand, ValueHint};
-use clap_complete::{env::CompleteEnv, ArgValueCompleter, CompletionCandidate, Shell};
+use clap_complete::{env::CompleteEnv, ArgValueCompleter, CompletionCandidate};
 use miette::{Context as _, IntoDiagnostic, Result};
 use notify_debouncer_full::{new_debouncer, notify::RecursiveMode, DebounceEventResult};
 use owo_colors::OwoColorize as _;
@@ -129,13 +129,6 @@ enum Command {
         force_canonical: bool,
     },
 
-    /// Generate shell completions
-    #[command(hide(true))]
-    ShellCompletions {
-        #[arg(long)]
-        shell: Option<Shell>,
-    },
-
     #[command(hide(true))]
     RootManageSymlinks {
         #[arg(long, value_names = ["ORIGINAL::::SYMLINK_PATH"], required = false, value_parser=parse_symlink_pair)]
@@ -178,28 +171,6 @@ fn egg_completer(current: &std::ffi::OsStr) -> Vec<CompletionCandidate> {
             completion
         })
         .collect::<Vec<CompletionCandidate>>()
-}
-
-fn print_shell_competions(shell: &Shell) -> Result<()> {
-    match shell {
-        Shell::Fish => {
-            println!("COMPLETE=fish yolk | source");
-        }
-        Shell::Bash => {
-            println!("source <(COMPLETE=bash yolk)");
-        }
-        Shell::Elvish => {
-            println!("eval (E:COMPLETE=elvish yolk | slurp)")
-        }
-        Shell::Zsh => {
-            println!("source <(COMPLETE=zsh yolk)")
-        }
-        Shell::PowerShell => {
-            println!("$env:COMPLETE = \"powershell\"; yolk | Out-String | Invoke-Expression; Remove-Item Env:\\COMPLETE");
-        }
-        _ => unreachable!(),
-    }
-    Ok(())
 }
 
 fn parse_symlink_pair(s: &str) -> Result<(PathBuf, PathBuf), String> {
@@ -320,13 +291,6 @@ fn run_command(args: Args) -> Result<()> {
                     })
                 });
                 println!("{}", text);
-            }
-        }
-        Command::ShellCompletions { shell } => {
-            if let Some(shell) = shell {
-                print_shell_competions(shell)?
-            } else {
-                print_shell_competions(&Shell::from_env().unwrap_or(Shell::Bash))?;
             }
         }
         Command::Sync { canonical } => {
