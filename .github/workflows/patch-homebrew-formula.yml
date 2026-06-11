@@ -1,0 +1,105 @@
+name: Patch Homebrew Formula
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: true
+        type: string
+
+jobs:
+  patch-homebrew-formula:
+    runs-on: ubuntu-latest
+    env:
+      TAP_REPO: elkowar/homebrew-tap
+      APP_NAME: yolk
+    steps:
+      - name: Clone Homebrew tap
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          git clone "https://${HOMEBREW_TAP_TOKEN}@github.com/${TAP_REPO}.git" tap
+          cd tap
+
+          git config user.name "cargo-dist bot"
+          git config user.email "dist@example.com"
+
+      - name: Add shell completions to formula
+        run: |
+          cd tap
+
+          if [ ! -f "$FORMULA_FILE" ]; then
+            echo "Formula file not found: $FORMULA_FILE"
+            exit 0
+          fi
+
+          python3 << 'SCRIPT'
+          import os
+          import re
+
+          app_name = os.environ['APP_NAME']
+          formula_file = os.environ['FORMULA_FILE']
+
+          with open(formula_file, "r") as f:
+            content = f.read()
+
+          # Skip if completions are already present
+          if "generate_completions_from_executable" in content:
+            print(f"Completions already present in {formula_file}")
+            exit(0)
+
+          # Find the def install block and inject completions inside it.
+          install_pattern = r'(\s+def install\b.*?)(\n\s+end\b)'
+          match = re.search(install_pattern, content, re.DOTALL)
+
+          if not match:
+            print(f"WARNING: Could not find def install block in {formula_file}")
+            exit(0)
+
+          install_block = match.group(1)
+          block_suffix = match.group(2)
+
+          # Find the last bin.install line inside the def install block
+          bin_install_matches = list(
+            re.finditer(r'\n(\s+bin\.install\s+.*?)$', install_block, re.MULTILINE)
+          )
+
+          if bin_install_matches:
+            # Inject after the last bin.install line, preserving indentation
+            last_match = bin_install_matches[-1]
+            indent_match = re.match(r'(\s*)', last_match.group(1))
+            indent = indent_match.group(1)
+            insert_point = last_match.end()
+            new_block = (
+              install_block[:insert_point]
+              + f"\n{indent}generate_completions_from_executable(bin/\"{app_name}\", shell_parameter_format: :clap)"
+              + install_block[insert_point:]
+            )
+          else:
+            print(f"WARNING: Could not find bin install in the def install block")
+            exit(0)
+
+          new_content = content[:match.start()] + new_block + block_suffix + content[match.end():]
+
+          with open(formula_file, "w") as f:
+            f.write(new_content)
+          print(f"Added completions to {formula_file}")
+          SCRIPT
+        env:
+          APP_NAME: yolk
+          FORMULA_FILE: Formula/yolk.rb
+
+      - name: Commit and push tap changes
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          cd tap
+
+          git add Formula/
+
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(homebrew): add shell completions" -m "[no-ci]"
+            git push
+          else
+            echo "No tap changes to push"
+          fi
