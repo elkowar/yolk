@@ -218,7 +218,7 @@ pub mod test_util {
         use assert_fs::prelude::PathChild as _;
 
         let home = assert_fs::TempDir::new().into_diagnostic()?;
-        let paths = crate::yolk_paths::YolkPaths::new(home.join("yolk"), home.to_path_buf());
+        let paths = crate::yolk_paths::YolkPaths::new(home.join("yolk"), home.to_path_buf())?;
         let yolk = crate::yolk::Yolk::new(paths);
         std::env::set_var("HOME", "/tmp/TEST_HOMEDIR_SHOULD_NOT_BE_USED");
         set_home_dir(home.to_path_buf());

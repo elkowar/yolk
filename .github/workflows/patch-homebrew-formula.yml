@@ -1,0 +1,113 @@
+# cargo-dist generates and publishes the Homebrew formula, but its template has no
+# support for shell completions. This post-announce job clones the tap, injects a
+# `generate_completions_from_executable(..., shell_parameter_format: :clap)` call into
+# the formula's `install` block (so Homebrew builds completions from `COMPLETE=<shell> yolk`),
+# then commits the change back to the tap.
+name: Patch Homebrew Formula
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: true
+        type: string
+
+jobs:
+  patch-homebrew-formula:
+    runs-on: ubuntu-latest
+    env:
+      TAP_REPO: elkowar/homebrew-tap
+      APP_NAME: yolk
+    steps:
+      - name: Clone Homebrew tap
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          git clone "https://${HOMEBREW_TAP_TOKEN}@github.com/${TAP_REPO}.git" tap
+          cd tap
+
+          git config user.name "cargo-dist bot"
+          git config user.email "dist@example.com"
+
+      - name: Add shell completions to formula
+        run: |
+          cd tap
+
+          if [ ! -f "$FORMULA_FILE" ]; then
+            echo "ERROR: Formula file not found: $FORMULA_FILE" >&2
+            exit 1
+          fi
+
+          python3 << 'SCRIPT'
+          import os
+          import re
+          import sys
+
+          app_name = os.environ['APP_NAME']
+          formula_file = os.environ['FORMULA_FILE']
+
+          with open(formula_file, "r") as f:
+            content = f.read()
+
+          # Skip if completions are already present
+          if "generate_completions_from_executable" in content:
+            print(f"Completions already present in {formula_file}")
+            sys.exit(0)
+
+          # Find the def install block and inject completions inside it.
+          install_pattern = r'(\s+def install\b.*?)(\n\s+end\b)'
+          match = re.search(install_pattern, content, re.DOTALL)
+
+          if not match:
+            # Fail loudly: the formula format changed and we would otherwise
+            # silently ship a release without shell completions.
+            print(f"ERROR: Could not find def install block in {formula_file}", file=sys.stderr)
+            sys.exit(1)
+
+          install_block = match.group(1)
+          block_suffix = match.group(2)
+
+          # Find the last bin.install line inside the def install block
+          bin_install_matches = list(
+            re.finditer(r'\n(\s+bin\.install\s+.*?)$', install_block, re.MULTILINE)
+          )
+
+          if bin_install_matches:
+            # Inject after the last bin.install line, preserving indentation
+            last_match = bin_install_matches[-1]
+            indent_match = re.match(r'(\s*)', last_match.group(1))
+            indent = indent_match.group(1)
+            insert_point = last_match.end()
+            new_block = (
+              install_block[:insert_point]
+              + f"\n{indent}generate_completions_from_executable(bin/\"{app_name}\", shell_parameter_format: :clap)"
+              + install_block[insert_point:]
+            )
+          else:
+            print(f"ERROR: Could not find bin install in the def install block", file=sys.stderr)
+            sys.exit(1)
+
+          new_content = content[:match.start()] + new_block + block_suffix + content[match.end():]
+
+          with open(formula_file, "w") as f:
+            f.write(new_content)
+          print(f"Added completions to {formula_file}")
+          SCRIPT
+        env:
+          APP_NAME: yolk
+          FORMULA_FILE: Formula/yolk.rb
+
+      - name: Commit and push tap changes
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          cd tap
+
+          git add Formula/
+
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(homebrew): add shell completions" -m "[no-ci]"
+            git push
+          else
+            echo "No tap changes to push"
+          fi

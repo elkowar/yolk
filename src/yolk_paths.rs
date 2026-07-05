@@ -48,13 +48,13 @@ pub fn default_yolk_dir() -> PathBuf {
 }
 
 impl YolkPaths {
-    pub fn new(path: PathBuf, home: PathBuf) -> Self {
-        YolkPaths {
+    pub fn new(path: PathBuf, home: PathBuf) -> Result<Self> {
+        Ok(YolkPaths {
             root_path: path,
             home: home
                 .canonical()
-                .expect("Failed to canonicalize home directory"),
-        }
+                .wrap_err("Failed to canonicalize home directory")?,
+        })
     }
 
     pub fn set_yolk_dir(&mut self, path: PathBuf) {
@@ -266,6 +266,35 @@ impl Egg {
         &self.egg_dir
     }
 
+    /// Edit directory of the Egg
+    pub fn edit_dir(&self) -> Result<PathBuf> {
+        Ok(self
+            .find_first_deployed_symlink()?
+            .unwrap_or_else(|| self.path().into()))
+    }
+
+    /// Path to the main file of the Egg
+    pub fn edit_path(&self) -> Result<Option<PathBuf>> {
+        let mut edit_path = self
+            .config()
+            .main_file
+            .clone()
+            .map(|file| self.path().join(file));
+        // If no main_file is specified and there's exactly one file in the egg directory, use that
+        if edit_path.is_none() {
+            let mut files = self.path().fs_err_read_dir().into_diagnostic()?;
+            if let Some(first_file) = files.next() {
+                if files.next().is_none() {
+                    edit_path = Some(first_file.into_diagnostic()?.path());
+                }
+            }
+        }
+        if edit_path.is_none() {
+            edit_path = Some(self.edit_dir()?);
+        }
+        Ok(edit_path)
+    }
+
     /// Check if the egg is _fully_ deployed (-> All contained entries have corresponding symlinks)
     #[tracing::instrument(skip_all, fields(egg.name = %self.name()))]
     pub fn is_deployed(&self) -> Result<bool> {
@@ -411,7 +440,8 @@ mod test {
     #[test]
     pub fn test_setup() {
         let root = assert_fs::TempDir::new().unwrap();
-        let yolk_paths = YolkPaths::new(root.child("yolk").to_path_buf(), root.to_path_buf());
+        let yolk_paths =
+            YolkPaths::new(root.child("yolk").to_path_buf(), root.to_path_buf()).unwrap();
         assert!(yolk_paths.check().is_err());
         yolk_paths.create().unwrap();
         assert!(yolk_paths.check().is_ok());
@@ -490,7 +520,7 @@ mod test {
     #[test]
     pub fn test_default_script() -> TestResult {
         let root = TempDir::new().into_diagnostic()?;
-        let yolk_paths = YolkPaths::new(root.child("yolk").to_path_buf(), root.to_path_buf());
+        let yolk_paths = YolkPaths::new(root.child("yolk").to_path_buf(), root.to_path_buf())?;
         yolk_paths.create().unwrap();
         let yolk = crate::yolk::Yolk::new(yolk_paths);
         _ = yolk.prepare_eval_ctx_for_templates(crate::yolk::EvalMode::Local)?;
