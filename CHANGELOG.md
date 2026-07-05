@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.9](https://github.com/elkowar/yolk/compare/v0.3.8...v0.3.9) - 2026-07-05
+
+### Added
+
+- improved parser diagnostics
+
+### Refactor
+
+- rework parser structure
+
 ## [0.3.8](https://github.com/elkowar/yolk/compare/v0.3.7...v0.3.8) - 2026-05-19
 
 ### Fixed
