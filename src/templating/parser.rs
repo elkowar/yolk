@@ -156,9 +156,7 @@ fn p_any_tag_start<'a>(input: &mut Input<'a>) -> PResult<&'a str> {
 /// closing delimiter instead of backtracking to the regular tag parsers.
 /// `end` is the closing delimiter of the surrounding tag (`#}` or `%}`), so a
 /// delimiter-adjacent keyword like `{#ignore#}` is still recognized.
-fn p_ignore_keyword<'a>(
-    end: &'static str,
-) -> impl winnow::Parser<Input<'a>, (), YolkParseError> {
+fn p_ignore_keyword<'a>(end: &'static str) -> impl winnow::Parser<Input<'a>, (), YolkParseError> {
     terminated(
         literal("ignore"),
         peek(alt((
@@ -344,10 +342,9 @@ fn p_ignore_multiline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>>
         ),
     );
 
-    let (((start, _), _body, (end, _)), full_span) =
-        (p_start_tag_line, cut_err(p_body), p_end)
-            .with_spanned()
-            .parse_next(input)?;
+    let (((start, _), _body, (end, _)), full_span) = (p_start_tag_line, cut_err(p_body), p_end)
+        .with_spanned()
+        .parse_next(input)?;
 
     Ok(Element::IgnoreMultiLine {
         start,
