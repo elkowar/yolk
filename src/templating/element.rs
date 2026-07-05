@@ -12,6 +12,20 @@ pub struct TaggedLine<'a> {
     pub full_line: Sp<&'a str>,
 }
 
+#[derive(Debug, Eq, PartialEq, arbitrary::Arbitrary)]
+pub enum TagExpr<'a> {
+    Transform(Sp<&'a str>),
+    If(Sp<&'a str>),
+}
+
+impl<'a> TagExpr<'a> {
+    pub fn expr(&self) -> &Sp<&'a str> {
+        match self {
+            TagExpr::Transform(expr) | TagExpr::If(expr) => expr,
+        }
+    }
+}
+
 /// The starting line and body of a block, such as a multiline tag or part of a conditional.
 ///
 /// `Expr` should either be `Sp<&'a str>` or `()`.
@@ -39,15 +53,13 @@ pub enum Element<'a> {
     Inline {
         /// The full line including the tag
         line: TaggedLine<'a>,
-        expr: Sp<&'a str>,
-        is_if: bool,
+        expr: TagExpr<'a>,
     },
     NextLine {
         /// The full line including the tag
         tagged_line: TaggedLine<'a>,
-        expr: Sp<&'a str>,
+        expr: TagExpr<'a>,
         next_line: Sp<&'a str>,
-        is_if: bool,
         full_span: Sp<&'a str>,
     },
     MultiLine {
@@ -107,14 +119,14 @@ impl<'a> Element<'a> {
     ) -> Result<String, TemplateError> {
         match self {
             Element::Plain(s) => Ok(s.as_str().to_string()),
-            Element::Inline { line, expr, is_if } => match is_if {
-                true => {
+            Element::Inline { line, expr } => match expr {
+                TagExpr::If(expr) => {
                     let eval_result = eval_ctx
                         .eval_rhai::<bool>(expr.as_str())
                         .map_err(|e| TemplateError::from_rhai(e, expr.range()))?;
                     Ok(comment_style.toggle_string(line.full_line.as_str(), eval_result))
                 }
-                false => Ok(format!(
+                TagExpr::Transform(expr) => Ok(format!(
                     "{}{}{}",
                     run_transformation_expr(eval_ctx, line.left, expr)?,
                     line.tag,
@@ -125,10 +137,9 @@ impl<'a> Element<'a> {
                 tagged_line: line,
                 expr,
                 next_line,
-                is_if,
                 ..
-            } => match is_if {
-                true => Ok(format!(
+            } => match expr {
+                TagExpr::If(expr) => Ok(format!(
                     "{}{}",
                     line.full_line.as_str(),
                     &comment_style.toggle_string(
@@ -138,7 +149,7 @@ impl<'a> Element<'a> {
                             .map_err(|e| TemplateError::from_rhai(e, expr.range()))?
                     )
                 )),
-                false => Ok(format!(
+                TagExpr::Transform(expr) => Ok(format!(
                     "{}{}",
                     line.full_line.as_str(),
                     run_transformation_expr(eval_ctx, next_line.as_str(), expr)?

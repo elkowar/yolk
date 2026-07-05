@@ -83,7 +83,7 @@ pub struct YolkParseDiagnostic {
     #[source_code]
     pub input: Arc<NamedSource<String>>,
 
-    /// Offset in chars of the error.
+    /// Byte offset and length of the error.
     #[label("{}", label.unwrap_or_else(|| "here"))]
     pub span: SourceSpan,
 

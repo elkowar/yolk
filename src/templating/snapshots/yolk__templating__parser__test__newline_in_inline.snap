@@ -1,7 +1,6 @@
 ---
 source: src/templating/parser.rs
 expression: "parse_document(\"foo /* {< test\\ntest >} */\")"
-snapshot_kind: text
 ---
 Ok(
     [
@@ -12,8 +11,9 @@ Ok(
                 right: " */",
                 full_line: [0..25]"foo /* {< test\ntest >} */",
             },
-            expr: [10..20]"test\ntest ",
-            is_if: false,
+            expr: Transform(
+                [10..20]"test\ntest ",
+            ),
         },
     ],
 )

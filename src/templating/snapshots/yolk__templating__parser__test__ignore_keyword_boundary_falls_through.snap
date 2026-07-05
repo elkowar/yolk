@@ -11,9 +11,10 @@ Ok(
                 right: "\n",
                 full_line: [0..20]"{# ignore_case() #}\n",
             },
-            expr: [3..17]"ignore_case() ",
+            expr: Transform(
+                [3..17]"ignore_case() ",
+            ),
             next_line: [20..23]"foo",
-            is_if: false,
             full_span: [0..23]"{# ignore_case() #}\nfoo",
         },
         Plain(

@@ -9,8 +9,9 @@ NextLine {
         right: " */\n",
         full_line: [0..14]"/* {# x #} */\n",
     },
-    expr: [6..8]"x ",
+    expr: Transform(
+        [6..8]"x ",
+    ),
     next_line: [14..17]"foo",
-    is_if: false,
     full_span: [0..17]"/* {# x #} */\nfoo",
 }

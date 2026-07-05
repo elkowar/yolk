@@ -16,13 +16,19 @@ use winnow::{
 };
 
 use super::{
-    element::{Block, Element, TaggedLine},
+    element::{Block, Element, TagExpr, TaggedLine},
     error::{cx, YolkParseError, YolkParseFailure},
 };
 
 // type Input<'a> = winnow::LocatingSlice<&'a str>;
 type Input<'a> = Recoverable<LocatingSlice<&'a str>, YolkParseError>;
 type PResult<T> = winnow::ModalResult<T, YolkParseError>;
+
+#[derive(Debug, Eq, PartialEq)]
+struct ParsedTagLine<'a, T> {
+    line: TaggedLine<'a>,
+    inner: Sp<T>,
+}
 
 #[derive(Eq, PartialEq, arbitrary::Arbitrary)]
 pub struct Sp<T> {
@@ -60,6 +66,7 @@ impl<T> Sp<T> {
     }
 }
 
+#[allow(unused)]
 pub fn parse_document(s: &str) -> Result<Vec<Element<'_>>, YolkParseFailure> {
     parse_document_named("file", s)
 }
@@ -159,6 +166,22 @@ fn p_condition_tag_inner<'a>(
     )
 }
 
+fn p_if_tag_inner<'a>() -> impl winnow::Parser<Input<'a>, &'a str, YolkParseError> {
+    p_condition_tag_inner(
+        "if",
+        "%}",
+        "An if tag requires a condition, e.g. `{% if foo %}`",
+    )
+}
+
+fn p_elif_tag_inner<'a>() -> impl winnow::Parser<Input<'a>, &'a str, YolkParseError> {
+    p_condition_tag_inner(
+        "elif",
+        "%}",
+        "An elif tag requires a condition, e.g. `{% elif foo %}`",
+    )
+}
+
 fn p_optional_if_tag_inner<'a>(
     end: &'static str,
     message: &'static str,
@@ -175,6 +198,17 @@ fn p_optional_if_tag_inner<'a>(
         ),
         p_regular_tag_inner(end).map(|expr| (false, expr)),
     ))
+}
+
+fn spanned_tag_expr(expr: Sp<(bool, &str)>) -> TagExpr<'_> {
+    let span = expr.range();
+    let (is_if, content) = *expr.content();
+    let expr = Sp::new(span, content);
+    if is_if {
+        TagExpr::If(expr)
+    } else {
+        TagExpr::Transform(expr)
+    }
 }
 
 /// p_tag := <start> <p_inner> <end>
@@ -216,13 +250,13 @@ fn p_ignore_keyword<'a>(end: &'static str) -> impl winnow::Parser<Input<'a>, (),
 }
 
 /// p_tag_line := <start> <p_inner> <right> (\n)?
-/// returns the [`TaggedLine`] and the result of the `p_inner` parser.
+/// returns the parsed syntax for the full tag line and its spanned inner content.
 fn p_tag_line<'a, T>(
     start: impl winnow::Parser<Input<'a>, &'a str, YolkParseError> + Copy,
     p_inner: impl winnow::Parser<Input<'a>, T, YolkParseError>,
     end: impl winnow::Parser<Input<'a>, &'a str, YolkParseError>,
     require_newline: bool,
-) -> impl winnow::Parser<Input<'a>, (TaggedLine<'a>, Sp<T>), YolkParseError> {
+) -> impl winnow::Parser<Input<'a>, ParsedTagLine<'a, T>, YolkParseError> {
     let left_p = repeat_till(
         0..,
         (not(line_ending), not(p_any_tag_start), any),
@@ -231,30 +265,30 @@ fn p_tag_line<'a, T>(
     .map(|((), _)| ())
     .take();
     let tag_p = p_tag(start, p_inner, end).with_taken();
-    let line_end: Box<dyn Parser<_, _, _>> = match require_newline {
-        true => Box::new(line_ending.map(Some)),
-        false => Box::new(opt(line_ending)),
+    let right_p = move |input: &mut Input<'a>| -> PResult<&'a str> {
+        if require_newline {
+            (till_line_ending, line_ending.map(Some))
+                .context(cx().msg("Expected a line after this tag"))
+                .take()
+                .parse_next(input)
+        } else {
+            (till_line_ending, opt(line_ending))
+                .context(cx().msg("Expected a line after this tag"))
+                .take()
+                .parse_next(input)
+        }
     };
-    let right_p = cut_err(
-        (
-            till_line_ending,
-            line_end.context(cx().msg("Expected a line after this tag")),
-        )
-            .take(),
-    );
-    (left_p, tag_p, right_p)
-        .with_spanned()
-        .map(|((left, (inner_res, tag), right), full_line)| {
-            (
-                TaggedLine {
-                    left,
-                    tag,
-                    right,
-                    full_line,
-                },
-                inner_res,
-            )
-        })
+    (left_p, tag_p, cut_err(right_p)).with_spanned().map(
+        |((left, (inner, tag), right), full_line)| ParsedTagLine {
+            line: TaggedLine {
+                left,
+                tag,
+                right,
+                full_line,
+            },
+            inner,
+        },
+    )
 }
 
 fn p_nextline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
@@ -262,16 +296,15 @@ fn p_nextline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     let p_inner =
         p_optional_if_tag_inner("#}", "An if tag requires a condition, e.g. `{# if foo #}`");
 
-    let (((tagged_line, expr), next_line), full_span) = (
+    let ((tag, next_line), full_span) = (
         p_tag_line("{#", p_inner, "#}", true),
         till_line_ending.spanned(),
     )
         .with_spanned()
         .parse_next(input)?;
     Ok(Element::NextLine {
-        tagged_line,
-        is_if: expr.content().0,
-        expr: expr.map(|x| x.1),
+        tagged_line: tag.line,
+        expr: spanned_tag_expr(tag.inner),
         next_line,
         full_span,
     })
@@ -280,14 +313,14 @@ fn p_nextline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
 /// Parses a `{# ignore #}` tag followed by a single line that is emitted verbatim.
 fn p_ignore_nextline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     peek(any).parse_next(input)?;
-    let (((tagged_line, _), next_line), full_span) = (
+    let ((tag, next_line), full_span) = (
         p_tag_line("{#", p_ignore_keyword("#}"), "#}", true),
         till_line_ending.spanned(),
     )
         .with_spanned()
         .parse_next(input)?;
     Ok(Element::IgnoreNextLine {
-        tagged_line,
+        tagged_line: tag.line,
         next_line,
         full_span,
     })
@@ -298,11 +331,10 @@ fn p_inline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     peek(any).parse_next(input)?;
     let p_inner =
         p_optional_if_tag_inner(">}", "An if tag requires a condition, e.g. `{< if foo >}`");
-    let (tagged_line, expr) = p_tag_line("{<", cut_err(p_inner), ">}", false).parse_next(input)?;
+    let tag = p_tag_line("{<", cut_err(p_inner), ">}", false).parse_next(input)?;
     Ok(Element::Inline {
-        line: tagged_line,
-        is_if: expr.content().0,
-        expr: expr.map(|x| x.1),
+        line: tag.line,
+        expr: spanned_tag_expr(tag.inner),
     })
 }
 
@@ -344,17 +376,17 @@ fn p_multiline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
         ),
     );
 
-    let (((tagged_line, expr), body, (end, _)), full_span) = (p_start_tag_line, p_body, p_end)
+    let ((start, body, end), full_span) = (p_start_tag_line, p_body, p_end)
         .with_spanned()
         .parse_next(input)?;
 
     Ok(Element::MultiLine {
         block: Block {
-            tagged_line,
-            expr,
+            tagged_line: start.line,
+            expr: start.inner,
             body,
         },
-        end,
+        end: end.line,
         full_span,
     })
 }
@@ -384,75 +416,45 @@ fn p_ignore_multiline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>>
         ),
     );
 
-    let (((start, _), _body, (end, _)), full_span) = (p_start_tag_line, cut_err(p_body), p_end)
+    let ((start, _body, end), full_span) = (p_start_tag_line, cut_err(p_body), p_end)
         .with_spanned()
         .parse_next(input)?;
 
     Ok(Element::IgnoreMultiLine {
-        start,
-        end,
+        start: start.line,
+        end: end.line,
         full_span,
     })
 }
 
 /// Parse a multiline block starting with a tag line using the given parser into a [`Block`].
 fn p_block<'a, Expr>(
-    start_p: impl winnow::Parser<Input<'a>, (TaggedLine<'a>, Expr), YolkParseError>,
+    start_p: impl winnow::Parser<Input<'a>, ParsedTagLine<'a, Expr>, YolkParseError>,
     block_p: impl winnow::Parser<Input<'a>, Vec<Element<'a>>, YolkParseError>,
-) -> impl winnow::Parser<Input<'a>, Block<'a, Expr>, YolkParseError> {
+) -> impl winnow::Parser<Input<'a>, Block<'a, Sp<Expr>>, YolkParseError> {
     let p = (start_p, cut_err(block_p));
-    let p = p.map(|((tagged_line, expr), body)| Block {
-        tagged_line,
-        expr,
+    let p = p.map(|(tag, body)| Block {
+        tagged_line: tag.line,
+        expr: tag.inner,
         body,
     });
     trace("p_multiline_block_starting_with", p)
 }
 
+fn p_conditional_body<'a>() -> impl Parser<Input<'a>, Vec<Element<'a>>, YolkParseError> {
+    p_multiline_body(alt(("end", "else", p_elif_tag_inner())))
+}
+
 fn p_conditional_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     peek(any).parse_next(input)?;
 
-    let p_if = p_block::<Sp<&'a str>>(
-        p_tag_line(
-            "{%",
-            p_condition_tag_inner(
-                "if",
-                "%}",
-                "An if tag requires a condition, e.g. `{% if foo %}`",
-            ),
-            "%}",
-            true,
-        ),
-        p_multiline_body(alt((
-            "end",
-            "else",
-            p_condition_tag_inner(
-                "elif",
-                "%}",
-                "An elif tag requires a condition, e.g. `{% elif foo %}`",
-            ),
-        ))),
+    let p_if = p_block::<&'a str>(
+        p_tag_line("{%", p_if_tag_inner(), "%}", true),
+        p_conditional_body(),
     );
-    let p_elif = p_block::<Sp<&'a str>>(
-        p_tag_line(
-            "{%",
-            p_condition_tag_inner(
-                "elif",
-                "%}",
-                "An elif tag requires a condition, e.g. `{% elif foo %}`",
-            ),
-            "%}",
-            true,
-        ),
-        p_multiline_body(alt((
-            "end",
-            "else",
-            p_condition_tag_inner(
-                "elif",
-                "%}",
-                "An elif tag requires a condition, e.g. `{% elif foo %}`",
-            ),
-        ))),
+    let p_elif = p_block::<&'a str>(
+        p_tag_line("{%", p_elif_tag_inner(), "%}", true),
+        p_conditional_body(),
     );
     let p_else = p_block(
         p_tag_line("{%", "else".void(), "%}", true)
@@ -480,7 +482,7 @@ fn p_conditional_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     Ok(Element::Conditional {
         blocks,
         else_block: else_block.map(|x| x.map_expr(|_| ())),
-        end: end_line.0,
+        end: end_line.line,
         full_span,
     })
 }

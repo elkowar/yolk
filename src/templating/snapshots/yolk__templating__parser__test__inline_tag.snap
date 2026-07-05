@@ -1,7 +1,6 @@
 ---
 source: src/templating/parser.rs
 expression: "p_inline_element.parse(new_input(\"foo /* {< test >} */\"))"
-snapshot_kind: text
 ---
 Ok(
     Inline {
@@ -11,7 +10,8 @@ Ok(
             right: " */",
             full_line: [0..20]"foo /* {< test >} */",
         },
-        expr: [10..15]"test ",
-        is_if: false,
+        expr: Transform(
+            [10..15]"test ",
+        ),
     },
 )

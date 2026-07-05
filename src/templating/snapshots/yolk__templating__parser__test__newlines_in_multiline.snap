@@ -14,9 +14,10 @@ Ok(
                 right: " */\n",
                 full_line: [9..28]"{#\ntest\ntest\n#} */\n",
             },
-            expr: [12..22]"test\ntest\n",
+            expr: Transform(
+                [12..22]"test\ntest\n",
+            ),
             next_line: [28..31]"bar",
-            is_if: false,
             full_span: [9..31]"{#\ntest\ntest\n#} */\nbar",
         },
     ],
