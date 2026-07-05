@@ -1,6 +1,0 @@
----
-source: src/templating/mod.rs
-expression: "Document::parse_string(\"foo /* {< string.upper(YOLK_TEXT) >} */\")?.render(&mut eval_ctx)?"
-snapshot_kind: text
----
-FOO /* {< string.upper(YOLK_TEXT) >} */

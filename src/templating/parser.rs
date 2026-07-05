@@ -61,25 +61,35 @@ impl<T> Sp<T> {
 }
 
 pub fn parse_document(s: &str) -> Result<Vec<Element<'_>>, YolkParseFailure> {
+    parse_document_named("file", s)
+}
+
+/// Parse a document, attaching `name` to the resulting diagnostics so error
+/// output points at the real source file rather than a placeholder.
+pub fn parse_document_named<'a>(
+    name: &str,
+    s: &'a str,
+) -> Result<Vec<Element<'a>>, YolkParseFailure> {
     let p = repeat(0.., p_element);
-    try_parse(p, s)
+    try_parse(p, name, s)
 }
 
 #[allow(unused)]
 pub fn parse_element(s: &str) -> Result<Element<'_>, YolkParseFailure> {
     let p = terminated(p_element, repeat(0.., line_ending).map(|_: ()| ()));
-    try_parse(p, s)
+    try_parse(p, "file", s)
 }
 
 pub fn try_parse<'a, P: Parser<Input<'a>, T, YolkParseError>, T>(
     mut parser: P,
+    name: &str,
     input: &'a str,
 ) -> Result<T, YolkParseFailure> {
     let (_, maybe_val, errs) = parser.recoverable_parse(LocatingSlice::new(input));
     if let (Some(v), true) = (maybe_val, errs.is_empty()) {
         Ok(v)
     } else {
-        Err(YolkParseFailure::from_errs(errs, input))
+        Err(YolkParseFailure::from_errs(errs, name, input))
     }
 }
 
@@ -124,9 +134,47 @@ fn p_plain_line_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
 fn p_regular_tag_inner(end: &str) -> impl winnow::Parser<Input<'_>, &'_ str, YolkParseError> {
     let p = repeat_till(1.., (not(end), any), peek(end)).map(|(_, _): ((), _)| ());
     cut_err(
-        p.context(cx().msg("Failed to parse expression").lbl("expression"))
-            .take(),
+        p.context(
+            cx().msg("Expected an expression in this tag")
+                .lbl("expression"),
+        )
+        .take(),
     )
+}
+
+fn p_condition_tag_inner<'a>(
+    keyword: &'static str,
+    end: &'static str,
+    message: &'static str,
+) -> impl winnow::Parser<Input<'a>, &'a str, YolkParseError> {
+    preceded(
+        literal(keyword),
+        cut_err(alt((
+            preceded(
+                wsp1,
+                p_regular_tag_inner(end).context(cx().msg(message).lbl("condition")),
+            ),
+            fail.context(cx().msg(message).lbl("condition")),
+        ))),
+    )
+}
+
+fn p_optional_if_tag_inner<'a>(
+    end: &'static str,
+    message: &'static str,
+) -> impl winnow::Parser<Input<'a>, (bool, &'a str), YolkParseError> {
+    alt((
+        preceded(
+            (literal("if"), wsp1),
+            cut_err(p_regular_tag_inner(end).context(cx().msg(message).lbl("condition"))),
+        )
+        .map(|expr| (true, expr)),
+        preceded(
+            (literal("if"), peek((wsp0_or_newline, literal(end)))),
+            cut_err(fail.context(cx().msg(message).lbl("condition"))),
+        ),
+        p_regular_tag_inner(end).map(|expr| (false, expr)),
+    ))
 }
 
 /// p_tag := <start> <p_inner> <end>
@@ -140,7 +188,6 @@ fn p_tag<'a, T>(
         delimited(wsp0_or_newline, p_inner.with_span(), wsp0_or_newline),
         cut_err(end),
     ))
-    .context(cx().msg("Failed to parse tag").lbl("tag"))
     .map(|(s, span)| Sp::new(span, s))
 }
 
@@ -191,7 +238,7 @@ fn p_tag_line<'a, T>(
     let right_p = cut_err(
         (
             till_line_ending,
-            line_end.context(cx().msg("Expected newline")),
+            line_end.context(cx().msg("Expected a line after this tag")),
         )
             .take(),
     );
@@ -212,10 +259,8 @@ fn p_tag_line<'a, T>(
 
 fn p_nextline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     peek(any).parse_next(input)?;
-    let p_inner = (
-        opt((literal("if"), wsp1)).map(|x| x.is_some()),
-        p_regular_tag_inner("#}"),
-    );
+    let p_inner =
+        p_optional_if_tag_inner("#}", "An if tag requires a condition, e.g. `{# if foo #}`");
 
     let (((tagged_line, expr), next_line), full_span) = (
         p_tag_line("{#", p_inner, "#}", true),
@@ -251,11 +296,8 @@ fn p_ignore_nextline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> 
 /// Parses an inline element, including the surrounding line
 fn p_inline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     peek(any).parse_next(input)?;
-    let p_inner = (
-        opt((literal("if"), wsp1)).map(|x| x.is_some()),
-        p_regular_tag_inner(">}"),
-    )
-        .context(cx().msg("Failed to parse tag inner").lbl("here"));
+    let p_inner =
+        p_optional_if_tag_inner(">}", "An if tag requires a condition, e.g. `{< if foo >}`");
     let (tagged_line, expr) = p_tag_line("{<", cut_err(p_inner), ">}", false).parse_next(input)?;
     Ok(Element::Inline {
         line: tagged_line,
@@ -373,27 +415,43 @@ fn p_conditional_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     let p_if = p_block::<Sp<&'a str>>(
         p_tag_line(
             "{%",
-            preceded(("if", wsp1), p_regular_tag_inner("%}")),
+            p_condition_tag_inner(
+                "if",
+                "%}",
+                "An if tag requires a condition, e.g. `{% if foo %}`",
+            ),
             "%}",
             true,
         ),
         p_multiline_body(alt((
             "end",
             "else",
-            preceded(("elif", wsp1), p_regular_tag_inner("%}")),
+            p_condition_tag_inner(
+                "elif",
+                "%}",
+                "An elif tag requires a condition, e.g. `{% elif foo %}`",
+            ),
         ))),
     );
     let p_elif = p_block::<Sp<&'a str>>(
         p_tag_line(
             "{%",
-            preceded(("elif", wsp1), p_regular_tag_inner("%}")),
+            p_condition_tag_inner(
+                "elif",
+                "%}",
+                "An elif tag requires a condition, e.g. `{% elif foo %}`",
+            ),
             "%}",
             true,
         ),
         p_multiline_body(alt((
             "end",
             "else",
-            preceded(("elif", wsp1), p_regular_tag_inner("%}")),
+            p_condition_tag_inner(
+                "elif",
+                "%}",
+                "An elif tag requires a condition, e.g. `{% elif foo %}`",
+            ),
         ))),
     );
     let p_else = p_block(
@@ -406,11 +464,8 @@ fn p_conditional_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
         (_, Vec<_>, Option<Block<'a, _>>, _),
         _,
     ) = (
-        p_if.context(cx().msg("Failed to parse if block").lbl("if block")),
-        cut_err(repeat(
-            0..,
-            p_elif.context(cx().msg("Failed to parse elif block").lbl("elif block")),
-        )),
+        p_if,
+        cut_err(repeat(0.., p_elif)),
         cut_err(opt(p_else.context(
             cx().msg("Failed to parse else block").lbl("else block"),
         ))),
@@ -473,6 +528,7 @@ mod test {
 
     use crate::templating::parser::{
         p_conditional_element, p_multiline_element, p_nextline_element, parse_document,
+        parse_document_named,
     };
 
     use super::{new_input, p_inline_element, p_tag_line};
@@ -631,5 +687,17 @@ mod test {
     #[test]
     fn test_error_empty_tag() {
         insta::assert_snapshot!(render_error(parse_document("{%%}").unwrap_err()));
+    }
+
+    #[test]
+    fn test_error_if_without_expression() {
+        insta::assert_snapshot!(render_error(parse_document("{<if>}").unwrap_err()));
+        insta::assert_snapshot!(render_error(parse_document("{%if%}").unwrap_err()));
+    }
+
+    #[test]
+    fn test_error_uses_source_name() {
+        let rendered = render_error(parse_document_named("real/path.yolk", "{%%}").unwrap_err());
+        assert!(rendered.contains("[real/path.yolk:1:3]"));
     }
 }
