@@ -355,7 +355,7 @@ fn run_command(args: Args) -> Result<()> {
                 cmd.status().into_diagnostic()?;
             } else {
                 // TODO: Ensure that, in something goes wrong during the sync, the git command is _not_ run.
-                // Even if, normally, the sync call would only emit warnings, we must _never_ commit a failed syc.
+                // Even if, normally, the sync call would only emit warnings, we must _never_ commit a failed sync.
                 // This also means there should potentially be slightly more separation between syncing templates and deployment,
                 // as deployment errors are not fatal for git usage.
                 let status = yolk.with_canonical_state(|| cmd.status().into_diagnostic())?;
@@ -525,7 +525,7 @@ fn run_command(args: Args) -> Result<()> {
 
         #[cfg(feature = "docgen")]
         Command::Docs { dir } => {
-            let docs = doc_generator::generate_docs(yolk)?;
+            let docs = yolk::doc_generator::generate_docs(yolk)?;
             for (name, docs) in docs {
                 fs_err::write(dir.join(format!("{name}.md")), docs).into_diagnostic()?;
             }

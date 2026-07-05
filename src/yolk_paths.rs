@@ -58,7 +58,7 @@ impl YolkPaths {
     }
 
     pub fn set_yolk_dir(&mut self, path: PathBuf) {
-        tracing::trace!("Updating oylk-dir to {}", path.display());
+        tracing::trace!("Updating yolk-dir to {}", path.display());
         self.root_path = path;
     }
     pub fn set_home_dir(&mut self, path: PathBuf) {

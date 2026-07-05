@@ -106,7 +106,7 @@ background_color = "#000000"
 # {# replace_quoted(colors.foreground) #}
 foreground_color = "#ffffff"
 ```
-After running `yolk sync`, yolk will replace the regex patterns with the corresponding result of the Lua expression.
+After running `yolk sync`, yolk will replace the regex patterns with the corresponding result of the Rhai expression.
 For example, depending on how you configured your `colors` in your `yolk.rhai`, this could turn into:
 ```toml
 # {# replace_quoted(colors.background) #}

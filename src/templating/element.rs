@@ -242,9 +242,9 @@ fn run_transformation_expr(
         .eval_text_transformation(&result, expr.as_str())
         .map_err(|e| TemplateError::from_rhai(e, expr.range()))?;
     if result != second_pass {
-        cov_mark::hit!(refuse_nonidempodent_transformation);
+        cov_mark::hit!(refuse_nonidempotent_transformation);
         println!(
-            "Warning: Refusing to apply transformation that is not idempodent: `{}`",
+            "Warning: Refusing to apply transformation that is not idempotent: `{}`",
             expr.as_str()
         );
         Ok(text.to_string())

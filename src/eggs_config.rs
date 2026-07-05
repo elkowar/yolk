@@ -351,7 +351,7 @@ impl EggConfig {
 
         let enabled = if let Some(x) = map.get("enabled") {
             x.as_bool()
-                .map_err(|t| rhai_error!("`enabled` must be a list, but got {t}"))?
+                .map_err(|t| rhai_error!("`enabled` must be a boolean, but got {t}"))?
         } else {
             true
         };

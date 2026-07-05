@@ -160,7 +160,7 @@ pub fn test_render_noop(mut eval_ctx: EvalCtx, #[case] input: &str) -> TestResul
 }
 
 #[test]
-pub fn test_render_replace_refuse_non_idempodent() -> TestResult {
+pub fn test_render_replace_refuse_non_idempotent() -> TestResult {
     let element = Document::parse_string("{# replace(`'.*'`, `a'a'`) #}\nfoo: 'original'")?;
     let mut eval_ctx = EvalCtx::new_in_mode(EvalMode::Local)?;
     assert!(element.render(&mut eval_ctx).is_err());

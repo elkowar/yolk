@@ -240,11 +240,11 @@ impl Deployer {
         Ok(())
     }
 
-    /// Retry running symlink creation and deletion with root priviledges.
+    /// Retry running symlink creation and deletion with root privileges.
     pub fn try_run_elevated(self) -> miette::Result<()> {
         if self.missing_permissions_create.is_empty() && self.missing_permissions_remove.is_empty()
         {
-            tracing::trace!("No priviledge escalation necessary, all symlink operations succeeded");
+            tracing::trace!("No privilege escalation necessary, all symlink operations succeeded");
             return Ok(());
         }
         let yolk_binary = std::env::args().nth(0).unwrap_or("yolk".to_string());

@@ -1,5 +1,5 @@
 #[cfg(feature = "docgen")]
-mod doc_generator;
+pub mod doc_generator;
 
 pub mod deploy;
 pub mod eggs_config;
