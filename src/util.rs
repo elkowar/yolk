@@ -224,8 +224,12 @@ pub mod test_util {
         set_home_dir(home.to_path_buf());
 
         let eggs = home.child("yolk/eggs");
-        let yolk_binary_path = assert_cmd::cargo::cargo_bin("yolk");
-        yolk.init_yolk(Some(yolk_binary_path.to_string_lossy().as_ref()))?;
+        // NB: the git-filter binary path (`init_yolk`'s argument) is currently
+        // unused by `init_git_config`. Tests that actually need to invoke the
+        // compiled binary live in `tests/cli.rs`, where Cargo exposes
+        // `CARGO_BIN_EXE_yolk` so the binary can be located without relying on
+        // Cargo's build-artifact layout.
+        yolk.init_yolk(None)?;
         Ok((home, yolk, eggs))
     }
 

@@ -1,10 +1,36 @@
-use assert_cmd::{assert, Command};
-use assert_fs::prelude::{FileWriteStr as _, PathChild};
+//! Integration tests that spawn the compiled `yolk` binary.
+//!
+//! These live here as an integration test (rather than as unit tests under
+//! `src/`) so that Cargo provides the `CARGO_BIN_EXE_yolk` environment variable,
+//! which `assert_cmd::Command::cargo_bin` uses to locate the binary. Unit tests
+//! don't get that variable, which forces `assert_cmd` to guess the binary's
+//! location by walking up from the test binary and assuming the default
+//! build-artifact layout. That assumption breaks with `build.build-dir`
+//! (`CARGO_BUILD_BUILD_DIR`, Cargo 1.91) and the upcoming build-dir layout
+//! changes, so any test that spawns the binary must run from here.
 
-use crate::{
-    util::test_util::{setup_and_init_test_yolk, TestResult},
+use assert_cmd::{assert, Command};
+use assert_fs::prelude::{FileWriteStr as _, PathChild as _};
+
+use yolk::{
     yolk::{EvalMode, Yolk},
+    yolk_paths::YolkPaths,
 };
+
+/// like <https://crates.io/crates/testresult>, but shows the debug output instead of display.
+pub type TestResult<T = ()> = std::result::Result<T, TestError>;
+
+#[derive(Debug)]
+pub enum TestError {}
+
+impl<T: std::fmt::Debug + std::fmt::Display> From<T> for TestError {
+    #[track_caller] // Will show the location of the caller in test failure messages
+    fn from(error: T) -> Self {
+        // Use alternate format for rich error message for anyhow
+        // See: https://docs.rs/anyhow/latest/anyhow/struct.Error.html#display-representations
+        panic!("error: {} - {:?}", std::any::type_name::<T>(), error);
+    }
+}
 
 struct TestEnv {
     home: assert_fs::TempDir,
@@ -13,25 +39,23 @@ struct TestEnv {
 }
 
 impl TestEnv {
-    pub fn init() -> miette::Result<Self> {
-        let (home, yolk, eggs) = setup_and_init_test_yolk()?;
+    pub fn init() -> TestResult<Self> {
+        let home = assert_fs::TempDir::new()?;
+        let paths = YolkPaths::new(home.join("yolk"), home.to_path_buf());
+        let yolk = Yolk::new(paths);
+        // Ensure neither the in-process library nor the spawned binary touch the
+        // real home directory. The binary is additionally given `--home-dir`
+        // explicitly below.
+        std::env::set_var("HOME", home.path());
 
-        Ok(Self { home, yolk, eggs })
+        let eggs = home.child("yolk/eggs");
+        yolk.init_yolk(None)?;
+        Ok(Self { home, eggs, yolk })
     }
+
     pub fn yolk_root(&self) -> assert_fs::fixture::ChildPath {
         self.home.child("yolk")
     }
-
-    // pub fn config_git(&self) {
-    //     self.start_git_command()
-    //         .args(["config", "--local", "user.name", "test"])
-    //         .assert()
-    //         .success();
-    //     self.start_git_command()
-    //         .args(["config", "--local", "user.email", "test@test.test"])
-    //         .assert()
-    //         .success();
-    // }
 
     pub fn start_git_command(&self) -> Command {
         let mut cmd = Command::new("git");
