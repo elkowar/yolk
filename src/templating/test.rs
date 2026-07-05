@@ -86,6 +86,43 @@ pub fn eval_ctx() -> EvalCtx {
         foo: 'new'
     "#}
 )]
+#[case::ignore_nextline(
+    "# {# ignore #}\nvalue = {< not a real tag >}\n",
+    "# {# ignore #}\nvalue = {< not a real tag >}\n"
+)]
+#[case::ignore_multiline(
+    indoc!{r#"
+        # {% ignore %}
+        value = {< get_yolk_text().to_upper() >}
+        other = {# also literal #}
+        # {% end %}
+    "#},
+    indoc!{r#"
+        # {% ignore %}
+        value = {< get_yolk_text().to_upper() >}
+        other = {# also literal #}
+        # {% end %}
+    "#},
+)]
+#[case::live_tag_after_ignore(
+    indoc!{r#"
+        # {% ignore %}
+        raw = {< literal >}
+        # {% end %}
+        live /* {< get_yolk_text().to_upper() >} */
+    "#},
+    indoc!{r#"
+        # {% ignore %}
+        raw = {< literal >}
+        # {% end %}
+        LIVE /* {< get_yolk_text().to_upper() >} */
+    "#},
+)]
+#[case::ignore_keyword_boundary_is_still_a_tag(
+    // `ignore_case` is not the `ignore` keyword, so this stays a normal next-line tag.
+    "{# get_yolk_text().to_upper() #}\nfoo\n",
+    "{# get_yolk_text().to_upper() #}\nFOO\n"
+)]
 pub fn test_render(
     mut eval_ctx: EvalCtx,
     #[case] input: &str,

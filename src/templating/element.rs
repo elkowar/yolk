@@ -61,6 +61,23 @@ pub enum Element<'a> {
         end: TaggedLine<'a>,
         full_span: Sp<&'a str>,
     },
+    /// `{# ignore #}` followed by a single line that is emitted verbatim,
+    /// without any yolk-syntax parsing or evaluation.
+    IgnoreNextLine {
+        /// The `{# ignore #}` line
+        tagged_line: TaggedLine<'a>,
+        next_line: Sp<&'a str>,
+        full_span: Sp<&'a str>,
+    },
+    /// `{% ignore %} ... {% end %}` whose body is emitted verbatim,
+    /// without any yolk-syntax parsing or evaluation.
+    IgnoreMultiLine {
+        /// The `{% ignore %}` line
+        start: TaggedLine<'a>,
+        /// The `{% end %}` line
+        end: TaggedLine<'a>,
+        full_span: Sp<&'a str>,
+    },
 }
 
 impl<'a> Element<'a> {
@@ -78,6 +95,8 @@ impl<'a> Element<'a> {
             Element::NextLine { full_span, .. } => full_span,
             Element::MultiLine { full_span, .. } => full_span,
             Element::Conditional { full_span, .. } => full_span,
+            Element::IgnoreNextLine { full_span, .. } => full_span,
+            Element::IgnoreMultiLine { full_span, .. } => full_span,
         }
     }
 
@@ -169,6 +188,9 @@ impl<'a> Element<'a> {
                 output.push_str(end.full_line.as_str());
                 Ok(output)
             }
+            // Ignore elements are emitted verbatim: no parsing, no evaluation, no comment toggling.
+            Element::IgnoreNextLine { full_span, .. }
+            | Element::IgnoreMultiLine { full_span, .. } => Ok(full_span.as_str().to_string()),
         }
     }
 }

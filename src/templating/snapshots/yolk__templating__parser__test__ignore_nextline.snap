@@ -1,0 +1,21 @@
+---
+source: src/templating/parser.rs
+expression: "parse_document(\"# {# ignore #}\\nvalue = {< not a real tag >}\\n\")"
+---
+Ok(
+    [
+        IgnoreNextLine {
+            tagged_line: TaggedLine {
+                left: "# ",
+                tag: "{# ignore #}",
+                right: "\n",
+                full_line: [0..15]"# {# ignore #}\n",
+            },
+            next_line: [15..43]"value = {< not a real tag >}",
+            full_span: [0..43]"# {# ignore #}\nvalue = {< not a real tag >}",
+        },
+        Plain(
+            [43..44]"\n",
+        ),
+    ],
+)

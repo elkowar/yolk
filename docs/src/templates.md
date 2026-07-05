@@ -72,6 +72,30 @@ background_color = "#000000"
 # {% end %}
 ```
 
+### Ignoring yolk syntax (literal blocks)
+
+Sometimes your config legitimately contains text that looks like yolk template syntax (`{< ... >}`, `{# ... #}` or `{% ... %}`), which would otherwise cause yolk to try (and fail) to evaluate it.
+For these cases you can use the `ignore` tag to mark a region as **literal**: yolk will emit it verbatim, without any parsing or evaluation.
+
+There are two forms:
+- Next-line: `{# ignore #}` makes the single line following it literal.
+- Block: `{% ignore %} ... {% end %}` makes everything between the tags literal.
+
+```toml
+# {# ignore #}
+weird_value = "{< this is not a yolk tag >}"
+
+# {% ignore %}
+template = "{% not evaluated %}"
+other = "{< also left alone >}"
+# {% end %}
+```
+
+After running `yolk sync`, all of the content above is left exactly as-is.
+
+> Note: An `{% ignore %}` block ends at the first `{% end %}` line, so a literal `{% end %}` can't appear inside a block.
+> If you need to keep a raw `{% end %}`, put `{# ignore #}` on the line directly above it instead.
+
 ### Example: Templating your color scheme
 In many cases, you'll want to make specific values, such as colors or paths, be set through one central source, rather than specifying them in every config file.
 Yolk allows you to do this (and more) by using various template functions.

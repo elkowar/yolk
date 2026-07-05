@@ -43,6 +43,10 @@ impl CommentStyle {
             | Element::NextLine {
                 tagged_line: line, ..
             }
+            | Element::IgnoreNextLine {
+                tagged_line: line, ..
+            }
+            | Element::IgnoreMultiLine { start: line, .. }
             | Element::MultiLine {
                 block: Block {
                     tagged_line: line, ..

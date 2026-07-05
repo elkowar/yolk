@@ -1,0 +1,23 @@
+---
+source: src/templating/parser.rs
+expression: "parse_document(indoc::indoc!\n{r#\"\n            # {% ignore %}\n            value = {< not a tag >}\n            other = {# also literal #}\n            # {% end %}\n        \"#})"
+---
+Ok(
+    [
+        IgnoreMultiLine {
+            start: TaggedLine {
+                left: "# ",
+                tag: "{% ignore %}",
+                right: "\n",
+                full_line: [0..15]"# {% ignore %}\n",
+            },
+            end: TaggedLine {
+                left: "# ",
+                tag: "{% end %}",
+                right: "\n",
+                full_line: [66..78]"# {% end %}\n",
+            },
+            full_span: [0..78]"# {% ignore %}\nvalue = {< not a tag >}\nother = {# also literal #}\n# {% end %}\n",
+        },
+    ],
+)

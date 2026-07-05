@@ -87,8 +87,10 @@ fn p_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     trace("peek any", peek(any)).parse_next(input)?;
     alt((
         p_inline_element,
+        p_ignore_nextline_element,
         p_nextline_element,
         p_conditional_element,
+        p_ignore_multiline_element,
         p_multiline_element,
         p_plain_line_element,
         fail.context(cx().msg("Encountered invalid element").lbl("element")),
@@ -144,6 +146,28 @@ fn p_tag<'a, T>(
 
 fn p_any_tag_start<'a>(input: &mut Input<'a>) -> PResult<&'a str> {
     alt((literal("{%"), literal("{#"), literal("{<"))).parse_next(input)
+}
+
+/// Matches the literal `ignore` keyword, but only as a whole token.
+///
+/// The boundary check ensures we don't match the `ignore` prefix of an
+/// identifier like `ignore_color()`. Because [`p_tag`] wraps its end matcher in
+/// `cut_err`, matching a prefix here would turn into a hard failure on the
+/// closing delimiter instead of backtracking to the regular tag parsers.
+/// `end` is the closing delimiter of the surrounding tag (`#}` or `%}`), so a
+/// delimiter-adjacent keyword like `{#ignore#}` is still recognized.
+fn p_ignore_keyword<'a>(
+    end: &'static str,
+) -> impl winnow::Parser<Input<'a>, (), YolkParseError> {
+    terminated(
+        literal("ignore"),
+        peek(alt((
+            winnow::ascii::space1.void(),
+            line_ending.void(),
+            literal(end).void(),
+        ))),
+    )
+    .void()
 }
 
 /// p_tag_line := <start> <p_inner> <right> (\n)?
@@ -210,6 +234,22 @@ fn p_nextline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     })
 }
 
+/// Parses a `{# ignore #}` tag followed by a single line that is emitted verbatim.
+fn p_ignore_nextline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
+    peek(any).parse_next(input)?;
+    let (((tagged_line, _), next_line), full_span) = (
+        p_tag_line("{#", p_ignore_keyword("#}"), "#}", true),
+        till_line_ending.spanned(),
+    )
+        .with_spanned()
+        .parse_next(input)?;
+    Ok(Element::IgnoreNextLine {
+        tagged_line,
+        next_line,
+        full_span,
+    })
+}
+
 /// Parses an inline element, including the surrounding line
 fn p_inline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     peek(any).parse_next(input)?;
@@ -249,7 +289,7 @@ fn p_multiline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     let p_start_tag_line = p_tag_line(
         "{%",
         preceded(
-            not(alt(("if", "elif", "else", "end"))),
+            not(alt(("if", "elif", "else", "end", "ignore"))),
             p_regular_tag_inner("%}"),
         ),
         "%}",
@@ -274,6 +314,43 @@ fn p_multiline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
             expr,
             body,
         },
+        end,
+        full_span,
+    })
+}
+
+/// Parses a `{% ignore %} ... {% end %}` block whose body is emitted verbatim.
+///
+/// Unlike [`p_multiline_element`], the body is scanned as raw characters rather
+/// than parsed into [`Element`]s, so yolk-syntax inside the body is left
+/// untouched. The block ends at the first `{% end %}` line, so a literal
+/// `{% end %}` cannot appear inside the body.
+fn p_ignore_multiline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
+    peek(any).parse_next(input)?;
+    let p_start_tag_line = p_tag_line("{%", p_ignore_keyword("%}"), "%}", true);
+    // Consume raw characters until we reach an `{% end %}` line.
+    let p_body = repeat_till(
+        0..,
+        (not(p_tag_line("{%", "end", "%}", false)), any),
+        peek(p_tag_line("{%", "end", "%}", false)),
+    )
+    .map(|((), _)| ())
+    .take();
+    let p_end = cut_err(
+        p_tag_line("{%", "end", "%}", false).context(
+            cx().msg("Expected block to end here")
+                .lbl("block end")
+                .hlp("Did you forget an `{% end %}` tag?"),
+        ),
+    );
+
+    let (((start, _), _body, (end, _)), full_span) =
+        (p_start_tag_line, cut_err(p_body), p_end)
+            .with_spanned()
+            .parse_next(input)?;
+
+    Ok(Element::IgnoreMultiLine {
+        start,
         end,
         full_span,
     })
@@ -419,6 +496,32 @@ mod test {
     #[test]
     fn test_nextline_tag() -> TestResult {
         assert_debug_snapshot!(p_nextline_element(&mut new_input("/* {# x #} */\nfoo"))?);
+        Ok(())
+    }
+
+    #[test]
+    fn test_ignore_nextline() -> TestResult {
+        assert_debug_snapshot!(parse_document(
+            "# {# ignore #}\nvalue = {< not a real tag >}\n"
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn test_ignore_multiline() -> TestResult {
+        assert_debug_snapshot!(parse_document(indoc::indoc! {r#"
+            # {% ignore %}
+            value = {< not a tag >}
+            other = {# also literal #}
+            # {% end %}
+        "#}));
+        Ok(())
+    }
+
+    #[test]
+    fn test_ignore_keyword_boundary_falls_through() -> TestResult {
+        // `ignore_case` is not the `ignore` keyword, so this stays a regular next-line tag.
+        assert_debug_snapshot!(parse_document("{# ignore_case() #}\nfoo\n"));
         Ok(())
     }
 
