@@ -58,8 +58,8 @@ pub struct YolkParseFailure {
 }
 
 impl YolkParseFailure {
-    pub fn from_errs(errs: Vec<YolkParseError>, input: &str) -> YolkParseFailure {
-        let src = Arc::new(NamedSource::new("file", input.to_string()));
+    pub fn from_errs(errs: Vec<YolkParseError>, name: &str, input: &str) -> YolkParseFailure {
+        let src = Arc::new(NamedSource::new(name, input.to_string()));
         YolkParseFailure {
             input: src.clone(),
             diagnostics: errs
@@ -67,7 +67,7 @@ impl YolkParseFailure {
                 .map(|e| YolkParseDiagnostic {
                     message: e.message,
                     input: src.clone(),
-                    span: e.span.unwrap_or_else(|| (0usize..0usize).into()),
+                    span: e.span.unwrap_or_else(|| (input.len()..input.len()).into()),
                     label: e.label,
                     help: e.help,
                     severity: Severity::Error,
@@ -147,14 +147,14 @@ impl<I: Stream> AddContext<I, YolkParseContext> for YolkParseError {
 impl<I: Stream + Location> FromRecoverableError<I, Self> for YolkParseError {
     #[inline]
     fn from_recoverable_error(
-        token_start: &<I as Stream>::Checkpoint,
-        _err_start: &<I as Stream>::Checkpoint,
+        _token_start: &<I as Stream>::Checkpoint,
+        err_start: &<I as Stream>::Checkpoint,
         input: &I,
         mut e: Self,
     ) -> Self {
         e.span = e
             .span
-            .or_else(|| Some(span_from_checkpoint(input, token_start)));
+            .or_else(|| Some(span_from_checkpoint(input, err_start)));
         e
     }
 }
@@ -162,13 +162,13 @@ impl<I: Stream + Location> FromRecoverableError<I, Self> for YolkParseError {
 impl<I: Stream + Location> FromRecoverableError<I, YolkParseContext> for YolkParseError {
     #[inline]
     fn from_recoverable_error(
-        token_start: &<I as Stream>::Checkpoint,
-        _err_start: &<I as Stream>::Checkpoint,
+        _token_start: &<I as Stream>::Checkpoint,
+        err_start: &<I as Stream>::Checkpoint,
         input: &I,
         e: YolkParseContext,
     ) -> Self {
         YolkParseError {
-            span: Some((input.offset_from(token_start).saturating_sub(1)..input.location()).into()),
+            span: Some(span_from_checkpoint(input, err_start)),
             label: e.label,
             help: e.help,
             message: e.message,

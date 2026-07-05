@@ -1,13 +1,13 @@
 ---
 source: src/templating/parser.rs
-expression: "render_error(parse_document(\"{<if>}\").unwrap_err())"
+expression: "render_error(parse_document(\"{%if%}\").unwrap_err())"
 ---
   × Failed to parse yolk template file
 
 Error: 
-  × An if tag requires a condition, e.g. `{< if foo >}`
+  × An if tag requires a condition, e.g. `{% if foo %}`
    ╭─[file:1:5]
- 1 │ {<if>}
+ 1 │ {%if%}
    ·     ▲
    ·     ╰── condition
    ╰────

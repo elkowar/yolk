@@ -6,7 +6,7 @@ use super::{
     parser,
 };
 
-use miette::{NamedSource, Result};
+use miette::Result;
 
 #[derive(Debug, arbitrary::Arbitrary)]
 pub struct Document<'a> {
@@ -29,9 +29,7 @@ impl<'a> Document<'a> {
     }
 
     pub fn parse_string_named(name: &str, s: &'a str) -> Result<Self> {
-        let elements = parser::parse_document(s).map_err(|e| {
-            miette::Report::from(e).with_source_code(NamedSource::new(name, s.to_string()))
-        })?;
+        let elements = parser::parse_document_named(name, s).map_err(miette::Report::from)?;
         let comment_style = CommentStyle::try_infer_from_elements(&elements).unwrap_or_default();
         Ok(Self {
             elements,
