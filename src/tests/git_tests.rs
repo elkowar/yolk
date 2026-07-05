@@ -37,7 +37,7 @@ impl TestEnv {
         let mut cmd = Command::new("git");
         cmd.env("HOME", self.home.path())
             .current_dir(self.yolk_root().path())
-            .args(&[
+            .args([
                 "--git-dir",
                 &self
                     .yolk

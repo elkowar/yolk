@@ -73,7 +73,7 @@ impl<'a> Element<'a> {
 
     pub fn full_span(&self) -> &Sp<&str> {
         match self {
-            Element::Plain(sp) => &sp,
+            Element::Plain(sp) => sp,
             Element::Inline { line, .. } => &line.full_line,
             Element::NextLine { full_span, .. } => full_span,
             Element::MultiLine { full_span, .. } => full_span,

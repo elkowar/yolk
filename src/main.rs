@@ -440,7 +440,7 @@ fn run_command(args: Args) -> Result<()> {
                                     eprintln!("Error: {e:?}");
                                 }
                             } else {
-                                changed.iter().for_each(|path| on_file_updated(&path));
+                                changed.iter().for_each(|path| on_file_updated(path));
                             }
                         }
                         Err(error) => tracing::error!("Error: {error:?}"),

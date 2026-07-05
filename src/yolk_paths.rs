@@ -381,9 +381,9 @@ impl Iterator for TraverseDeployment {
                 let link_entry = link.join(in_egg_entry.file_name());
                 self.stack.push((in_egg_entry.path(), link_entry));
             }
-            return self.next();
+            self.next()
         } else {
-            return Some(Ok(Err(in_egg)));
+            Some(Ok(Err(in_egg)))
         }
     }
 }

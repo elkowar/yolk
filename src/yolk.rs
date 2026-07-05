@@ -257,7 +257,7 @@ impl Yolk {
                     match old_symlink.fs_err_read_link() {
                         Ok(x) => canonical_egg_path
                             .as_ref()
-                            .map_or(false, |p| x.starts_with(p)),
+                            .is_some_and(|p| x.starts_with(p)),
                         Err(e) => {
                             errs.push(miette::Report::from_err(e));
                             false

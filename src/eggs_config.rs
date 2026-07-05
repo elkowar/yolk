@@ -288,7 +288,7 @@ impl EggConfig {
         };
 
         for (k, _v) in map.iter() {
-            let k: &str = &*k;
+            let k: &str = k;
             if EggConfigKey::from_str(k).is_none() {
                 tracing::warn!("unknown egg config key: {}", k);
             }
@@ -362,7 +362,7 @@ impl EggConfig {
                 .map_err(|t| rhai_error!("`unsafe_shell_hooks` must be a map, but got {t}"))?;
 
             for (k, _v) in shell_hooks.iter() {
-                let k: &str = &*k;
+                let k: &str = k;
                 if ShellHookKey::from_str(k).is_none() {
                     tracing::warn!("unknown key: {}", k);
                 }
