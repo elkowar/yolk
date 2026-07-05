@@ -228,7 +228,7 @@ fn test_deploy_outside_of_home() -> TestResult {
 }
 
 #[test]
-fn test_deploy_put_mode_fails_with_stowy_usage() -> TestResult {
+fn test_deploy_put_mode_fails_with_stow_usage() -> TestResult {
     cov_mark::check_count!(deploy_put, 1);
     let (home, yolk, eggs) = setup_and_init_test_yolk()?;
     home.child(".config").create_dir_all()?;

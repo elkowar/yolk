@@ -69,7 +69,7 @@ enum Command {
     },
     /// Evaluate a Rhai expression.
     ///
-    /// The expression is executed in the same scope that template tag expression are evaluated in.
+    /// The expression is executed in the same scope that template tag expressions are evaluated in.
     Eval {
         /// Evaluate in canonical context instead.
         #[arg(long)]
@@ -354,7 +354,7 @@ fn run_command(args: Args) -> Result<()> {
             {
                 cmd.status().into_diagnostic()?;
             } else {
-                // TODO: Ensure that, in something goes wrong during the sync, the git command is _not_ run.
+                // TODO: Ensure that, if something goes wrong during the sync, the git command is _not_ run.
                 // Even if, normally, the sync call would only emit warnings, we must _never_ commit a failed sync.
                 // This also means there should potentially be slightly more separation between syncing templates and deployment,
                 // as deployment errors are not fatal for git usage.
@@ -511,15 +511,12 @@ fn run_command(args: Args) -> Result<()> {
             for symlink_path in delete_symlink {
                 tracker.delete_symlink(symlink_path)?;
             }
-            if tracker.failed_creations().is_empty() {
-                tracing::info!("All symlinks created successfully");
-            } else {
-                tracing::error!("Failed to create some symlinks");
-            }
-            if tracker.failed_deletions().is_empty() {
-                tracing::info!("All symlinks deleted successfully");
-            } else {
-                tracing::error!("Failed to delete some symlinks");
+            if tracker.has_pending_elevated_operations() {
+                miette::bail!(
+                    help = "The elevated helper still did not have permission to complete these symlink operations.",
+                    "Failed to manage symlinks: {}",
+                    tracker.pending_elevated_operations_summary()
+                );
             }
         }
 

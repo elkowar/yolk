@@ -267,7 +267,7 @@ pub fn tag_module() -> Module {
         - Inline tags (`{< ... >}`): These tags operate on everything before the tag within the same line.
         - Block tags (`{% ... %} ... {% end %}`): These tags operate on everything between the tag and the corresponding `{% end %}` tag.
 
-        Inside these tags, you can call any of Yolks template tag functions (Or, in fact, any rhai expression that returns a string).
+        Inside these tags, you can call any of Yolk's template tag functions (or, in fact, any Rhai expression that returns a string).
     "});
 
     fn tag_text_replace(text: &str, pattern: &str, replacement: &str) -> RhaiFnResult<String> {

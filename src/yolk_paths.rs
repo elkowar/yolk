@@ -249,11 +249,7 @@ pub struct Egg {
 
 impl Egg {
     pub fn open(home: PathBuf, egg_path: PathBuf, config: EggConfig) -> Result<Self> {
-        miette::ensure!(
-            egg_path.is_dir(),
-            "No egg at {} does not exist",
-            egg_path.abbr(),
-        );
+        miette::ensure!(egg_path.is_dir(), "No egg exists at {}", egg_path.abbr(),);
         Ok(Self {
             home_path: home.canonical()?,
             egg_dir: egg_path.canonical()?,

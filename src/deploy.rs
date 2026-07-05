@@ -41,6 +41,35 @@ impl Deployer {
         &self.missing_permissions_remove
     }
 
+    pub fn has_pending_elevated_operations(&self) -> bool {
+        !self.missing_permissions_create.is_empty() || !self.missing_permissions_remove.is_empty()
+    }
+
+    pub fn pending_elevated_operations_summary(&self) -> String {
+        let mut parts = Vec::new();
+        if !self.missing_permissions_create.is_empty() {
+            parts.push(format!(
+                "create {}",
+                self.missing_permissions_create
+                    .iter()
+                    .map(|(_, symlink)| symlink.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        if !self.missing_permissions_remove.is_empty() {
+            parts.push(format!(
+                "delete {}",
+                self.missing_permissions_remove
+                    .iter()
+                    .map(|symlink| symlink.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        parts.join("; ")
+    }
+
     pub fn add_created_symlink(&mut self, link_path: PathBuf) {
         self.created_symlinks.push(link_path);
     }
@@ -242,8 +271,7 @@ impl Deployer {
 
     /// Retry running symlink creation and deletion with root privileges.
     pub fn try_run_elevated(self) -> miette::Result<()> {
-        if self.missing_permissions_create.is_empty() && self.missing_permissions_remove.is_empty()
-        {
+        if !self.has_pending_elevated_operations() {
             tracing::trace!("No privilege escalation necessary, all symlink operations succeeded");
             return Ok(());
         }
@@ -275,31 +303,8 @@ impl Deployer {
             }))
             .collect::<Vec<_>>();
         tracing::info!(
-            "Some symlink operations require root permissions: {} {}",
-            if self.missing_permissions_create.is_empty() {
-                "".to_string()
-            } else {
-                format!(
-                    "create {}",
-                    self.missing_permissions_create
-                        .iter()
-                        .map(|x| format!("{}", x.1.display()))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            },
-            if self.missing_permissions_remove.is_empty() {
-                "".to_string()
-            } else {
-                format!(
-                    "delete {}",
-                    self.missing_permissions_remove
-                        .iter()
-                        .map(|x| format!("{}", x.display()))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            }
+            "Some symlink operations require elevated permissions: {}",
+            self.pending_elevated_operations_summary(),
         );
         try_sudo(&args)?;
         Ok(())
@@ -352,16 +357,18 @@ fn try_sudo(args: &[String]) -> miette::Result<()> {
         .or_else(|_| which_global("run0"))
         .map_err(|_| miette::miette!("No sudo, doas, or run0 command found"))?;
 
+    let sudo_command_display = sudo_command.display().to_string();
     let mut cmd = std::process::Command::new(sudo_command);
     cmd.stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::inherit())
         .args(args);
-    let output = cmd.output().into_diagnostic()?;
-    if !output.status.success() {
-        tracing::error!(
-            "Failed to run command with sudo: {}",
-            String::from_utf8_lossy(&output.stderr)
+    let status = cmd.status().into_diagnostic()?;
+    if !status.success() {
+        miette::bail!(
+            "Failed to run elevated symlink helper via {}: {}",
+            sudo_command_display,
+            status
         );
     }
     Ok(())

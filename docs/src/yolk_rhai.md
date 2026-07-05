@@ -97,8 +97,8 @@ Files that are not listed here will not be edited by yolk during `yolk sync`!
 A path, relative to the egg directory, that will be opened when you run `yolk edit <eggname>`.
 
 #### `unsafe_shell_hooks`
-An object that may declare two scripts, which get ran when the egg is deployed or un-deployed.
-The `pre_deploy` script gets executed before the egg is deployed, the `pre_undeploy` script gets executed before the egg is un-deployed, the `post_deploy` script gets executed after the egg has been deployed, the `post_undeploy` script gets executed after the egg has been un-deployed.
+An object that may declare scripts to run when the egg is deployed or undeployed.
+The `pre_deploy` script runs before the egg is deployed, the `pre_undeploy` script runs before the egg is undeployed, the `post_deploy` script runs after the egg has been deployed, and the `post_undeploy` script runs after the egg has been undeployed.
 
 Note that these scripts should optimally be idempotent, so running them twice should not change anything compared to running them once.
 
@@ -136,7 +136,7 @@ fn some_function() {
 
 Note that functions are exported by default.
 
-Now, in your `yolk.rhai`, import this script, giving the module an explict name:
+Now, in your `yolk.rhai`, import this script, giving the module an explicit name:
 
 ```rs
 import "colors" as colors;

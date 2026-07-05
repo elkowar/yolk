@@ -10,7 +10,7 @@ Quick reminder: Yolk has three different types of tags, that differ only in what
 - Inline tags (`{< ... >}`): These tags operate on everything before the tag within the same line.
 - Block tags (`{% ... %} ... {% end %}`): These tags operate on everything between the tag and the corresponding `{% end %}` tag.
 
-Inside these tags, you can call any of Yolks template tag functions (Or, in fact, any rhai expression that returns a string).
+Inside these tags, you can call any of Yolk's template tag functions (or, in fact, any Rhai expression that returns a string).
 
 ---
 
