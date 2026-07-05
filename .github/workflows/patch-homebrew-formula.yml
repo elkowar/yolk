@@ -1,3 +1,8 @@
+# cargo-dist generates and publishes the Homebrew formula, but its template has no
+# support for shell completions. This post-announce job clones the tap, injects a
+# `generate_completions_from_executable(..., shell_parameter_format: :clap)` call into
+# the formula's `install` block (so Homebrew builds completions from `COMPLETE=<shell> yolk`),
+# then commits the change back to the tap.
 name: Patch Homebrew Formula
 
 on:
@@ -29,13 +34,14 @@ jobs:
           cd tap
 
           if [ ! -f "$FORMULA_FILE" ]; then
-            echo "Formula file not found: $FORMULA_FILE"
-            exit 0
+            echo "ERROR: Formula file not found: $FORMULA_FILE" >&2
+            exit 1
           fi
 
           python3 << 'SCRIPT'
           import os
           import re
+          import sys
 
           app_name = os.environ['APP_NAME']
           formula_file = os.environ['FORMULA_FILE']
@@ -46,15 +52,17 @@ jobs:
           # Skip if completions are already present
           if "generate_completions_from_executable" in content:
             print(f"Completions already present in {formula_file}")
-            exit(0)
+            sys.exit(0)
 
           # Find the def install block and inject completions inside it.
           install_pattern = r'(\s+def install\b.*?)(\n\s+end\b)'
           match = re.search(install_pattern, content, re.DOTALL)
 
           if not match:
-            print(f"WARNING: Could not find def install block in {formula_file}")
-            exit(0)
+            # Fail loudly: the formula format changed and we would otherwise
+            # silently ship a release without shell completions.
+            print(f"ERROR: Could not find def install block in {formula_file}", file=sys.stderr)
+            sys.exit(1)
 
           install_block = match.group(1)
           block_suffix = match.group(2)
@@ -76,8 +84,8 @@ jobs:
               + install_block[insert_point:]
             )
           else:
-            print(f"WARNING: Could not find bin install in the def install block")
-            exit(0)
+            print(f"ERROR: Could not find bin install in the def install block", file=sys.stderr)
+            sys.exit(1)
 
           new_content = content[:match.start()] + new_block + block_suffix + content[match.end():]
 

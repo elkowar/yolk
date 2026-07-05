@@ -150,11 +150,20 @@ fn egg_completer(current: &std::ffi::OsStr) -> Vec<CompletionCandidate> {
         return vec![];
     };
 
-    let yolk_dir = yolk_paths::default_yolk_dir();
-    let Some(home_dir) = dirs::home_dir() else {
+    // Completion runs before arg parsing, so the `--yolk-dir`/`--home-dir` flags
+    // aren't available here. We still honor their environment variable equivalents.
+    let yolk_dir = std::env::var_os("YOLK_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(yolk_paths::default_yolk_dir);
+    let Some(home_dir) = std::env::var_os("YOLK_HOME_DIR")
+        .map(PathBuf::from)
+        .or_else(dirs::home_dir)
+    else {
         return vec![];
     };
-    let yolk_paths = yolk::yolk_paths::YolkPaths::new(yolk_dir, home_dir);
+    let Ok(yolk_paths) = yolk::yolk_paths::YolkPaths::new(yolk_dir, home_dir) else {
+        return vec![];
+    };
     let yolk = Yolk::new(yolk_paths);
 
     let Ok(eggs) = yolk.list_eggs() else {
@@ -255,7 +264,7 @@ fn run_command(args: Args) -> Result<()> {
         .wrap_err("No home dir could be found")?;
     tracing::trace!("Setting yolk dir to {}", yolk_dir.display());
     tracing::trace!("Setting home dir to {}", home_dir.display());
-    let yolk_paths = yolk::yolk_paths::YolkPaths::new(yolk_dir, home_dir);
+    let yolk_paths = yolk::yolk_paths::YolkPaths::new(yolk_dir, home_dir)?;
 
     let yolk = Yolk::new(yolk_paths);
     match &args.command {

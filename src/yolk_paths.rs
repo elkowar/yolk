@@ -48,13 +48,13 @@ pub fn default_yolk_dir() -> PathBuf {
 }
 
 impl YolkPaths {
-    pub fn new(path: PathBuf, home: PathBuf) -> Self {
-        YolkPaths {
+    pub fn new(path: PathBuf, home: PathBuf) -> Result<Self> {
+        Ok(YolkPaths {
             root_path: path,
             home: home
                 .canonical()
-                .expect("Failed to canonicalize home directory"),
-        }
+                .wrap_err("Failed to canonicalize home directory")?,
+        })
     }
 
     pub fn set_yolk_dir(&mut self, path: PathBuf) {
@@ -440,7 +440,8 @@ mod test {
     #[test]
     pub fn test_setup() {
         let root = assert_fs::TempDir::new().unwrap();
-        let yolk_paths = YolkPaths::new(root.child("yolk").to_path_buf(), root.to_path_buf());
+        let yolk_paths =
+            YolkPaths::new(root.child("yolk").to_path_buf(), root.to_path_buf()).unwrap();
         assert!(yolk_paths.check().is_err());
         yolk_paths.create().unwrap();
         assert!(yolk_paths.check().is_ok());
@@ -519,7 +520,7 @@ mod test {
     #[test]
     pub fn test_default_script() -> TestResult {
         let root = TempDir::new().into_diagnostic()?;
-        let yolk_paths = YolkPaths::new(root.child("yolk").to_path_buf(), root.to_path_buf());
+        let yolk_paths = YolkPaths::new(root.child("yolk").to_path_buf(), root.to_path_buf())?;
         yolk_paths.create().unwrap();
         let yolk = crate::yolk::Yolk::new(yolk_paths);
         _ = yolk.prepare_eval_ctx_for_templates(crate::yolk::EvalMode::Local)?;

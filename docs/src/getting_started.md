@@ -41,6 +41,11 @@ for `zsh`, run
 ```zsh
 echo "source <(COMPLETE=zsh yolk)" >> ~/.zshrc
 ```
+Note that zsh's completion system must be initialized before this line runs. If your `~/.zshrc`
+doesn't already do so (frameworks like oh-my-zsh do it for you), add the following *above* it:
+```zsh
+autoload -Uz compinit && compinit
+```
 for `fish` run
 ```fish
 echo "COMPLETE=fish yolk | source" >> ~/.config/fish/completions/yolk.fish

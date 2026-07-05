@@ -41,7 +41,7 @@ struct TestEnv {
 impl TestEnv {
     pub fn init() -> TestResult<Self> {
         let home = assert_fs::TempDir::new()?;
-        let paths = YolkPaths::new(home.join("yolk"), home.to_path_buf());
+        let paths = YolkPaths::new(home.join("yolk"), home.to_path_buf())?;
         let yolk = Yolk::new(paths);
         // Ensure neither the in-process library nor the spawned binary touch the
         // real home directory. The binary is additionally given `--home-dir`
