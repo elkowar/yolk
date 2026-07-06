@@ -1,4 +1,7 @@
 {
+  "project": {
+    "name": "Yolk"
+  },
   "styles": {
     "theme": "dark",
     "logo": ".github/images/yolk_banner_animated.svg",
