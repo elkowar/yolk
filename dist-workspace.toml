@@ -22,7 +22,10 @@ installers = ["shell", "powershell", "homebrew"]
 # Customize the Homebrew formula name
 formula = "yolk"
 # Target platforms to build apps for (Rust target-triple syntax)
-targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-unknown-linux-musl", "x86_64-pc-windows-msvc"]
+targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-unknown-linux-musl", "x86_64-pc-windows-msvc", "aarch64-linux-android"]
+# Steps run before `dist build` (used to set up the Android NDK for the
+# aarch64-linux-android cross-build; a no-op for all other targets).
+github-build-setup = "./build-setup.yml"
 # Path that installers should place binaries in
 install-path = "CARGO_HOME"
 # Whether to install an updater program
@@ -42,3 +45,7 @@ post-announce-jobs = ["./patch-homebrew-formula"]
 global = "ubuntu-latest"
 local = "ubuntu-latest"
 x86_64-unknown-linux-gnu = "ubuntu-latest"
+# The Android NDK only ships a linux-x86_64 host toolchain (there is no
+# linux-aarch64 NDK), so cross-build aarch64-linux-android on an x86_64 runner
+# rather than cargo-dist's default aarch64 Linux runner.
+aarch64-linux-android = "ubuntu-22.04"
