@@ -195,7 +195,7 @@ fn egg_completer(current: &std::ffi::OsStr) -> Vec<CompletionCandidate> {
         .filter(|(_, name)| name.starts_with(current))
         .map(|(egg, name)| {
             let mut completion = CompletionCandidate::new(name);
-            if let Ok(Some(path)) = egg.edit_path() {
+            if let Ok(path) = egg.edit_path() {
                 completion = completion.help(Some(StyledStr::from(path.display().to_string())))
             }
             completion
@@ -358,8 +358,18 @@ fn run_command(args: Args) -> Result<()> {
                         templates,
                         &target_paths,
                         &fallback_target,
-                    )?;
-                    yolk.sync_named_egg_to_mode(EvalMode::Local, egg_name, true)?;
+                    )
+                    .with_context(|| {
+                        format!(
+                            "The files were already moved into `eggs/{egg_name}`, but updating yolk.rhai failed. Add the config entry manually and run `yolk sync`."
+                        )
+                    })?;
+                    yolk.sync_named_egg_to_mode(EvalMode::Local, egg_name, true)
+                        .with_context(|| {
+                            format!(
+                                "The files were moved into `eggs/{egg_name}` and yolk.rhai was updated, but syncing failed. Resolve the issue and run `yolk sync` again."
+                            )
+                        })?;
                     println!("Added an entry for `{egg_name}` to yolk.rhai and ran `yolk sync`.");
                     println!(
                         "The appended config is intentionally simple; you probably want to clean it up and move it into your preferred yolk.rhai structure."
@@ -458,9 +468,7 @@ fn run_command(args: Args) -> Result<()> {
                     let main_file = egg.edit_path()?;
                     let cd_path = egg.edit_dir()?;
                     let _ = std::env::set_current_dir(&cd_path);
-                    if let Some(ref main_file) = main_file {
-                        edit::edit_file(main_file).into_diagnostic()?;
-                    }
+                    edit::edit_file(&main_file).into_diagnostic()?;
                 }
                 None => {
                     let _ = std::env::set_current_dir(yolk.paths().root_path());

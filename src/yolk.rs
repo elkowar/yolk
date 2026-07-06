@@ -203,9 +203,15 @@ impl Yolk {
                 original_path.abbr(),
                 target_path.abbr()
             );
+            // Capture the absolute location of the file *before* we move it away,
+            // so the generated config points at the real target rather than the
+            // (possibly relative, now-nonexistent) input path.
+            let canonical_original = original_path
+                .canonical()
+                .unwrap_or_else(|_| original_path.clone());
             fs_err::create_dir(egg_path).into_diagnostic()?;
             fs_err::rename(&original_path, target_path).into_diagnostic()?;
-            targets_map.insert(file_name.into(), original_path.clone());
+            targets_map.insert(file_name.into(), canonical_original);
         }
         Ok(targets_map)
     }
@@ -337,7 +343,14 @@ impl Yolk {
         }
         old_symlinks_db.write(egg_name, deployed_symlinks)?;
 
-        Ok(())
+        if errs.is_empty() {
+            Ok(())
+        } else {
+            Err(MultiError::new(
+                format!("Failed to clean up some stale symlinks for egg {egg_name}"),
+                errs,
+            ))
+        }
     }
 
     /// fetch the `eggs` variable from a given EvalCtx.

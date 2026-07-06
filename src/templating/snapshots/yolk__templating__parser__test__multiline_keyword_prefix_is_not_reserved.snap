@@ -1,0 +1,31 @@
+---
+source: src/templating/parser.rs
+expression: "parse_document(indoc::indoc!\n{r#\"\n            {% ignore_case() %}\n            body\n            {% end %}\n        \"#})"
+---
+Ok(
+    [
+        MultiLine {
+            block: Block {
+                tagged_line: TaggedLine {
+                    left: "",
+                    tag: "{% ignore_case() %}",
+                    right: "\n",
+                    full_line: [0..20]"{% ignore_case() %}\n",
+                },
+                expr: [3..17]"ignore_case() ",
+                body: [
+                    Plain(
+                        [20..25]"body\n",
+                    ),
+                ],
+            },
+            end: TaggedLine {
+                left: "",
+                tag: "{% end %}",
+                right: "\n",
+                full_line: [25..35]"{% end %}\n",
+            },
+            full_span: [0..35]"{% ignore_case() %}\nbody\n{% end %}\n",
+        },
+    ],
+)

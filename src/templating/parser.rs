@@ -229,22 +229,42 @@ fn p_any_tag_start<'a>(input: &mut Input<'a>) -> PResult<&'a str> {
     alt((literal("{%"), literal("{#"), literal("{<"))).parse_next(input)
 }
 
+/// Peeks a token boundary after a keyword: whitespace, a line ending, or the
+/// given closing delimiter. `end` is the closing delimiter of the surrounding
+/// tag (`#}` or `%}`), so a delimiter-adjacent keyword like `{#ignore#}` still
+/// counts as a whole token.
+fn peek_keyword_boundary<'a>(
+    end: &'static str,
+) -> impl winnow::Parser<Input<'a>, (), YolkParseError> {
+    peek(alt((
+        winnow::ascii::space1.void(),
+        line_ending.void(),
+        literal(end).void(),
+    )))
+    .void()
+}
+
 /// Matches the literal `ignore` keyword, but only as a whole token.
 ///
 /// The boundary check ensures we don't match the `ignore` prefix of an
 /// identifier like `ignore_color()`. Because [`p_tag`] wraps its end matcher in
 /// `cut_err`, matching a prefix here would turn into a hard failure on the
 /// closing delimiter instead of backtracking to the regular tag parsers.
-/// `end` is the closing delimiter of the surrounding tag (`#}` or `%}`), so a
-/// delimiter-adjacent keyword like `{#ignore#}` is still recognized.
 fn p_ignore_keyword<'a>(end: &'static str) -> impl winnow::Parser<Input<'a>, (), YolkParseError> {
+    terminated(literal("ignore"), peek_keyword_boundary(end)).void()
+}
+
+/// Matches any of the reserved multiline keywords (`if`, `elif`, `else`, `end`,
+/// `ignore`), but only as whole tokens. Used by [`p_multiline_element`] to avoid
+/// swallowing tags that belong to the conditional or ignore parsers — while
+/// still allowing regular transform expressions like `{% ignore_case() %}` that
+/// merely start with one of these keywords.
+fn p_reserved_multiline_keyword<'a>(
+    end: &'static str,
+) -> impl winnow::Parser<Input<'a>, (), YolkParseError> {
     terminated(
-        literal("ignore"),
-        peek(alt((
-            winnow::ascii::space1.void(),
-            line_ending.void(),
-            literal(end).void(),
-        ))),
+        alt(("if", "elif", "else", "end", "ignore")),
+        peek_keyword_boundary(end),
     )
     .void()
 }
@@ -361,7 +381,7 @@ fn p_multiline_element<'a>(input: &mut Input<'a>) -> PResult<Element<'a>> {
     let p_start_tag_line = p_tag_line(
         "{%",
         preceded(
-            not(alt(("if", "elif", "else", "end", "ignore"))),
+            not(p_reserved_multiline_keyword("%}")),
             p_regular_tag_inner("%}"),
         ),
         "%}",
@@ -577,6 +597,19 @@ mod test {
     fn test_ignore_keyword_boundary_falls_through() -> TestResult {
         // `ignore_case` is not the `ignore` keyword, so this stays a regular next-line tag.
         assert_debug_snapshot!(parse_document("{# ignore_case() #}\nfoo\n"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_multiline_keyword_prefix_is_not_reserved() -> TestResult {
+        // `ignore_case` starts with the reserved `ignore` keyword but is a normal
+        // transform expression, so this must parse as a regular multiline block
+        // rather than being excluded and falling back to plain text.
+        assert_debug_snapshot!(parse_document(indoc::indoc! {r#"
+            {% ignore_case() %}
+            body
+            {% end %}
+        "#}));
         Ok(())
     }
 

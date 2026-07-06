@@ -128,9 +128,13 @@ fn test_adopt_directory_moves_into_egg() -> TestResult {
 
 #[test]
 fn test_adopt_file_moves_into_egg_and_returns_target_mapping() -> TestResult {
+    use crate::util::PathExt as _;
     let env = TestEnv::init()?;
     env.home_file(".zshrc").write_str("source ~/.zprofile")?;
     let source = env.home_file(".zshrc");
+    // adopt records the canonical absolute location the file was moved from, so
+    // capture it before the move (afterwards `source` no longer exists).
+    let expected_target = source.canonical()?;
 
     let targets = env.yolk().adopt("zsh".to_string(), source.to_path_buf())?;
 
@@ -138,7 +142,7 @@ fn test_adopt_file_moves_into_egg_and_returns_target_mapping() -> TestResult {
     env.egg_file("zsh/.zshrc").assert("source ~/.zprofile");
     assert_eq!(
         targets,
-        maplit::hashmap! { PathBuf::from(".zshrc") => source.to_path_buf() },
+        maplit::hashmap! { PathBuf::from(".zshrc") => expected_target },
     );
     Ok(())
 }
