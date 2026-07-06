@@ -368,6 +368,20 @@ impl Yolk {
         }
     }
 
+    pub fn sync_named_egg_to_mode(
+        &self,
+        mode: EvalMode,
+        name: &str,
+        update_deployments: bool,
+    ) -> Result<()> {
+        let mut eval_ctx = self.prepare_eval_ctx_for_templates(mode)?;
+        let mut egg_configs = self.load_egg_configs(&mut eval_ctx)?;
+        let egg_config = egg_configs
+            .remove(name)
+            .ok_or_else(|| miette!("No egg with name {name}"))?;
+        self.sync_egg_to_mode(&mut eval_ctx, name, egg_config, update_deployments)
+    }
+
     #[tracing::instrument(skip_all, fields(%name, %sync_deployment, ?egg_config))]
     fn sync_egg_to_mode(
         &self,

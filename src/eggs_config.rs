@@ -254,7 +254,7 @@ impl EggConfig {
             .iter()
             .map(|(source, target)| {
                 let source = egg_root.canonical()?.join(source);
-                let target = target.expanduser();
+                let target = expanduser_with_home(target, home.as_ref());
                 let target = if target.is_absolute() {
                     target
                 } else {
@@ -386,6 +386,16 @@ impl EggConfig {
             unsafe_shell_hooks,
         })
     }
+}
+
+/// Replace the `~` at the start of a path with the given home directory path.
+fn expanduser_with_home(path: &Path, home: &Path) -> PathBuf {
+    if let Some(first) = path.components().next() {
+        if first.as_os_str().to_string_lossy() == "~" {
+            return home.join(path.strip_prefix("~").unwrap_or(path));
+        }
+    }
+    path.to_path_buf()
 }
 
 #[cfg(test)]

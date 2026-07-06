@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     io::Read as _,
     path::{Path, PathBuf},
     str::FromStr,
@@ -24,6 +24,8 @@ use yolk::{
     yolk::{EvalMode, Yolk},
     yolk_paths,
 };
+
+mod adopt;
 
 #[derive(clap::Parser, Debug)]
 #[command(version, about)]
@@ -72,7 +74,11 @@ enum Command {
         /// Whether this should be deployed via `merge` or `put` strategy. Defaults to `put`.
         #[arg(long)]
         strategy: Option<DeploymentStrategy>,
+        /// Append the generated config to yolk.rhai and sync the adopted egg without prompting.
+        #[arg(long)]
+        append_config_and_sync: bool,
         /// List of filepaths that should be included in the list of templated files.
+        #[arg(long, value_hint=ValueHint::FilePath)]
         templates: Vec<PathBuf>,
     },
 
@@ -322,19 +328,44 @@ fn run_command(args: Args) -> Result<()> {
             egg_name,
             path,
             strategy,
+            append_config_and_sync,
             templates,
         } => {
             let strategy = strategy.unwrap_or_default();
+            let adopt_action = if *append_config_and_sync {
+                adopt::AdoptAction::AppendConfigAndSync
+            } else {
+                adopt::prompt_adopt_action(egg_name)?
+            };
             let fallback_target = path.canonical()?;
             let target_paths = yolk.adopt(egg_name.to_string(), path.clone())?;
-            print_adopt_instructions(
-                &yolk,
-                egg_name,
-                strategy,
-                templates,
-                &target_paths,
-                &fallback_target,
-            );
+            match adopt_action {
+                adopt::AdoptAction::PrintConfig => {
+                    adopt::print_adopt_instructions(
+                        &yolk,
+                        egg_name,
+                        strategy,
+                        templates,
+                        &target_paths,
+                        &fallback_target,
+                    );
+                }
+                adopt::AdoptAction::AppendConfigAndSync => {
+                    adopt::append_adopt_config_to_yolk_rhai(
+                        &yolk,
+                        egg_name,
+                        strategy,
+                        templates,
+                        &target_paths,
+                        &fallback_target,
+                    )?;
+                    yolk.sync_named_egg_to_mode(EvalMode::Local, egg_name, true)?;
+                    println!("Added an entry for `{egg_name}` to yolk.rhai and ran `yolk sync`.");
+                    println!(
+                        "The appended config is intentionally simple; you probably want to clean it up and move it into your preferred yolk.rhai structure."
+                    );
+                }
+            }
         }
 
         Command::Sync { canonical } => {
@@ -564,128 +595,4 @@ fn run_command(args: Args) -> Result<()> {
         }
     }
     Ok(())
-}
-
-fn print_adopt_instructions(
-    yolk: &Yolk,
-    egg_name: &str,
-    strategy: DeploymentStrategy,
-    templates: &[PathBuf],
-    target_paths: &HashMap<PathBuf, PathBuf>,
-    fallback_target: &Path,
-) {
-    println!("Add this entry to the `eggs` map in your yolk.rhai:");
-    println!();
-    println!(
-        "    {}",
-        format_adopt_config_entry(
-            yolk.paths().home_path(),
-            egg_name,
-            strategy,
-            templates,
-            target_paths,
-            fallback_target,
-        )
-    );
-    println!();
-    println!(
-        "Yolk moved the files into `eggs/{egg_name}`. After adding the entry, run `yolk sync` to create the symlink so the config is available at its target path."
-    );
-}
-
-fn format_adopt_config_entry(
-    home_path: &Path,
-    egg_name: &str,
-    strategy: DeploymentStrategy,
-    templates: &[PathBuf],
-    target_paths: &HashMap<PathBuf, PathBuf>,
-    fallback_target: &Path,
-) -> String {
-    format!(
-        "{}: #{{ enabled: true, strategy: {}, targets: {}, templates: {} }},",
-        rhai_string(egg_name),
-        rhai_string(deployment_strategy_name(strategy)),
-        format_adopt_targets(home_path, target_paths, fallback_target),
-        format_path_list(templates),
-    )
-}
-
-fn deployment_strategy_name(strategy: DeploymentStrategy) -> &'static str {
-    match strategy {
-        DeploymentStrategy::Merge => "merge",
-        DeploymentStrategy::Put => "put",
-    }
-}
-
-fn format_adopt_targets(
-    home_path: &Path,
-    target_paths: &HashMap<PathBuf, PathBuf>,
-    fallback_target: &Path,
-) -> String {
-    if target_paths.is_empty() {
-        return rhai_string(format_config_path(home_path, fallback_target));
-    }
-
-    let mut mappings = target_paths.iter().collect::<Vec<_>>();
-    mappings.sort_by_key(|(source, _)| source.to_string_lossy().to_string());
-    let entries = mappings
-        .into_iter()
-        .map(|(source, target)| {
-            let src_path = rhai_string(source.to_string_lossy());
-            let target_path = rhai_string(format_config_path(
-                home_path,
-                &canonicalize_target_path(target),
-            ));
-            format!("{src_path}: {target_path}")
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
-    format!("#{{ {entries} }}")
-}
-
-fn format_path_list(paths: &[PathBuf]) -> String {
-    if paths.is_empty() {
-        return "[]".to_string();
-    }
-    format!(
-        "[{}]",
-        paths
-            .iter()
-            .map(|path| rhai_string(path.to_string_lossy()))
-            .collect::<Vec<_>>()
-            .join(", ")
-    )
-}
-
-fn canonicalize_target_path(path: &Path) -> PathBuf {
-    if path.exists() {
-        return path.canonical().unwrap_or_else(|_| path.to_path_buf());
-    }
-
-    match (path.parent(), path.file_name()) {
-        (Some(parent), Some(file_name)) => parent
-            .canonical()
-            .map(|parent| parent.join(file_name))
-            .unwrap_or_else(|_| path.to_path_buf()),
-        _ => path.to_path_buf(),
-    }
-}
-
-fn format_config_path(home_path: &Path, path: &Path) -> String {
-    if let Ok(relative) = path.strip_prefix(home_path) {
-        if relative.as_os_str().is_empty() {
-            "~".to_string()
-        } else {
-            PathBuf::from("~").join(relative).display().to_string()
-        }
-    } else {
-        path.display().to_string()
-    }
-}
-
-fn rhai_string(value: impl AsRef<str>) -> String {
-    format!(
-        "\"{}\"",
-        value.as_ref().replace('\\', "\\\\").replace('"', "\\\"")
-    )
 }

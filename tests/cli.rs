@@ -163,3 +163,29 @@ fn test_adopt_file_prints_target_map() -> TestResult {
 
     Ok(())
 }
+
+#[test]
+fn test_adopt_can_append_config_and_sync() -> TestResult {
+    let env = TestEnv::init()?;
+    let source = env.home.child(".config/noctalia");
+    source.create_dir_all()?;
+    source.child("config.toml").write_str("theme = 'dark'")?;
+
+    let mut cmd = env.yolk_cmd();
+    cmd.args([
+        "adopt",
+        "noctalia",
+        &source.to_string_lossy(),
+        "--append-config-and-sync",
+    ]);
+    cmd.assert()
+        .success()
+        .stdout(contains("Added an entry for `noctalia` to yolk.rhai"))
+        .stdout(contains("you probably want to clean it up"));
+
+    let yolk_rhai = std::fs::read_to_string(env.yolk_root().child("yolk.rhai")).unwrap();
+    assert!(yolk_rhai.contains(r#"eggs["noctalia"] = #{ enabled: true, strategy: "put", targets: "~/.config/noctalia", templates: [] };"#));
+    assert!(source.path().is_symlink());
+
+    Ok(())
+}

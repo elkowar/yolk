@@ -30,34 +30,6 @@ $ yolk init
 
 This will create the yolk directory, with a default `yolk.rhai` file, and an `eggs` directory.
 
-### Shell completions
-
-`yolk` comes with built-in shell completions for `bash`, `zsh`, `fish`, `elvish` and `powershell`.
-To enable those, for `bash` run
-```bash
-echo "source <(COMPLETE=bash yolk)" >> ~/.bashrc
-```
-for `zsh`, run
-```zsh
-echo "source <(COMPLETE=zsh yolk)" >> ~/.zshrc
-```
-Note that zsh's completion system must be initialized before this line runs. If your `~/.zshrc`
-doesn't already do so (frameworks like oh-my-zsh do it for you), add the following *above* it:
-```zsh
-autoload -Uz compinit && compinit
-```
-for `fish` run
-```fish
-echo "COMPLETE=fish yolk | source" >> ~/.config/fish/completions/yolk.fish
-```
-for `elvish` run
-```elvish
-echo "eval (E:COMPLETE=elvish yolk | slurp)" >> ~/.elvish/rc.elv
-```
-and for `powershell` run
-```powershell
-echo '$env:COMPLETE = "powershell"; yolk | Out-String | Invoke-Expression; Remove-Item Env:\COMPLETE' >> $PROFILE
-```
 
 ### Adding your first egg
 
@@ -83,6 +55,24 @@ export let eggs = #{
 Now we can run `yolk sync`!
 This will set up a symlink from the target location `~/.config/alacritty`
 back to the alacritty egg directory `~/.config/yolk/eggs/alacritty`.
+
+### Adopting existing config
+
+Instead of moving files into `eggs` yourself, you can also ask Yolk to adopt an existing file or directory:
+
+```bash
+$ yolk adopt alacritty ~/.config/alacritty
+```
+
+This moves the config into a new egg and prints an entry you can add to the `eggs` map in your `yolk.rhai`.
+If you want Yolk to append that entry and deploy the egg right away, run:
+
+```bash
+$ yolk adopt alacritty ~/.config/alacritty --append-config-and-sync
+```
+
+The appended configuration is intentionally simple, so you may want to clean it up afterwards
+and move it into whatever structure you use in your `yolk.rhai`.
 
 ### Committing your dots to git
 
@@ -156,3 +146,32 @@ $ yolk sync
 ```
 
 You will see that, your `alacritty.toml` has changed, and the colors from your `yolk.rhai` file have been applied, depending on your hostname.
+
+### Shell completions
+
+`yolk` comes with built-in shell completions for `bash`, `zsh`, `fish`, `elvish` and `powershell`.
+To enable those, for `bash` run
+```bash
+echo "source <(COMPLETE=bash yolk)" >> ~/.bashrc
+```
+for `zsh`, run
+```zsh
+echo "source <(COMPLETE=zsh yolk)" >> ~/.zshrc
+```
+Note that zsh's completion system must be initialized before this line runs. If your `~/.zshrc`
+doesn't already do so (frameworks like oh-my-zsh do it for you), add the following *above* it:
+```zsh
+autoload -Uz compinit && compinit
+```
+for `fish` run
+```fish
+echo "COMPLETE=fish yolk | source" >> ~/.config/fish/completions/yolk.fish
+```
+for `elvish` run
+```elvish
+echo "eval (E:COMPLETE=elvish yolk | slurp)" >> ~/.elvish/rc.elv
+```
+and for `powershell` run
+```powershell
+echo '$env:COMPLETE = "powershell"; yolk | Out-String | Invoke-Expression; Remove-Item Env:\COMPLETE' >> $PROFILE
+```
