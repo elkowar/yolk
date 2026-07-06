@@ -2,9 +2,8 @@ use std::path::PathBuf;
 
 use crate::{
     eggs_config::{DeploymentStrategy, ShellHooks},
-    util::test_util::{setup_and_init_test_yolk, TestResult},
+    util::test_util::{TestEnv, TestResult},
     yolk::EvalMode,
-    yolk_paths::Egg,
 };
 
 #[cfg(not(windows))]
@@ -29,121 +28,114 @@ use crate::eggs_config::EggConfig;
 
 #[test]
 fn test_deploy_egg_put_mode() -> TestResult {
-    let (home, yolk, eggs) = setup_and_init_test_yolk()?;
-    eggs.child("foo/foo.toml").write_str("")?;
-    eggs.child("foo/thing/thing.toml").write_str("")?;
-    yolk.sync_egg_deployment(&Egg::open(
-        home.to_path_buf(),
-        eggs.child("foo").to_path_buf(),
-        EggConfig::default()
-            .with_strategy(DeploymentStrategy::Put)
-            .with_target("foo.toml", home.child("foo.toml"))
-            .with_target("thing", home.child("thing")),
-    )?)?;
-    home.child("foo.toml").assert(is_symlink());
-    home.child("thing").assert(is_symlink());
+    let env = TestEnv::init()?;
+    env.egg_file("foo/foo.toml").write_str("")?;
+    env.egg_file("foo/thing/thing.toml").write_str("")?;
+    env.yolk().sync_egg_deployment(
+        &env.open_egg(
+            "foo",
+            EggConfig::default()
+                .with_strategy(DeploymentStrategy::Put)
+                .with_target("foo.toml", env.home_file("foo.toml"))
+                .with_target("thing", env.home_file("thing")),
+        )?,
+    )?;
+    env.home_file("foo.toml").assert(is_symlink());
+    env.home_file("thing").assert(is_symlink());
     Ok(())
 }
 
 #[test]
 fn test_egg_post_deploy_hooks() -> TestResult {
-    let (home, yolk, eggs) = setup_and_init_test_yolk()?;
-    eggs.child("foo/foo.toml").write_str("")?;
+    let env = TestEnv::init()?;
+    env.egg_file("foo/foo.toml").write_str("")?;
     let egg = EggConfig::default()
         .with_strategy(DeploymentStrategy::Put)
-        .with_target("foo.toml", home.child("foo.toml"))
+        .with_target("foo.toml", env.home_file("foo.toml"))
         .with_unsafe_hooks(ShellHooks {
-            post_deploy: Some(format!("touch {}/post_deploy_ran", home.display())),
-            post_undeploy: Some(format!("touch {}/post_undeploy_ran", home.display())),
-            pre_deploy: Some(format!("touch {}/pre_deploy_ran", home.display())),
-            pre_undeploy: Some(format!("touch {}/pre_undeploy_ran", home.display())),
+            post_deploy: Some(format!("touch {}/post_deploy_ran", env.home.display())),
+            post_undeploy: Some(format!("touch {}/post_undeploy_ran", env.home.display())),
+            pre_deploy: Some(format!("touch {}/pre_deploy_ran", env.home.display())),
+            pre_undeploy: Some(format!("touch {}/pre_undeploy_ran", env.home.display())),
         });
     let egg_again = egg.clone().with_unsafe_hooks(ShellHooks {
-        post_deploy: Some(format!("touch {}/post_deploy_ran_again", home.display())),
-        post_undeploy: Some(format!("touch {}/post_undeploy_ran_again", home.display())),
-        pre_deploy: Some(format!("touch {}/pre_deploy_ran_again", home.display())),
-        pre_undeploy: Some(format!("touch {}/pre_undeploy_ran_again", home.display())),
+        post_deploy: Some(format!(
+            "touch {}/post_deploy_ran_again",
+            env.home.display()
+        )),
+        post_undeploy: Some(format!(
+            "touch {}/post_undeploy_ran_again",
+            env.home.display()
+        )),
+        pre_deploy: Some(format!("touch {}/pre_deploy_ran_again", env.home.display())),
+        pre_undeploy: Some(format!(
+            "touch {}/pre_undeploy_ran_again",
+            env.home.display()
+        )),
     });
-    yolk.sync_egg_deployment(&Egg::open(
-        home.to_path_buf(),
-        eggs.child("foo").to_path_buf(),
-        egg.clone(),
-    )?)?;
-    home.child("pre_deploy_ran").assert(exists());
-    yolk.sync_egg_deployment(&Egg::open(
-        home.to_path_buf(),
-        eggs.child("foo").to_path_buf(),
-        egg_again.clone(),
-    )?)?;
-    home.child("pre_deploy_ran_again").assert(exists().not());
+    env.yolk()
+        .sync_egg_deployment(&env.open_egg("foo", egg.clone())?)?;
+    env.home_file("pre_deploy_ran").assert(exists());
+    env.yolk()
+        .sync_egg_deployment(&env.open_egg("foo", egg_again.clone())?)?;
+    env.home_file("pre_deploy_ran_again").assert(exists().not());
 
-    yolk.sync_egg_deployment(&Egg::open(
-        home.to_path_buf(),
-        eggs.child("foo").to_path_buf(),
-        egg.clone(),
-    )?)?;
-    home.child("post_deploy_ran").assert(exists());
-    yolk.sync_egg_deployment(&Egg::open(
-        home.to_path_buf(),
-        eggs.child("foo").to_path_buf(),
-        egg_again.clone(),
-    )?)?;
-    home.child("post_deploy_ran_again").assert(exists().not());
+    env.yolk()
+        .sync_egg_deployment(&env.open_egg("foo", egg.clone())?)?;
+    env.home_file("post_deploy_ran").assert(exists());
+    env.yolk()
+        .sync_egg_deployment(&env.open_egg("foo", egg_again.clone())?)?;
+    env.home_file("post_deploy_ran_again")
+        .assert(exists().not());
 
-    yolk.sync_egg_deployment(&Egg::open(
-        home.to_path_buf(),
-        eggs.child("foo").to_path_buf(),
-        egg.clone().with_enabled(false),
-    )?)?;
-    home.child("pre_undeploy_ran").assert(exists());
-    yolk.sync_egg_deployment(&Egg::open(
-        home.to_path_buf(),
-        eggs.child("foo").to_path_buf(),
-        egg_again.clone().with_enabled(false),
-    )?)?;
-    home.child("pre_undeploy_ran_again").assert(exists().not());
+    env.yolk()
+        .sync_egg_deployment(&env.open_egg("foo", egg.clone().with_enabled(false))?)?;
+    env.home_file("pre_undeploy_ran").assert(exists());
+    env.yolk()
+        .sync_egg_deployment(&env.open_egg("foo", egg_again.clone().with_enabled(false))?)?;
+    env.home_file("pre_undeploy_ran_again")
+        .assert(exists().not());
 
-    yolk.sync_egg_deployment(&Egg::open(
-        home.to_path_buf(),
-        eggs.child("foo").to_path_buf(),
-        egg.clone().with_enabled(false),
-    )?)?;
-    home.child("post_undeploy_ran").assert(exists());
-    yolk.sync_egg_deployment(&Egg::open(
-        home.to_path_buf(),
-        eggs.child("foo").to_path_buf(),
-        egg_again.clone().with_enabled(false),
-    )?)?;
-    home.child("post_undeploy_ran_again").assert(exists().not());
+    env.yolk()
+        .sync_egg_deployment(&env.open_egg("foo", egg.clone().with_enabled(false))?)?;
+    env.home_file("post_undeploy_ran").assert(exists());
+    env.yolk()
+        .sync_egg_deployment(&env.open_egg("foo", egg_again.clone().with_enabled(false))?)?;
+    env.home_file("post_undeploy_ran_again")
+        .assert(exists().not());
 
     Ok(())
 }
 
 #[test]
 fn test_adopt_directory_moves_into_egg() -> TestResult {
-    let (home, yolk, eggs) = setup_and_init_test_yolk()?;
-    let source = home.child(".config/noctalia");
-    source.create_dir_all()?;
-    source.child("config.toml").write_str("theme = 'dark'")?;
+    let env = TestEnv::init()?;
+    env.home_file(".config/noctalia").create_dir_all()?;
+    env.home_file(".config/noctalia/config.toml")
+        .write_str("theme = 'dark'")?;
+    let source = env.home_file(".config/noctalia");
 
-    let targets = yolk.adopt("noctalia".to_string(), source.to_path_buf())?;
+    let targets = env
+        .yolk()
+        .adopt("noctalia".to_string(), source.to_path_buf())?;
 
     assert!(targets.is_empty());
     source.assert(exists().not());
-    eggs.child("noctalia/config.toml").assert("theme = 'dark'");
+    env.egg_file("noctalia/config.toml")
+        .assert("theme = 'dark'");
     Ok(())
 }
 
 #[test]
 fn test_adopt_file_moves_into_egg_and_returns_target_mapping() -> TestResult {
-    let (home, yolk, eggs) = setup_and_init_test_yolk()?;
-    let source = home.child(".zshrc");
-    source.write_str("source ~/.zprofile")?;
+    let env = TestEnv::init()?;
+    env.home_file(".zshrc").write_str("source ~/.zprofile")?;
+    let source = env.home_file(".zshrc");
 
-    let targets = yolk.adopt("zsh".to_string(), source.to_path_buf())?;
+    let targets = env.yolk().adopt("zsh".to_string(), source.to_path_buf())?;
 
     source.assert(exists().not());
-    eggs.child("zsh/.zshrc").assert("source ~/.zprofile");
+    env.egg_file("zsh/.zshrc").assert("source ~/.zprofile");
     assert_eq!(
         targets,
         maplit::hashmap! { PathBuf::from(".zshrc") => source.to_path_buf() },
@@ -154,17 +146,14 @@ fn test_adopt_file_moves_into_egg_and_returns_target_mapping() -> TestResult {
 #[test]
 fn test_deploy_merge_mode() -> TestResult {
     cov_mark::check_count!(deploy_merge, 1);
-    let (home, yolk, eggs) = setup_and_init_test_yolk()?;
-    home.child(".config").create_dir_all()?;
-    eggs.child("bar/.config/thing.toml").write_str("")?;
-    yolk.sync_egg_deployment(&Egg::open(
-        home.to_path_buf(),
-        eggs.child("bar").to_path_buf(),
-        EggConfig::new_merge(".", &home),
-    )?)?;
+    let env = TestEnv::init()?;
+    env.home_file(".config").create_dir_all()?;
+    env.egg_file("bar/.config/thing.toml").write_str("")?;
+    env.yolk()
+        .sync_egg_deployment(&env.open_egg("bar", EggConfig::new_merge(".", &env.home))?)?;
 
-    home.child(".config").assert(is_dir());
-    home.child(".config/thing.toml").assert(is_symlink());
+    env.home_file(".config").assert(is_dir());
+    env.home_file(".config/thing.toml").assert(is_symlink());
     Ok(())
 }
 
@@ -172,89 +161,83 @@ fn test_deploy_merge_mode() -> TestResult {
 fn test_deploy_put_mode() -> TestResult {
     cov_mark::check_count!(deploy_put_symlink_failed, 0);
     cov_mark::check_count!(deploy_put, 2);
-    let (home, yolk, eggs) = setup_and_init_test_yolk()?;
-    eggs.child("foo/foo.toml").write_str("")?;
-    eggs.child("foo/thing/thing.toml").write_str("")?;
-    yolk.sync_egg_deployment(&Egg::open(
-        home.to_path_buf(),
-        eggs.child("foo").to_path_buf(),
-        EggConfig::default()
-            .with_target("foo.toml", home.child("foo.toml"))
-            .with_target("thing", home.child("thing"))
-            .with_strategy(DeploymentStrategy::Put),
-    )?)?;
-    home.child("foo.toml").assert(is_symlink());
-    home.child("thing").assert(is_symlink());
+    let env = TestEnv::init()?;
+    env.egg_file("foo/foo.toml").write_str("")?;
+    env.egg_file("foo/thing/thing.toml").write_str("")?;
+    env.yolk().sync_egg_deployment(
+        &env.open_egg(
+            "foo",
+            EggConfig::default()
+                .with_target("foo.toml", env.home_file("foo.toml"))
+                .with_target("thing", env.home_file("thing"))
+                .with_strategy(DeploymentStrategy::Put),
+        )?,
+    )?;
+    env.home_file("foo.toml").assert(is_symlink());
+    env.home_file("thing").assert(is_symlink());
     Ok(())
 }
 
 #[test]
 fn test_moving_put_deploy_cleans_up_old_symlinks() -> TestResult {
     cov_mark::check_count!(delete_stale_symlink, 2);
-    let (home, yolk, eggs) = setup_and_init_test_yolk()?;
-    eggs.child("foo/foo.toml").write_str("")?;
-    let mut egg = Egg::open(
-        home.to_path_buf(),
-        eggs.child("foo").to_path_buf(),
-        EggConfig::new("foo.toml", home.child("foo.toml")),
-    )?;
-    yolk.sync_egg_deployment(&egg)?;
-    home.child("foo.toml").assert(is_symlink());
+    let env = TestEnv::init()?;
+    env.egg_file("foo/foo.toml").write_str("")?;
+    let mut egg = env.open_egg("foo", EggConfig::new("foo.toml", env.home_file("foo.toml")))?;
+    env.yolk().sync_egg_deployment(&egg)?;
+    env.home_file("foo.toml").assert(is_symlink());
 
     // now we sync again, to a different location
-    *egg.config_mut() = EggConfig::new("foo.toml", home.child("bar.toml"));
-    yolk.sync_egg_deployment(&egg)?;
-    home.child("bar.toml").assert(is_symlink());
-    home.child("foo.toml").assert(exists().not());
+    *egg.config_mut() = EggConfig::new("foo.toml", env.home_file("bar.toml"));
+    env.yolk().sync_egg_deployment(&egg)?;
+    env.home_file("bar.toml").assert(is_symlink());
+    env.home_file("foo.toml").assert(exists().not());
 
     // and back, just to be sure
-    *egg.config_mut() = EggConfig::new("foo.toml", home.child("foo.toml"));
-    yolk.sync_egg_deployment(&egg)?;
-    home.child("foo.toml").assert(is_symlink());
-    home.child("bar.toml").assert(exists().not());
+    *egg.config_mut() = EggConfig::new("foo.toml", env.home_file("foo.toml"));
+    env.yolk().sync_egg_deployment(&egg)?;
+    env.home_file("foo.toml").assert(is_symlink());
+    env.home_file("bar.toml").assert(exists().not());
     Ok(())
 }
 
 #[test]
 fn test_moving_merge_deploy_cleans_up_old_symlinks() -> TestResult {
     cov_mark::check_count!(delete_stale_symlink, 2);
-    let (home, yolk, eggs) = setup_and_init_test_yolk()?;
-    home.child("a").create_dir_all()?;
-    home.child("b").create_dir_all()?;
-    eggs.child("foo/foo/foo.toml").write_str("")?;
-    let mut egg = Egg::open(
-        home.to_path_buf(),
-        eggs.child("foo").to_path_buf(),
-        EggConfig::new_merge(".", home.child("a")),
-    )?;
-    yolk.sync_egg_deployment(&egg)?;
-    home.child("a/foo").assert(is_symlink());
+    let env = TestEnv::init()?;
+    env.home_file("a").create_dir_all()?;
+    env.home_file("b").create_dir_all()?;
+    env.egg_file("foo/foo/foo.toml").write_str("")?;
+    let mut egg = env.open_egg("foo", EggConfig::new_merge(".", env.home_file("a")))?;
+    env.yolk().sync_egg_deployment(&egg)?;
+    env.home_file("a/foo").assert(is_symlink());
 
     // now we sync again, to a different location
-    *egg.config_mut() = EggConfig::new_merge(".", home.child("b"));
-    yolk.sync_egg_deployment(&egg)?;
-    home.child("b/foo").assert(is_symlink());
-    home.child("a/foo").assert(exists().not());
+    *egg.config_mut() = EggConfig::new_merge(".", env.home_file("b"));
+    env.yolk().sync_egg_deployment(&egg)?;
+    env.home_file("b/foo").assert(is_symlink());
+    env.home_file("a/foo").assert(exists().not());
 
     // and back, just to be sure
-    *egg.config_mut() = EggConfig::new_merge(".", home.child("a"));
-    yolk.sync_egg_deployment(&egg)?;
-    home.child("a/foo").assert(is_symlink());
-    home.child("b/foo").assert(exists().not());
+    *egg.config_mut() = EggConfig::new_merge(".", env.home_file("a"));
+    env.yolk().sync_egg_deployment(&egg)?;
+    env.home_file("a/foo").assert(is_symlink());
+    env.home_file("b/foo").assert(exists().not());
     Ok(())
 }
 
 #[test]
 fn test_deploy_outside_of_home() -> TestResult {
-    let (home, yolk, eggs) = setup_and_init_test_yolk()?;
+    let env = TestEnv::init()?;
     let other_dir = TempDir::new()?;
-    eggs.child("foo/foo.toml").write_str("")?;
-    yolk.sync_egg_deployment(&Egg::open(
-        home.to_path_buf(),
-        eggs.child("foo").to_path_buf(),
-        EggConfig::new("foo.toml", other_dir.child("foo.toml"))
-            .with_strategy(DeploymentStrategy::Put),
-    )?)?;
+    env.egg_file("foo/foo.toml").write_str("")?;
+    env.yolk().sync_egg_deployment(
+        &env.open_egg(
+            "foo",
+            EggConfig::new("foo.toml", other_dir.child("foo.toml"))
+                .with_strategy(DeploymentStrategy::Put),
+        )?,
+    )?;
     other_dir.child("foo.toml").assert(is_symlink());
     Ok(())
 }
@@ -262,16 +245,14 @@ fn test_deploy_outside_of_home() -> TestResult {
 #[test]
 fn test_deploy_put_mode_fails_with_stow_usage() -> TestResult {
     cov_mark::check_count!(deploy_put, 1);
-    let (home, yolk, eggs) = setup_and_init_test_yolk()?;
-    home.child(".config").create_dir_all()?;
-    eggs.child("bar/.config/thing.toml").write_str("")?;
-    let result = yolk.sync_egg_deployment(&Egg::open(
-        home.to_path_buf(),
-        eggs.child("bar").to_path_buf(),
-        EggConfig::new(".", &home),
-    )?);
-    home.child(".config").assert(is_dir());
-    home.child(".config/thing.toml").assert(exists().not());
+    let env = TestEnv::init()?;
+    env.home_file(".config").create_dir_all()?;
+    env.egg_file("bar/.config/thing.toml").write_str("")?;
+    let result = env
+        .yolk()
+        .sync_egg_deployment(&env.open_egg("bar", EggConfig::new(".", &env.home))?);
+    env.home_file(".config").assert(is_dir());
+    env.home_file(".config/thing.toml").assert(exists().not());
     assert!(format!("{:?}", miette::Report::from(result.unwrap_err()))
         .contains("Failed to create symlink"));
     Ok(())
@@ -281,53 +262,48 @@ fn test_deploy_put_mode_fails_with_stow_usage() -> TestResult {
 fn test_deploy_put_creates_parent_dir() -> TestResult {
     cov_mark::check_count!(deploy_put, 1);
     cov_mark::check_count!(deploy_put_symlink_failed, 0);
-    let (home, yolk, eggs) = setup_and_init_test_yolk()?;
-    eggs.child("foo/foo.toml").write_str("")?;
-    yolk.sync_egg_deployment(&Egg::open(
-        home.to_path_buf(),
-        eggs.child("foo").to_path_buf(),
-        EggConfig::new("foo.toml", home.child("a/a/a/foo.toml")),
+    let env = TestEnv::init()?;
+    env.egg_file("foo/foo.toml").write_str("")?;
+    env.yolk().sync_egg_deployment(&env.open_egg(
+        "foo",
+        EggConfig::new("foo.toml", env.home_file("a/a/a/foo.toml")),
     )?)?;
-    home.child("a/a/a").assert(is_dir().and(is_symlink().not()));
-    home.child("a/a/a/foo.toml").assert(is_symlink());
+    env.home_file("a/a/a")
+        .assert(is_dir().and(is_symlink().not()));
+    env.home_file("a/a/a/foo.toml").assert(is_symlink());
     Ok(())
 }
 
 #[test]
 fn test_undeploy() -> TestResult {
     cov_mark::check!(undeploy);
-    let (home, yolk, eggs) = setup_and_init_test_yolk()?;
-    home.child(".config").create_dir_all()?;
-    eggs.child("foo/foo.toml").write_str("")?;
-    eggs.child("bar/.config/thing.toml").write_str("")?;
+    let env = TestEnv::init()?;
+    env.home_file(".config").create_dir_all()?;
+    env.egg_file("foo/foo.toml").write_str("")?;
+    env.egg_file("bar/.config/thing.toml").write_str("")?;
 
-    let mut egg = Egg::open(
-        home.to_path_buf(),
-        eggs.child("foo").to_path_buf(),
-        EggConfig::new_merge("foo.toml", home.child("foo.toml")),
+    let mut egg = env.open_egg(
+        "foo",
+        EggConfig::new_merge("foo.toml", env.home_file("foo.toml")),
     )?;
 
-    yolk.sync_egg_deployment(&egg)?;
-    home.child("foo.toml").assert(is_symlink());
+    env.yolk().sync_egg_deployment(&egg)?;
+    env.home_file("foo.toml").assert(is_symlink());
 
     egg.config_mut().enabled = false;
-    yolk.sync_egg_deployment(&egg)?;
-    home.child("foo.toml").assert(exists().not());
+    env.yolk().sync_egg_deployment(&egg)?;
+    env.home_file("foo.toml").assert(exists().not());
 
     // Verify stow-style usage works
-    home.child(".config").create_dir_all()?;
-    eggs.child("bar/.config/thing.toml").write_str("")?;
-    let mut egg = Egg::open(
-        home.to_path_buf(),
-        eggs.child("bar").to_path_buf(),
-        EggConfig::new_merge(".", &home),
-    )?;
-    yolk.sync_egg_deployment(&egg)?;
-    home.child(".config/thing.toml").assert(is_symlink());
+    env.home_file(".config").create_dir_all()?;
+    env.egg_file("bar/.config/thing.toml").write_str("")?;
+    let mut egg = env.open_egg("bar", EggConfig::new_merge(".", &env.home))?;
+    env.yolk().sync_egg_deployment(&egg)?;
+    env.home_file(".config/thing.toml").assert(is_symlink());
     egg.config_mut().enabled = false;
-    yolk.sync_egg_deployment(&egg)?;
-    home.child(".config/thing.toml").assert(exists().not());
-    home.child(".config").assert(is_dir());
+    env.yolk().sync_egg_deployment(&egg)?;
+    env.home_file(".config/thing.toml").assert(exists().not());
+    env.home_file(".config").assert(is_dir());
     Ok(())
 }
 
@@ -337,72 +313,70 @@ fn test_undeploy() -> TestResult {
 fn test_deploy_after_moving_overrides_old_dead_symlinks() -> TestResult {
     cov_mark::check_count!(remove_dead_symlink, 1);
 
-    let (home, yolk, eggs) = setup_and_init_test_yolk()?;
+    let env = TestEnv::init()?;
     // We start out with a stow-style situation, where we have eggs/alacritty/.config/alacritty/alacritty.toml
-    home.child(".config").create_dir_all()?;
-    eggs.child("alacritty/.config/alacritty/alacritty.toml")
+    env.home_file(".config").create_dir_all()?;
+    env.egg_file("alacritty/.config/alacritty/alacritty.toml")
         .write_str("")?;
-    let mut egg = Egg::open(
-        home.to_path_buf(),
-        eggs.child("alacritty").to_path_buf(),
-        EggConfig::new_merge(".", &home),
-    )?;
-    yolk.sync_egg_deployment(&egg)?;
-    home.child(".config/alacritty").assert(is_symlink());
+    let mut egg = env.open_egg("alacritty", EggConfig::new_merge(".", &env.home))?;
+    env.yolk().sync_egg_deployment(&egg)?;
+    env.home_file(".config/alacritty").assert(is_symlink());
 
     // now we want to change to a simpler structure, where we explicitly declare the target dir for the files.
     // the user first moves the files inside the egg dir
     fs_err::rename(
-        eggs.child("alacritty/.config/alacritty/alacritty.toml"),
-        eggs.child("alacritty/alacritty.toml"),
+        env.egg_file("alacritty/.config/alacritty/alacritty.toml"),
+        env.egg_file("alacritty/alacritty.toml"),
     )?;
     // deletes the now empty .config structure
-    fs_err::remove_dir(eggs.child("alacritty/.config/alacritty/"))?;
-    fs_err::remove_dir(eggs.child("alacritty/.config/"))?;
+    fs_err::remove_dir(env.egg_file("alacritty/.config/alacritty/"))?;
+    fs_err::remove_dir(env.egg_file("alacritty/.config/"))?;
 
     // He now updates his egg configuration to make the alacritty egg dir deploy to .config/alacritty
     egg.config_mut().targets = maplit::hashmap! {
         PathBuf::from(".") => PathBuf::from(".config/alacritty/")
     };
     // And syncs
-    yolk.sync_egg_deployment(&egg)?;
+    env.yolk().sync_egg_deployment(&egg)?;
 
-    home.child(".config/alacritty").assert(is_symlink());
+    env.home_file(".config/alacritty").assert(is_symlink());
     Ok(())
 }
 
 #[test]
 fn test_syncing() -> TestResult {
-    let (home, yolk, eggs) = setup_and_init_test_yolk()?;
+    let env = TestEnv::init()?;
     let foo_toml_initial = "{# data.value #}\nfoo";
-    home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
+    env.yolk_rhai().write_str(indoc::indoc! {r#"
             export const data = if LOCAL { #{value: "local"} } else { #{value: "canonical"} };
             export let eggs = #{foo: #{ targets: `~`, strategy: "merge"}};
         "#})?;
-    eggs.child("foo/foo.toml").write_str(foo_toml_initial)?;
-    yolk.sync_to_mode(EvalMode::Local, true)?;
+    env.egg_file("foo/foo.toml").write_str(foo_toml_initial)?;
+    env.yolk().sync_to_mode(EvalMode::Local, true)?;
     // No template set in eggs.rhai, so no templating should happen
-    home.child("foo.toml").assert(is_symlink());
-    eggs.child("foo/foo.toml").assert(foo_toml_initial);
+    env.home_file("foo.toml").assert(is_symlink());
+    env.egg_file("foo/foo.toml").assert(foo_toml_initial);
 
     // Now we make the file a template, so it should be updated
-    home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
+    env.yolk_rhai().write_str(indoc::indoc! {r#"
             export const data = if LOCAL {#{value: "local"}} else {#{value: "canonical"}};
             export let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"], strategy: "merge"}};
         "#})?;
 
-    yolk.sync_to_mode(EvalMode::Local, true)?;
-    eggs.child("foo/foo.toml").assert("{# data.value #}\nlocal");
+    env.yolk().sync_to_mode(EvalMode::Local, true)?;
+    env.egg_file("foo/foo.toml")
+        .assert("{# data.value #}\nlocal");
 
     // Update the state, to see if applying again just works :tm:
-    home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
+    env.yolk_rhai().write_str(indoc::indoc! {r#"
             export const data = if LOCAL {#{value: "new local"}} else {#{value: "new canonical"}};
             export let eggs = #{foo: #{targets: `~`, templates: ["foo.toml"], strategy: "merge"}};
         "#})?;
-    yolk.sync_to_mode(EvalMode::Local, true)?;
-    home.child("foo.toml").assert("{# data.value #}\nnew local");
-    yolk.with_canonical_state(|| {
-        eggs.child("foo/foo.toml")
+    env.yolk().sync_to_mode(EvalMode::Local, true)?;
+    env.home_file("foo.toml")
+        .assert("{# data.value #}\nnew local");
+    env.yolk().with_canonical_state(|| {
+        env.egg_file("foo/foo.toml")
             .assert("{# data.value #}\nnew canonical");
         Ok(())
     })?;
@@ -412,18 +386,18 @@ fn test_syncing() -> TestResult {
 #[test]
 #[cfg(not(windows))]
 fn test_sync_eggs_continues_after_failure() -> TestResult {
-    let (home, yolk, eggs) = setup_and_init_test_yolk()?;
-    home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
+    let env = TestEnv::init()?;
+    env.yolk_rhai().write_str(indoc::indoc! {r#"
             export let eggs = #{
                 foo: #{ targets: `~`, strategy: "merge", templates: ["foo"]},
                 bar: #{ targets: `~`, strategy: "merge", templates: ["bar"]},
             };
         "#})?;
-    eggs.child("foo/foo").write_str(r#"{< invalid rhai >}"#)?;
-    eggs.child("bar/bar").write_str(r#"foo # {<if false>}"#)?;
-    let result = yolk.sync_to_mode(EvalMode::Local, true);
-    eggs.child("foo/foo").assert(r#"{< invalid rhai >}"#);
-    eggs.child("bar/bar")
+    env.egg_file("foo/foo").write_str(r#"{< invalid rhai >}"#)?;
+    env.egg_file("bar/bar").write_str(r#"foo # {<if false>}"#)?;
+    let result = env.yolk().sync_to_mode(EvalMode::Local, true);
+    env.egg_file("foo/foo").assert(r#"{< invalid rhai >}"#);
+    env.egg_file("bar/bar")
         .assert(r#"#<yolk> foo # {<if false>}"#);
     assert!(test_util::render_error(result.unwrap_err()).contains("Syntax error"));
     Ok(())
@@ -431,17 +405,17 @@ fn test_sync_eggs_continues_after_failure() -> TestResult {
 
 #[test]
 fn test_access_sysinfo() -> TestResult {
-    let (home, yolk, eggs) = setup_and_init_test_yolk()?;
-    home.child("yolk/yolk.rhai").write_str(
+    let env = TestEnv::init()?;
+    env.yolk_rhai().write_str(
         r#"
             export const hostname = SYSTEM.hostname;
             export let eggs = #{foo: #{targets: `~/foo`, templates: ["foo.toml"]}};
         "#,
     )?;
-    eggs.child("foo/foo.toml")
+    env.egg_file("foo/foo.toml")
         .write_str("{< `host=${hostname}|${SYSTEM.hostname}` >}")?;
-    yolk.sync_to_mode(EvalMode::Local, true)?;
-    eggs.child("foo/foo.toml").assert(
+    env.yolk().sync_to_mode(EvalMode::Local, true)?;
+    env.egg_file("foo/foo.toml").assert(
         "host=canonical-hostname|canonical-hostname{< `host=${hostname}|${SYSTEM.hostname}` >}",
     );
     Ok(())
@@ -449,12 +423,12 @@ fn test_access_sysinfo() -> TestResult {
 
 #[test]
 fn test_sysinfo_accessible_in_functions() -> TestResult {
-    let (home, yolk, _) = setup_and_init_test_yolk()?;
-    home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
+    let env = TestEnv::init()?;
+    env.yolk_rhai().write_str(indoc::indoc! {r#"
             fn get_hostname() { SYSTEM.hostname }
             fn is_local() { LOCAL }
         "#})?;
-    let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(EvalMode::Local)?;
+    let mut eval_ctx = env.yolk().prepare_eval_ctx_for_templates(EvalMode::Local)?;
     assert_eq!(
         "canonical-hostname",
         eval_ctx.eval_rhai::<String>("get_hostname()")?
@@ -465,30 +439,31 @@ fn test_sysinfo_accessible_in_functions() -> TestResult {
 
 #[test]
 fn test_imports_work_in_yolk_rhai() -> TestResult {
-    let (home, yolk, _) = setup_and_init_test_yolk()?;
-    home.child("yolk/foo.rhai").write_str(indoc::indoc! {r#"
+    let env = TestEnv::init()?;
+    env.home_file("yolk/foo.rhai").write_str(indoc::indoc! {r#"
             fn some_function() { 1 }
             export let some_value = 1;
         "#})?;
-    home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
+    env.yolk_rhai().write_str(indoc::indoc! {r#"
             import "foo" as foo;
             fn get_value() { foo::some_function() + foo::some_value }
         "#})?;
-    let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(EvalMode::Local)?;
+    let mut eval_ctx = env.yolk().prepare_eval_ctx_for_templates(EvalMode::Local)?;
     assert_eq!(2, eval_ctx.eval_rhai::<i64>("get_value()")?);
     Ok(())
 }
 
 #[test]
 pub fn test_custom_functions_in_text_transformer_tag() -> TestResult {
-    let (home, yolk, _) = setup_and_init_test_yolk()?;
-    home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
+    let env = TestEnv::init()?;
+    env.yolk_rhai().write_str(indoc::indoc! {r#"
             fn scream() { get_yolk_text().to_upper() }
         "#})?;
-    let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(EvalMode::Local)?;
+    let mut eval_ctx = env.yolk().prepare_eval_ctx_for_templates(EvalMode::Local)?;
     assert_str_eq!(
         "TEST{< scream() >}",
-        yolk.eval_template(&mut eval_ctx, "", "test{< scream() >}")?
+        env.yolk()
+            .eval_template(&mut eval_ctx, "", "test{< scream() >}")?
     );
 
     Ok(())
@@ -496,18 +471,18 @@ pub fn test_custom_functions_in_text_transformer_tag() -> TestResult {
 
 #[test]
 fn test_variable_and_import_in_text_transformer_tag() -> TestResult {
-    let (home, yolk, _) = setup_and_init_test_yolk()?;
-    home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
+    let env = TestEnv::init()?;
+    env.yolk_rhai().write_str(indoc::indoc! {r#"
             import "foo" as foo;
             export let some_value = "a";
         "#})?;
-    home.child("yolk/foo.rhai").write_str(indoc::indoc! {r#"
+    env.home_file("yolk/foo.rhai").write_str(indoc::indoc! {r#"
             export let imported = "b";
         "#})?;
-    let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(EvalMode::Local)?;
+    let mut eval_ctx = env.yolk().prepare_eval_ctx_for_templates(EvalMode::Local)?;
     assert_str_eq!(
         "foo=ab # {< replace_value(some_value + foo::imported) >}",
-        yolk.eval_template(
+        env.yolk().eval_template(
             &mut eval_ctx,
             "",
             "foo=x # {< replace_value(some_value + foo::imported) >}"
@@ -521,11 +496,12 @@ fn test_variable_and_import_in_text_transformer_tag() -> TestResult {
 pub fn test_syntax_error_in_yolk_rhai() -> TestResult {
     use crate::util::create_regex;
 
-    let (home, yolk, _) = setup_and_init_test_yolk()?;
-    home.child("yolk/yolk.rhai").write_str(indoc::indoc! {r#"
+    let env = TestEnv::init()?;
+    env.yolk_rhai().write_str(indoc::indoc! {r#"
             fn foo(
         "#})?;
-    insta::assert_snapshot!(yolk
+    insta::assert_snapshot!(env
+        .yolk()
         .prepare_eval_ctx_for_templates(crate::yolk::EvalMode::Local)
         .map_err(|e| create_regex(r"\[.*.rhai:\d+:\d+]")
             .unwrap()
@@ -539,17 +515,16 @@ pub fn test_syntax_error_in_yolk_rhai() -> TestResult {
 #[test]
 #[cfg(not(windows))]
 pub fn test_deployment_error() -> TestResult {
-    let (home, yolk, eggs) = setup_and_init_test_yolk()?;
-    eggs.child("bar/file1").write_str("")?;
-    eggs.child("bar/file2").write_str("")?;
-    home.child("file1").write_str("")?;
-    home.child("file2").write_str("")?;
-    let egg = Egg::open(
-        home.to_path_buf(),
-        eggs.child("bar").to_path_buf(),
+    let env = TestEnv::init()?;
+    env.egg_file("bar/file1").write_str("")?;
+    env.egg_file("bar/file2").write_str("")?;
+    env.home_file("file1").write_str("")?;
+    env.home_file("file2").write_str("")?;
+    let egg = env.open_egg(
+        "bar",
         EggConfig::default()
-            .with_target("file1", home.child("file1"))
-            .with_target("file2", home.child("file2")),
+            .with_target("file1", env.home_file("file1"))
+            .with_target("file2", env.home_file("file2")),
     )?;
     // Normalize platform-specific temp dir prefixes (e.g. macOS uses
     // `/var/folders/.../T` and `/private/var/folders/.../T`) so the snapshot
@@ -565,7 +540,7 @@ pub fn test_deployment_error() -> TestResult {
         (r"file\d", "[filename]"),
     ]}, {
         insta::assert_snapshot!(test_util::render_error(
-            yolk.sync_egg_deployment(&egg).unwrap_err()
+            env.yolk().sync_egg_deployment(&egg).unwrap_err()
         ));
     });
     Ok(())
@@ -573,8 +548,8 @@ pub fn test_deployment_error() -> TestResult {
 
 #[test]
 pub fn test_only_active_sections_get_evaluated() -> TestResult {
-    let (_home, yolk, _) = setup_and_init_test_yolk()?;
-    let mut eval_ctx = yolk.prepare_eval_ctx_for_templates(EvalMode::Local)?;
+    let env = TestEnv::init()?;
+    let mut eval_ctx = env.yolk().prepare_eval_ctx_for_templates(EvalMode::Local)?;
 
     let template = indoc::indoc! {r#"
         {% if false %}
@@ -595,7 +570,7 @@ pub fn test_only_active_sections_get_evaluated() -> TestResult {
             {# if false #}
             #<yolk> {< bad_code() >}
         "#},
-        yolk.eval_template(&mut eval_ctx, "", template)?
+        env.yolk().eval_template(&mut eval_ctx, "", template)?
     );
 
     Ok(())

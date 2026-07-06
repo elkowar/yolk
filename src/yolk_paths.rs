@@ -418,8 +418,8 @@ impl Iterator for TraverseDeployment {
 mod test {
     use crate::{
         deploy::remove_symlink,
-        util::test_util::{setup_and_init_test_yolk, TestResult},
-        yolk_paths::{Egg, DEFAULT_YOLK_RHAI},
+        util::test_util::{TestEnv, TestResult},
+        yolk_paths::DEFAULT_YOLK_RHAI,
     };
     use assert_fs::{
         assert::PathAssert,
@@ -449,15 +449,14 @@ mod test {
     #[test]
     pub fn test_is_deployed_2() -> TestResult {
         cov_mark::check_count!(traverse_dir_recursive, 0);
-        let (home, yolk, eggs) = setup_and_init_test_yolk()?;
-        eggs.child("foo/foo.toml").write_str("")?;
-        eggs.child("foo/thing/thing.toml").write_str("")?;
-        let egg = Egg::open(
-            home.to_path_buf(),
-            eggs.child("foo").to_path_buf(),
-            EggConfig::default().with_target("foo.toml", home.child("foo.toml")),
+        let env = TestEnv::init()?;
+        env.egg_file("foo/foo.toml").write_str("")?;
+        env.egg_file("foo/thing/thing.toml").write_str("")?;
+        let egg = env.open_egg(
+            "foo",
+            EggConfig::default().with_target("foo.toml", env.home_file("foo.toml")),
         )?;
-        yolk.sync_egg_deployment(&egg)?;
+        env.yolk().sync_egg_deployment(&egg)?;
         assert!(egg.is_deployed()?);
         Ok(())
     }
@@ -465,20 +464,19 @@ mod test {
     #[test]
     pub fn test_is_deployed_single_dir() -> TestResult {
         cov_mark::check_count!(traverse_dir_recursive, 0);
-        let (home, yolk, eggs) = setup_and_init_test_yolk()?;
+        let env = TestEnv::init()?;
 
-        let test_egg_dir = eggs.child("test_egg");
+        let test_egg_dir = env.egg_file("test_egg");
         test_egg_dir.child("foo").create_dir_all()?;
         test_egg_dir.child("foo/bar").write_str("")?;
-        let egg = Egg::open(
-            home.to_path_buf(),
-            test_egg_dir.to_path_buf(),
-            EggConfig::new_merge(".", home.child("target")),
+        let egg = env.open_egg(
+            "test_egg",
+            EggConfig::new_merge(".", env.home_file("target")),
         )?;
         assert!(!(egg.is_deployed()?));
-        yolk.sync_egg_deployment(&egg)?;
+        env.yolk().sync_egg_deployment(&egg)?;
         assert!(egg.is_deployed()?);
-        remove_symlink(home.child("target"))?;
+        remove_symlink(env.home_file("target"))?;
         assert!(!(egg.is_deployed()?));
         Ok(())
     }
@@ -486,11 +484,11 @@ mod test {
     #[test]
     pub fn test_is_deployed() -> TestResult {
         cov_mark::check!(traverse_dir_recursive);
-        let (home, yolk, eggs) = setup_and_init_test_yolk()?;
-        let test_egg_dir = eggs.child("test_egg");
+        let env = TestEnv::init()?;
+        let test_egg_dir = env.egg_file("test_egg");
 
-        home.child("content/dir_old").create_dir_all()?;
-        home.child("content/dir_old/file_old").write_str("")?;
+        env.home_file("content/dir_old").create_dir_all()?;
+        env.home_file("content/dir_old/file_old").write_str("")?;
         test_egg_dir.child("content/file").write_str("")?;
         test_egg_dir.child("content/dir1").create_dir_all()?;
         test_egg_dir.child("content/dir2/dir1").create_dir_all()?;
@@ -501,15 +499,11 @@ mod test {
         test_egg_dir.child("content/dir3/file1").write_str("")?;
         test_egg_dir.child("content/dir4/dir1").create_dir_all()?;
 
-        let egg = Egg::open(
-            home.to_path_buf(),
-            test_egg_dir.to_path_buf(),
-            EggConfig::new_merge(".", &home),
-        )?;
+        let egg = env.open_egg("test_egg", EggConfig::new_merge(".", &env.home))?;
         assert!(!(egg.is_deployed()?));
-        yolk.sync_egg_deployment(&egg)?;
+        env.yolk().sync_egg_deployment(&egg)?;
         assert!(egg.is_deployed()?);
-        fs_err::remove_file(home.child("content/dir_old/file1"))?;
+        fs_err::remove_file(env.home_file("content/dir_old/file1"))?;
         assert!(!(egg.is_deployed()?));
         Ok(())
     }

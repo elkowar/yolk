@@ -58,6 +58,22 @@ impl TestEnv {
         self.home.child("yolk")
     }
 
+    pub fn home_file(&self, path: impl AsRef<std::path::Path>) -> assert_fs::fixture::ChildPath {
+        self.home.child(path)
+    }
+
+    pub fn egg_file(&self, path: impl AsRef<std::path::Path>) -> assert_fs::fixture::ChildPath {
+        self.eggs.child(path)
+    }
+
+    pub fn yolk_file(&self, path: impl AsRef<std::path::Path>) -> assert_fs::fixture::ChildPath {
+        self.yolk_root().child(path)
+    }
+
+    pub fn yolk_rhai(&self) -> assert_fs::fixture::ChildPath {
+        self.yolk_file("yolk.rhai")
+    }
+
     pub fn start_git_command(&self) -> Command {
         let mut cmd = Command::new("git");
         cmd.env("HOME", self.home.path())
@@ -106,17 +122,14 @@ impl TestEnv {
 fn test_git_add_with_error() -> TestResult {
     let env = TestEnv::init()?;
 
-    env.home
-        .child("yolk/yolk.rhai")
-        .write_str(indoc::indoc! {r#"
+    env.yolk_rhai().write_str(indoc::indoc! {r#"
             export let eggs = #{
                 foo: #{ targets: `~/foo`, strategy: "put", templates: ["fine", "broken"]},
             };
         "#})?;
-    env.eggs
-        .child("foo/fine")
+    env.egg_file("foo/fine")
         .write_str(r#"{<(1+1).to_string()>}"#)?;
-    env.eggs.child("foo/broken").write_str(r#"{< foo >}"#)?;
+    env.egg_file("foo/broken").write_str(r#"{< foo >}"#)?;
     assert!(env.yolk.sync_to_mode(EvalMode::Local, false).is_err());
     env.yolk_git(&["add", "--all"]).failure();
     env.git_cmd(&["show", ":eggs/foo/fine"])
@@ -131,7 +144,7 @@ fn test_git_add_with_error() -> TestResult {
 #[test]
 fn test_adopt_directory_prints_config_snippet() -> TestResult {
     let env = TestEnv::init()?;
-    let source = env.home.child(".config/noctalia");
+    let source = env.home_file(".config/noctalia");
     source.create_dir_all()?;
 
     let mut cmd = env.yolk_cmd();
@@ -146,7 +159,7 @@ fn test_adopt_directory_prints_config_snippet() -> TestResult {
 #[test]
 fn test_adopt_file_prints_target_map() -> TestResult {
     let env = TestEnv::init()?;
-    let source = env.home.child(".zshrc");
+    let source = env.home_file(".zshrc");
     source.write_str("zsh")?;
 
     let mut cmd = env.yolk_cmd();
@@ -167,7 +180,7 @@ fn test_adopt_file_prints_target_map() -> TestResult {
 #[test]
 fn test_adopt_can_append_config_and_sync() -> TestResult {
     let env = TestEnv::init()?;
-    let source = env.home.child(".config/noctalia");
+    let source = env.home_file(".config/noctalia");
     source.create_dir_all()?;
     source.child("config.toml").write_str("theme = 'dark'")?;
 
@@ -183,7 +196,7 @@ fn test_adopt_can_append_config_and_sync() -> TestResult {
         .stdout(contains("Added an entry for `noctalia` to yolk.rhai"))
         .stdout(contains("you probably want to clean it up"));
 
-    let yolk_rhai = std::fs::read_to_string(env.yolk_root().child("yolk.rhai")).unwrap();
+    let yolk_rhai = std::fs::read_to_string(env.yolk_rhai()).unwrap();
     assert!(yolk_rhai.contains(r#"eggs["noctalia"] = #{ enabled: true, strategy: "put", targets: "~/.config/noctalia", templates: [] };"#));
     assert!(source.path().is_symlink());
 

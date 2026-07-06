@@ -174,7 +174,7 @@ pub fn create_regex(s: impl AsRef<str>) -> miette::Result<Regex> {
 #[cfg(test)]
 pub mod test_util {
     use std::cell::RefCell;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::thread_local;
 
     use miette::IntoDiagnostic as _;
@@ -210,27 +210,69 @@ pub mod test_util {
         }
     }
 
-    pub fn setup_and_init_test_yolk() -> miette::Result<(
-        assert_fs::TempDir,
-        crate::yolk::Yolk,
-        assert_fs::fixture::ChildPath,
-    )> {
-        use assert_fs::prelude::PathChild as _;
+    pub struct TestEnv {
+        pub home: assert_fs::TempDir,
+        pub yolk: crate::yolk::Yolk,
+        pub eggs: assert_fs::fixture::ChildPath,
+    }
 
-        let home = assert_fs::TempDir::new().into_diagnostic()?;
-        let paths = crate::yolk_paths::YolkPaths::new(home.join("yolk"), home.to_path_buf())?;
-        let yolk = crate::yolk::Yolk::new(paths);
-        std::env::set_var("HOME", "/tmp/TEST_HOMEDIR_SHOULD_NOT_BE_USED");
-        set_home_dir(home.to_path_buf());
+    impl TestEnv {
+        pub fn init() -> miette::Result<Self> {
+            use assert_fs::prelude::PathChild as _;
 
-        let eggs = home.child("yolk/eggs");
-        // NB: the git-filter binary path (`init_yolk`'s argument) is currently
-        // unused by `init_git_config`. Tests that actually need to invoke the
-        // compiled binary live in `tests/cli.rs`, where Cargo exposes
-        // `CARGO_BIN_EXE_yolk` so the binary can be located without relying on
-        // Cargo's build-artifact layout.
-        yolk.init_yolk(None)?;
-        Ok((home, yolk, eggs))
+            let home = assert_fs::TempDir::new().into_diagnostic()?;
+            let paths = crate::yolk_paths::YolkPaths::new(home.join("yolk"), home.to_path_buf())?;
+            let yolk = crate::yolk::Yolk::new(paths);
+            std::env::set_var("HOME", "/tmp/TEST_HOMEDIR_SHOULD_NOT_BE_USED");
+            set_home_dir(home.to_path_buf());
+
+            let eggs = home.child("yolk/eggs");
+            // NB: the git-filter binary path (`init_yolk`'s argument) is currently
+            // unused by `init_git_config`. Tests that actually need to invoke the
+            // compiled binary live in `tests/cli.rs`, where Cargo exposes
+            // `CARGO_BIN_EXE_yolk` so the binary can be located without relying on
+            // Cargo's build-artifact layout.
+            yolk.init_yolk(None)?;
+            Ok(Self { home, yolk, eggs })
+        }
+
+        pub fn yolk(&self) -> &crate::yolk::Yolk {
+            &self.yolk
+        }
+
+        pub fn open_egg(
+            &self,
+            name: impl AsRef<Path>,
+            config: crate::eggs_config::EggConfig,
+        ) -> miette::Result<crate::yolk_paths::Egg> {
+            crate::yolk_paths::Egg::open(
+                self.home.to_path_buf(),
+                self.egg_file(name).to_path_buf(),
+                config,
+            )
+        }
+
+        pub fn home_file(&self, path: impl AsRef<Path>) -> assert_fs::fixture::ChildPath {
+            use assert_fs::prelude::PathChild as _;
+
+            self.home.child(path)
+        }
+
+        pub fn egg_file(&self, path: impl AsRef<Path>) -> assert_fs::fixture::ChildPath {
+            use assert_fs::prelude::PathChild as _;
+
+            self.eggs.child(path)
+        }
+
+        pub fn yolk_file(&self, path: impl AsRef<Path>) -> assert_fs::fixture::ChildPath {
+            use assert_fs::prelude::PathChild as _;
+
+            self.home.child("yolk").child(path)
+        }
+
+        pub fn yolk_rhai(&self) -> assert_fs::fixture::ChildPath {
+            self.yolk_file("yolk.rhai")
+        }
     }
 
     pub fn render_error(e: impl miette::Diagnostic) -> String {
