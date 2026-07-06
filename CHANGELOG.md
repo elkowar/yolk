@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0](https://github.com/elkowar/yolk/compare/v1.0.0...v1.1.0) - 2026-07-06
+
+### Added
+
+- add support for aarch64-linux-android, enabling termux support (fixes #81)
+
+### Chore
+
+- fix title on oranda page
+- release v1.0.0 ([#84](https://github.com/elkowar/yolk/pull/84))
+
 ## [1.0.0](https://github.com/elkowar/yolk/compare/v0.3.9...v1.0.0) - 2026-07-06
 
 ### Added
