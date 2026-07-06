@@ -270,7 +270,7 @@ impl Deployer {
     }
 
     /// Retry running symlink creation and deletion with root privileges.
-    pub fn try_run_elevated(self) -> miette::Result<()> {
+    pub fn try_run_elevated(&mut self) -> miette::Result<()> {
         if !self.has_pending_elevated_operations() {
             tracing::trace!("No privilege escalation necessary, all symlink operations succeeded");
             return Ok(());
@@ -307,6 +307,8 @@ impl Deployer {
             self.pending_elevated_operations_summary(),
         );
         try_sudo(&args)?;
+        self.missing_permissions_create.clear();
+        self.missing_permissions_remove.clear();
         Ok(())
     }
 }

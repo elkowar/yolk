@@ -202,6 +202,28 @@ fn test_moving_put_deploy_cleans_up_old_symlinks() -> TestResult {
 }
 
 #[test]
+#[cfg(not(windows))]
+fn test_failed_deploy_does_not_cleanup_previous_successful_deploy() -> TestResult {
+    let env = TestEnv::init()?;
+    env.egg_file("foo/foo.toml").write_str("")?;
+    let mut egg = env.open_egg("foo", EggConfig::new("foo.toml", env.home_file("old.toml")))?;
+    env.yolk().sync_egg_deployment(&egg)?;
+    env.home_file("old.toml").assert(is_symlink());
+
+    env.home_file("new.toml").write_str("conflict")?;
+    *egg.config_mut() = EggConfig::new("foo.toml", env.home_file("new.toml"));
+    assert!(env.yolk().sync_egg_deployment(&egg).is_err());
+
+    env.home_file("old.toml").assert(is_symlink());
+    let cached_deployments = fs_err::read_to_string(env.yolk_file(".deployed_cache/foo"))?;
+    assert_eq!(
+        cached_deployments,
+        env.home_file("old.toml").display().to_string()
+    );
+    Ok(())
+}
+
+#[test]
 fn test_moving_merge_deploy_cleans_up_old_symlinks() -> TestResult {
     cov_mark::check_count!(delete_stale_symlink, 2);
     let env = TestEnv::init()?;

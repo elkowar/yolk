@@ -143,7 +143,7 @@ enum Command {
     Git {
         // TODO: Test whether the command is being completed (works only in bash currently).
         // Possibly would need to pre-fill with the `git` command  <kunzaatko, 16-02-2026>
-        #[clap(allow_hyphen_values = true, last=true, value_hint=ValueHint::CommandWithArguments)]
+        #[clap(allow_hyphen_values = true, trailing_var_arg = true, value_hint=ValueHint::CommandWithArguments)]
         command: Vec<String>,
         /// Force yolk to run the command with canonicalized files, regardless of what command it is.
         #[arg(long)]
@@ -424,6 +424,7 @@ fn run_command(args: Args) -> Result<()> {
                 // Even if, normally, the sync call would only emit warnings, we must _never_ commit a failed sync.
                 // This also means there should potentially be slightly more separation between syncing templates and deployment,
                 // as deployment errors are not fatal for git usage.
+                yolk.validate_config_invariants()?;
                 let status = yolk.with_canonical_state(|| cmd.status().into_diagnostic())?;
                 if !status.success() {
                     miette::bail!("Git command failed with status {}", status);

@@ -244,13 +244,24 @@ impl Yolk {
                 tracing::info!("Successfully deployed egg {}", egg.name());
             }
 
-            let deployed_symlinks = deployer.created_symlinks().clone();
-            if let Err(e) =
-                self.cleanup_stale_symlinks_for(&mut deployer, egg.name(), &deployed_symlinks)
-            {
-                tracing::error!("{e:?}");
+            if result.is_ok() {
+                let mut deployed_symlinks = deployer.created_symlinks().clone();
+                deployed_symlinks.extend(
+                    deployer
+                        .failed_creations()
+                        .iter()
+                        .map(|(_, symlink)| symlink.clone()),
+                );
+                deployer.try_run_elevated()?;
+                if let Err(e) =
+                    self.cleanup_stale_symlinks_for(&mut deployer, egg.name(), &deployed_symlinks)
+                {
+                    tracing::error!("{e:?}");
+                }
+                deployer.try_run_elevated()?;
+            } else {
+                deployer.try_run_elevated()?;
             }
-            deployer.try_run_elevated()?;
             result.map(|()| true)
         } else if !egg.config().enabled && deployed {
             let mut deployer = Deployer::new();
@@ -470,11 +481,32 @@ impl Yolk {
     /// First syncs them to canonical then runs the closure, then syncs them back to local.
     pub fn with_canonical_state<T>(&self, f: impl FnOnce() -> Result<T>) -> Result<T> {
         tracing::info!("Converting all templates into their canonical state");
-        self.sync_to_mode(EvalMode::Canonical, false)?;
+        if let Err(canonical_err) = self.sync_to_mode(EvalMode::Canonical, false) {
+            tracing::warn!(
+                "Failed to fully convert templates to canonical state; attempting local restore"
+            );
+            if let Err(restore_err) = self.sync_to_mode(EvalMode::Local, false) {
+                return Err(MultiError::new(
+                    "Failed to enter canonical state and failed to restore local state",
+                    vec![canonical_err.into(), restore_err.into()],
+                )
+                .into());
+            }
+            return Err(canonical_err.into());
+        }
         let result = f();
         tracing::info!("Converting all templates back to the local state");
-        self.sync_to_mode(EvalMode::Local, false)?;
-        result
+        let restore_result = self.sync_to_mode(EvalMode::Local, false);
+        match (result, restore_result) {
+            (Ok(value), Ok(())) => Ok(value),
+            (Err(err), Ok(())) => Err(err),
+            (Ok(_), Err(err)) => Err(err.into()),
+            (Err(operation_err), Err(restore_err)) => Err(MultiError::new(
+                "Canonical operation failed and failed to restore local state",
+                vec![operation_err, restore_err.into()],
+            )
+            .into()),
+        }
     }
 
     /// Run the yolk.rhai script, load the egg configs and return a list of all eggs.

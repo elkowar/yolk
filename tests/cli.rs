@@ -142,6 +142,31 @@ fn test_git_add_with_error() -> TestResult {
 }
 
 #[test]
+fn test_git_add_rejects_mode_dependent_template_list() -> TestResult {
+    let env = TestEnv::init()?;
+
+    env.yolk_rhai().write_str(indoc::indoc! {r#"
+            export let eggs = #{
+                foo: #{
+                    targets: `~/foo`,
+                    strategy: "put",
+                    templates: if LOCAL { ["foo"] } else { [] },
+                },
+            };
+        "#})?;
+    env.egg_file("foo/foo").write_str("{# if LOCAL #}\nlocal")?;
+    env.yolk.sync_to_mode(EvalMode::Local, false)?;
+
+    env.yolk_git(&["add", "--all"])
+        .failure()
+        .stderr(contains("different set of templated files"));
+    env.git_cmd(&["show", ":eggs/foo/foo"])
+        .stdout("")
+        .stderr("fatal: path \'eggs/foo/foo\' exists on disk, but not in the index\n");
+    Ok(())
+}
+
+#[test]
 fn test_adopt_directory_prints_config_snippet() -> TestResult {
     let env = TestEnv::init()?;
     let source = env.home_file(".config/noctalia");
