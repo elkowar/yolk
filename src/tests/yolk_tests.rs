@@ -120,6 +120,38 @@ fn test_egg_post_deploy_hooks() -> TestResult {
 }
 
 #[test]
+fn test_adopt_directory_moves_into_egg() -> TestResult {
+    let (home, yolk, eggs) = setup_and_init_test_yolk()?;
+    let source = home.child(".config/noctalia");
+    source.create_dir_all()?;
+    source.child("config.toml").write_str("theme = 'dark'")?;
+
+    let targets = yolk.adopt("noctalia".to_string(), source.to_path_buf())?;
+
+    assert!(targets.is_empty());
+    source.assert(exists().not());
+    eggs.child("noctalia/config.toml").assert("theme = 'dark'");
+    Ok(())
+}
+
+#[test]
+fn test_adopt_file_moves_into_egg_and_returns_target_mapping() -> TestResult {
+    let (home, yolk, eggs) = setup_and_init_test_yolk()?;
+    let source = home.child(".zshrc");
+    source.write_str("source ~/.zprofile")?;
+
+    let targets = yolk.adopt("zsh".to_string(), source.to_path_buf())?;
+
+    source.assert(exists().not());
+    eggs.child("zsh/.zshrc").assert("source ~/.zprofile");
+    assert_eq!(
+        targets,
+        maplit::hashmap! { PathBuf::from(".zshrc") => source.to_path_buf() },
+    );
+    Ok(())
+}
+
+#[test]
 fn test_deploy_merge_mode() -> TestResult {
     cov_mark::check_count!(deploy_merge, 1);
     let (home, yolk, eggs) = setup_and_init_test_yolk()?;

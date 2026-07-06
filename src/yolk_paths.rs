@@ -183,6 +183,7 @@ impl YolkPaths {
         self.root_path.join("eggs")
     }
 
+    /// Path to a specific egg given its name. Does not check whether the path exists.
     pub fn egg_path(&self, egg_name: &str) -> PathBuf {
         self.eggs_dir_path().join(egg_name)
     }

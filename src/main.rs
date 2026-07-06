@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     io::Read as _,
     path::{Path, PathBuf},
     str::FromStr,
@@ -19,6 +19,7 @@ use tracing_subscriber::{
 use tracing_tree::HierarchicalLayer;
 use yolk::{
     deploy::Deployer,
+    eggs_config::DeploymentStrategy,
     util::PathExt as _,
     yolk::{EvalMode, Yolk},
     yolk_paths,
@@ -60,6 +61,20 @@ enum Command {
     ///
     /// This renames `.git` to `.yolk_git` to ensure that git interaction happens through the yolk CLI
     Safeguard,
+
+    /// Migrate a directory into an egg inside your yolk repository, and guide you through adding it to your yolk.rhai configuration.
+    #[clap(name = "adopt")]
+    Adopt {
+        /// Name of the egg that will be created.
+        egg_name: String,
+        /// Path that should be adopted into yolk.
+        path: PathBuf,
+        /// Whether this should be deployed via `merge` or `put` strategy. Defaults to `put`.
+        #[arg(long)]
+        strategy: Option<DeploymentStrategy>,
+        /// List of filepaths that should be included in the list of templated files.
+        templates: Vec<PathBuf>,
+    },
 
     /// Run a given shell command within a canonical context. I.e.: `yolk exec-canonical gitui`.
     #[clap(name = "exec-canonical")]
@@ -302,6 +317,26 @@ fn run_command(args: Args) -> Result<()> {
                 println!("{}", text);
             }
         }
+
+        Command::Adopt {
+            egg_name,
+            path,
+            strategy,
+            templates,
+        } => {
+            let strategy = strategy.unwrap_or_default();
+            let fallback_target = path.canonical()?;
+            let target_paths = yolk.adopt(egg_name.to_string(), path.clone())?;
+            print_adopt_instructions(
+                &yolk,
+                egg_name,
+                strategy,
+                templates,
+                &target_paths,
+                &fallback_target,
+            );
+        }
+
         Command::Sync { canonical } => {
             // Lets always ensure that the yolk dir is in a properly set up state.
             // This should later be replaced with some sort of version-aware compatibility check.
@@ -529,4 +564,128 @@ fn run_command(args: Args) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn print_adopt_instructions(
+    yolk: &Yolk,
+    egg_name: &str,
+    strategy: DeploymentStrategy,
+    templates: &[PathBuf],
+    target_paths: &HashMap<PathBuf, PathBuf>,
+    fallback_target: &Path,
+) {
+    println!("Add this entry to the `eggs` map in your yolk.rhai:");
+    println!();
+    println!(
+        "    {}",
+        format_adopt_config_entry(
+            yolk.paths().home_path(),
+            egg_name,
+            strategy,
+            templates,
+            target_paths,
+            fallback_target,
+        )
+    );
+    println!();
+    println!(
+        "Yolk moved the files into `eggs/{egg_name}`. After adding the entry, run `yolk sync` to create the symlink so the config is available at its target path."
+    );
+}
+
+fn format_adopt_config_entry(
+    home_path: &Path,
+    egg_name: &str,
+    strategy: DeploymentStrategy,
+    templates: &[PathBuf],
+    target_paths: &HashMap<PathBuf, PathBuf>,
+    fallback_target: &Path,
+) -> String {
+    format!(
+        "{}: #{{ enabled: true, strategy: {}, targets: {}, templates: {} }},",
+        rhai_string(egg_name),
+        rhai_string(deployment_strategy_name(strategy)),
+        format_adopt_targets(home_path, target_paths, fallback_target),
+        format_path_list(templates),
+    )
+}
+
+fn deployment_strategy_name(strategy: DeploymentStrategy) -> &'static str {
+    match strategy {
+        DeploymentStrategy::Merge => "merge",
+        DeploymentStrategy::Put => "put",
+    }
+}
+
+fn format_adopt_targets(
+    home_path: &Path,
+    target_paths: &HashMap<PathBuf, PathBuf>,
+    fallback_target: &Path,
+) -> String {
+    if target_paths.is_empty() {
+        return rhai_string(format_config_path(home_path, fallback_target));
+    }
+
+    let mut mappings = target_paths.iter().collect::<Vec<_>>();
+    mappings.sort_by_key(|(source, _)| source.to_string_lossy().to_string());
+    let entries = mappings
+        .into_iter()
+        .map(|(source, target)| {
+            let src_path = rhai_string(source.to_string_lossy());
+            let target_path = rhai_string(format_config_path(
+                home_path,
+                &canonicalize_target_path(target),
+            ));
+            format!("{src_path}: {target_path}")
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("#{{ {entries} }}")
+}
+
+fn format_path_list(paths: &[PathBuf]) -> String {
+    if paths.is_empty() {
+        return "[]".to_string();
+    }
+    format!(
+        "[{}]",
+        paths
+            .iter()
+            .map(|path| rhai_string(path.to_string_lossy()))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
+fn canonicalize_target_path(path: &Path) -> PathBuf {
+    if path.exists() {
+        return path.canonical().unwrap_or_else(|_| path.to_path_buf());
+    }
+
+    match (path.parent(), path.file_name()) {
+        (Some(parent), Some(file_name)) => parent
+            .canonical()
+            .map(|parent| parent.join(file_name))
+            .unwrap_or_else(|_| path.to_path_buf()),
+        _ => path.to_path_buf(),
+    }
+}
+
+fn format_config_path(home_path: &Path, path: &Path) -> String {
+    if let Ok(relative) = path.strip_prefix(home_path) {
+        if relative.as_os_str().is_empty() {
+            "~".to_string()
+        } else {
+            PathBuf::from("~").join(relative).display().to_string()
+        }
+    } else {
+        path.display().to_string()
+    }
+}
+
+fn rhai_string(value: impl AsRef<str>) -> String {
+    format!(
+        "\"{}\"",
+        value.as_ref().replace('\\', "\\\\").replace('"', "\\\"")
+    )
 }

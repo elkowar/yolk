@@ -10,7 +10,8 @@
 //! changes, so any test that spawns the binary must run from here.
 
 use assert_cmd::{assert, Command};
-use assert_fs::prelude::{FileWriteStr as _, PathChild as _};
+use assert_fs::prelude::{FileWriteStr as _, PathChild as _, PathCreateDir as _};
+use predicates::str::contains;
 
 use yolk::{
     yolk::{EvalMode, Yolk},
@@ -124,5 +125,41 @@ fn test_git_add_with_error() -> TestResult {
     env.git_cmd(&["show", ":eggs/foo/broken"])
         .stdout("")
         .stderr("fatal: path \'eggs/foo/broken\' exists on disk, but not in the index\n");
+    Ok(())
+}
+
+#[test]
+fn test_adopt_directory_prints_config_snippet() -> TestResult {
+    let env = TestEnv::init()?;
+    let source = env.home.child(".config/noctalia");
+    source.create_dir_all()?;
+
+    let mut cmd = env.yolk_cmd();
+    cmd.args(["adopt", "noctalia", &source.to_string_lossy()]);
+    cmd.assert().success().stdout(contains(
+        r#""noctalia": #{ enabled: true, strategy: "put", targets: "~/.config/noctalia", templates: [] },"#,
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn test_adopt_file_prints_target_map() -> TestResult {
+    let env = TestEnv::init()?;
+    let source = env.home.child(".zshrc");
+    source.write_str("zsh")?;
+
+    let mut cmd = env.yolk_cmd();
+    cmd.args([
+        "adopt",
+        "zsh",
+        &source.to_string_lossy(),
+        "--strategy",
+        "merge",
+    ]);
+    cmd.assert().success().stdout(contains(
+        r#""zsh": #{ enabled: true, strategy: "merge", targets: #{ ".zshrc": "~/.zshrc" }, templates: [] },"#,
+    ));
+
     Ok(())
 }

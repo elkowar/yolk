@@ -164,6 +164,52 @@ impl Yolk {
         Ok(())
     }
 
+    /// Adopt a path as a new egg inside the yolk dir.
+    /// This does NOT add anything to the yolk.rhai, so the configuration will temporarily be undeployed,
+    /// until the yolk.rhai is edited and sync is ran.
+    pub fn adopt(
+        &self,
+        egg_name: String,
+        original_path: PathBuf,
+    ) -> Result<HashMap<PathBuf, PathBuf>> {
+        let mut eval_ctx = self.prepare_eval_ctx_for_templates(EvalMode::Local)?;
+        let eggs = self.load_egg_configs(&mut eval_ctx)?;
+        miette::ensure!(
+            !eggs.contains_key(&egg_name),
+            "Egg with name {egg_name} already exists",
+        );
+        miette::ensure!(
+            !original_path.is_symlink(),
+            "Cannot adopt egg, because the given path is already a symlink."
+        );
+
+        let egg_path = self.paths().egg_path(&egg_name);
+        miette::ensure!(
+            !egg_path.exists(),
+            "Cannot adopt egg, because the egg path {} already exists",
+            egg_path.abbr()
+        );
+        let mut targets_map = HashMap::new();
+        tracing::info!("Adopting egg {} from {}", egg_name, original_path.abbr());
+        if original_path.is_dir() {
+            tracing::info!("Moving {} into {}", original_path.abbr(), egg_path.abbr());
+            fs_err::rename(original_path, egg_path)
+                .into_diagnostic()
+                .context("Failed to move directory into eggs dir")?;
+        } else if let Some(file_name) = original_path.file_name() {
+            let target_path = egg_path.join(file_name);
+            tracing::info!(
+                "Moving {} into {}",
+                original_path.abbr(),
+                target_path.abbr()
+            );
+            fs_err::create_dir(egg_path).into_diagnostic()?;
+            fs_err::rename(&original_path, target_path).into_diagnostic()?;
+            targets_map.insert(file_name.into(), original_path.clone());
+        }
+        Ok(targets_map)
+    }
+
     /// Deploy or undeploy the given egg, depending on the current system state and the given Egg data.
     /// Returns true if the egg is now deployed, false if it is not.
     #[tracing::instrument(skip_all, fields(egg.name = %egg.name()))]
