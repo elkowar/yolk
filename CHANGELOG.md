@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0](https://github.com/elkowar/yolk/compare/v0.3.9...v1.0.0) - 2026-07-06
+
+### Added
+
+- Allow yolk adopt to edit yolk.rhai and run sync
+- add adopt command that moves config into egg dir and prints config
+- improved parser diagnostics
+
+### Chore
+
+- release as 1.0.0
+- clean up docs and lint issues
+
+### Fixed
+
+- correctness fixes for adopt, stale symlink cleanup, and parser keywords
+- several small correctness risks regarding sync
+- improve symlink escalation flow
+
+### Refactor
+
+- simple unified test harness making tests more semantically meaningful
+- rework parser structure
+
 ## [0.3.9](https://github.com/elkowar/yolk/compare/v0.3.8...v0.3.9) - 2026-07-05
 
 ### Added
