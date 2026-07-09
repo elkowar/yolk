@@ -82,8 +82,16 @@ impl EvalCtx {
         self.engine
             .register_global_module(Arc::new(self.globals_module.clone()));
         let ast = self.compile(content)?;
-        let module = Module::eval_ast_as_new(self.scope.clone(), &ast, &self.engine)
-            .map_err(|e| RhaiError::from_rhai(content, *e))?;
+        let module = match Module::eval_ast_as_new(self.scope.clone(), &ast, &self.engine) {
+            Ok(module) => module,
+            Err(err) => {
+                return Err(RhaiError::from_rhai_with_engine(
+                    content,
+                    *err,
+                    &self.engine,
+                ))
+            }
+        };
         let module = Arc::new(module);
         self.engine.register_global_module(module.clone());
         self.yolk_file_module = Some((ast, module.clone()));
@@ -96,9 +104,14 @@ impl EvalCtx {
         if let Some((yolk_file_ast, _)) = self.yolk_file_module.as_ref() {
             ast = yolk_file_ast.merge(&ast);
         }
-        self.engine
-            .eval_ast_with_scope(&mut self.scope, &ast)
-            .map_err(|e| RhaiError::from_rhai(content, *e))
+        match self.engine.eval_ast_with_scope(&mut self.scope, &ast) {
+            Ok(value) => Ok(value),
+            Err(err) => Err(RhaiError::from_rhai_with_engine(
+                content,
+                *err,
+                &self.engine,
+            )),
+        }
     }
 
     /// Eval a rhai expression in a scope that has a special `get_yolk_text()` function that returns the given `text`.

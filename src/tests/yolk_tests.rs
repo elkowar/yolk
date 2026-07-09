@@ -540,6 +540,104 @@ pub fn test_syntax_error_in_yolk_rhai() -> TestResult {
 
 #[test]
 #[cfg(not(windows))]
+pub fn test_rhai_error_for_known_function_with_wrong_arguments() -> TestResult {
+    let env = TestEnv::init()?;
+    env.yolk_rhai().write_str(indoc::indoc! {r#"
+            io::path_exists(1);
+        "#})?;
+
+    let report = env
+        .yolk()
+        .prepare_eval_ctx_for_templates(crate::yolk::EvalMode::Local)
+        .map_err(test_util::render_report)
+        .unwrap_err();
+
+    assert!(report.contains("Function `io::path_exists` exists"));
+    assert!(report.contains("no overload accepts arguments: i64"));
+    assert!(report.contains("Available overloads:"));
+    assert!(report.contains("io::path_exists(p: string) -> Result<bool>"));
+
+    Ok(())
+}
+
+#[test]
+#[cfg(not(windows))]
+pub fn test_rhai_error_for_unknown_function_suggests_similar_name() -> TestResult {
+    let env = TestEnv::init()?;
+    env.yolk_rhai().write_str(indoc::indoc! {r#"
+            io::path_exits("foo");
+        "#})?;
+
+    let report = env
+        .yolk()
+        .prepare_eval_ctx_for_templates(crate::yolk::EvalMode::Local)
+        .map_err(test_util::render_report)
+        .unwrap_err();
+
+    assert!(report.contains("Unknown function `io::path_exits`"));
+    assert!(report.contains("Did you mean `io::path_exists`?"));
+
+    Ok(())
+}
+
+#[test]
+#[cfg(not(windows))]
+pub fn test_rhai_error_for_user_function_with_wrong_arguments() -> TestResult {
+    let env = TestEnv::init()?;
+    env.yolk_rhai().write_str(indoc::indoc! {r#"
+            fn greet(name) {
+                "hello, " + name
+            }
+        "#})?;
+    let mut eval_ctx = env
+        .yolk()
+        .prepare_eval_ctx_for_templates(crate::yolk::EvalMode::Local)?;
+
+    let report = eval_ctx
+        .eval_rhai::<String>("greet(\"leon\", \"extra\")")
+        .map_err(|err| err.into_report("expr", "greet(\"leon\", \"extra\")"))
+        .map_err(test_util::render_report)
+        .unwrap_err();
+
+    assert!(report.contains("Function `greet` exists"), "{report}");
+    assert!(
+        report.contains(
+            "no overload accepts arguments: &str | ImmutableString | String, &str | ImmutableString | String"
+        ),
+        "{report}"
+    );
+    assert!(report.contains("greet(name)"), "{report}");
+
+    Ok(())
+}
+
+#[test]
+#[cfg(not(windows))]
+pub fn test_rhai_function_hint_keeps_template_span() -> TestResult {
+    let env = TestEnv::init()?;
+    let mut eval_ctx = env
+        .yolk()
+        .prepare_eval_ctx_for_templates(crate::yolk::EvalMode::Local)?;
+
+    let report = env
+        .yolk()
+        .eval_template(
+            &mut eval_ctx,
+            "template.conf",
+            "before\nvalue = {< io::path_exists(1) >}\nafter\n",
+        )
+        .map_err(test_util::render_report)
+        .unwrap_err();
+
+    assert!(report.contains("Function `io::path_exists` exists"));
+    assert!(report.contains("value = {< io::path_exists(1) >}"));
+    assert!(report.contains("template.conf"));
+
+    Ok(())
+}
+
+#[test]
+#[cfg(not(windows))]
 pub fn test_deployment_error() -> TestResult {
     let env = TestEnv::init()?;
     env.egg_file("bar/file1").write_str("")?;

@@ -1,6 +1,9 @@
 use std::ops::Range;
 
 use miette::Diagnostic;
+use rhai::Engine;
+
+use super::rhai_function_hints::{hint_for_function_not_found, FunctionCallHint};
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum RhaiError {
@@ -13,6 +16,16 @@ pub enum RhaiError {
     },
     #[error(transparent)]
     RhaiError(#[from] rhai::EvalAltResult),
+    /// A function was not found, and we managed to find some additional information about available alternatives.
+    #[error("{message}")]
+    EnrichedFunctionNotFound {
+        message: String,
+        #[help]
+        help: Option<String>,
+        #[source]
+        origin: Box<rhai::EvalAltResult>,
+        hint: Box<FunctionCallHint>,
+    },
     #[error("{}", .0)]
     #[diagnostic(transparent)]
     Other(miette::Report),
@@ -37,6 +50,22 @@ impl RhaiError {
     }
 
     pub fn from_rhai(source_code: &str, err: rhai::EvalAltResult) -> Self {
+        Self::from_rhai_inner(source_code, err, None)
+    }
+
+    pub fn from_rhai_with_engine(
+        source_code: &str,
+        err: rhai::EvalAltResult,
+        engine: &Engine,
+    ) -> Self {
+        Self::from_rhai_inner(source_code, err, Some(engine))
+    }
+
+    fn from_rhai_inner(
+        source_code: &str,
+        err: rhai::EvalAltResult,
+        engine: Option<&Engine>,
+    ) -> Self {
         let position = err.position();
         let mut span = 0..0;
         if let Some(line_nr) = position.line() {
@@ -65,10 +94,21 @@ impl RhaiError {
         if span.start >= source_code.len() {
             span = source_code.len() - 1..source_code.len();
         }
-        Self::SourceError {
-            span,
-            origin: Box::new(RhaiError::RhaiError(err)),
-        }
+        let origin = match (engine, err) {
+            (Some(engine), rhai::EvalAltResult::ErrorFunctionNotFound(signature, position)) => {
+                let hint = hint_for_function_not_found(engine, &signature);
+                Box::new(RhaiError::EnrichedFunctionNotFound {
+                    message: hint.message(),
+                    help: hint.help(),
+                    origin: Box::new(rhai::EvalAltResult::ErrorFunctionNotFound(
+                        signature, position,
+                    )),
+                    hint: Box::new(hint),
+                })
+            }
+            (_, err) => Box::new(RhaiError::RhaiError(err)),
+        };
+        Self::SourceError { span, origin }
     }
 
     /// Convert this error into a [`miette::Report`] with the given name and source code attached as a rust source.
