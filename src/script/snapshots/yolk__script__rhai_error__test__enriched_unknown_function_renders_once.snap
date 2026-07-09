@@ -1,0 +1,11 @@
+---
+source: src/script/rhai_error.rs
+expression: "render_rhai_error(r#\"ptint(\"hi\")\"#)"
+---
+  × Unknown function `ptint`. Did you mean `print`?
+   ╭─[<inline>:1:2]
+ 1 │ ptint("hi")
+   ·  ┬
+   ·  ╰── here
+   ╰────
+  help: Similar functions: `print`

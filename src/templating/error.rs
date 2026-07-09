@@ -14,8 +14,14 @@ pub enum TemplateError {
     #[error("{error}")]
     #[diagnostic(forward(error))]
     Rhai {
-        #[source]
-        #[diagnostic_source]
+        // NOTE: `error` is intentionally neither `#[source]` nor
+        // `#[diagnostic_source]`. Its `Display` is already forwarded as this
+        // variant's message (`#[error("{error}")]`), so exposing it as a cause
+        // would make the graphical handler print the message twice — and the
+        // nested render would reuse the inner, expression-local span, planting
+        // the "here" label at the wrong offset in the template source. We only
+        // forward the diagnostic metadata (help, code, ...) and attach our own
+        // template-relative label via `error_span`.
         error: RhaiScriptError,
         #[label(primary, "here")]
         error_span: Option<SourceSpan>,

@@ -1,0 +1,11 @@
+---
+source: src/script/rhai_error.rs
+expression: "render_rhai_error(\"fn boom() { 1 / 0 } boom()\")"
+---
+  × Division by zero: 1 / 0
+  │ in call to function 'boom' (line 1, position 21)
+   ╭─[<inline>:1:22]
+ 1 │ fn boom() { 1 / 0 } boom()
+   ·                      ┬
+   ·                      ╰── here
+   ╰────

@@ -1,0 +1,14 @@
+---
+source: src/tests/yolk_tests.rs
+expression: "env.yolk().eval_template(&mut eval_ctx, \"template.conf\",\n\"before\\nvalue = {< 1 / 0 >}\\nafter\\n\",).map_err(test_util::render_report).unwrap_err()"
+---
+  × Failed to render document `template.conf`
+  ╰─▶ Failed to evaluate template
+  ╰─▶   × Division by zero: 1 / 0
+         ╭─[template.conf:2:12]
+       1 │ before
+       2 │ value = {< 1 / 0 >}
+         ·            ▲
+         ·            ╰── here
+       3 │ after
+         ╰────

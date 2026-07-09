@@ -636,6 +636,44 @@ pub fn test_rhai_function_hint_keeps_template_span() -> TestResult {
     Ok(())
 }
 
+/// An enriched rhai error inside a template tag must render once, with the
+/// label pointing into the template source (not the isolated expression).
+#[test]
+#[cfg(not(windows))]
+pub fn test_template_unknown_function_error_rendering() -> TestResult {
+    let env = TestEnv::init()?;
+    let mut eval_ctx = env.yolk().prepare_eval_ctx_for_templates(EvalMode::Local)?;
+    insta::assert_snapshot!(env
+        .yolk()
+        .eval_template(
+            &mut eval_ctx,
+            "template.conf",
+            "before\nvalue = {< ptint(\"hi\") >}\nafter\n",
+        )
+        .map_err(test_util::render_report)
+        .unwrap_err());
+    Ok(())
+}
+
+/// A plain runtime error inside a template tag renders once with the template
+/// span highlighted.
+#[test]
+#[cfg(not(windows))]
+pub fn test_template_runtime_error_rendering() -> TestResult {
+    let env = TestEnv::init()?;
+    let mut eval_ctx = env.yolk().prepare_eval_ctx_for_templates(EvalMode::Local)?;
+    insta::assert_snapshot!(env
+        .yolk()
+        .eval_template(
+            &mut eval_ctx,
+            "template.conf",
+            "before\nvalue = {< 1 / 0 >}\nafter\n",
+        )
+        .map_err(test_util::render_report)
+        .unwrap_err());
+    Ok(())
+}
+
 #[test]
 #[cfg(not(windows))]
 pub fn test_deployment_error() -> TestResult {

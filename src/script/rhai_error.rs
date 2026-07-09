@@ -10,7 +10,6 @@ pub enum RhaiScriptError {
     Located {
         #[label("here")]
         span: SourceSpan,
-        #[diagnostic_source]
         kind: RhaiScriptErrorKind,
     },
     #[error(transparent)]
@@ -160,4 +159,51 @@ fn clamp_span(span: SourceSpan, source_len: usize) -> SourceSpan {
     let requested_len = span.len();
     let len = requested_len.min(source_len.saturating_sub(start));
     (start, len).into()
+}
+
+#[cfg(test)]
+mod test {
+    use crate::script::eval_ctx::EvalCtx;
+    use crate::util::test_util::render_report;
+    use crate::yolk::EvalMode;
+
+    /// Evaluate a rhai snippet that is expected to fail, and render the
+    /// resulting error report exactly as a user would see it on the CLI.
+    fn render_rhai_error(source: &str) -> String {
+        let mut ctx = EvalCtx::new_in_mode(EvalMode::Local).unwrap();
+        let err = ctx
+            .eval_rhai::<()>(source)
+            .expect_err("expected rhai evaluation to fail");
+        render_report(err.into_report("<inline>", source))
+    }
+
+    #[test]
+    fn test_enriched_unknown_function_renders_once() {
+        insta::assert_snapshot!(render_rhai_error(r#"ptint("hi")"#));
+    }
+
+    #[test]
+    fn test_enriched_wrong_arguments_renders_once() {
+        insta::assert_snapshot!(render_rhai_error("io::path_exists(1)"));
+    }
+
+    #[test]
+    fn test_generic_runtime_error() {
+        insta::assert_snapshot!(render_rhai_error("1 / 0"));
+    }
+
+    #[test]
+    fn test_nested_function_call_error() {
+        insta::assert_snapshot!(render_rhai_error("fn boom() { 1 / 0 } boom()"));
+    }
+
+    #[test]
+    fn test_variable_not_found() {
+        insta::assert_snapshot!(render_rhai_error("foo + 1"));
+    }
+
+    #[test]
+    fn test_syntax_error() {
+        insta::assert_snapshot!(render_rhai_error("let x = "));
+    }
 }

@@ -1,0 +1,10 @@
+---
+source: src/script/rhai_error.rs
+expression: "render_rhai_error(\"let x = \")"
+---
+  × Syntax error: Script is incomplete (line 1, position 9)
+   ╭─[<inline>:1:8]
+ 1 │ let x = 
+   ·        ┬
+   ·        ╰── here
+   ╰────
