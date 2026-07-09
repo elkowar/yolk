@@ -11,7 +11,7 @@ use crate::deploy::Deployer;
 use crate::multi_error::MultiError;
 use crate::{
     eggs_config::{DeploymentStrategy, EggConfig},
-    script::{eval_ctx::EvalCtx, rhai_error::RhaiError, sysinfo::SystemInfo},
+    script::{eval_ctx::EvalCtx, rhai_error::RhaiScriptError, sysinfo::SystemInfo},
     templating::document::Document,
     util::{self, PathExt as _},
     yolk_paths::{Egg, YolkPaths},
@@ -364,7 +364,7 @@ impl Yolk {
         Ok(eggs_map
             .into_iter()
             .map(|(x, v)| Ok((x.into(), EggConfig::from_dynamic(v)?)))
-            .collect::<Result<HashMap<_, _>, RhaiError>>()?)
+            .collect::<Result<HashMap<_, _>, RhaiScriptError>>()?)
     }
 
     /// First, sync the deployment of all eggs to the local system.
@@ -501,7 +501,10 @@ impl Yolk {
             if let Err(restore_err) = self.sync_to_mode(EvalMode::Local, false) {
                 return Err(MultiError::new(
                     "Failed to enter canonical state and failed to restore local state",
-                    vec![canonical_err.into(), restore_err.into()],
+                    vec![
+                        miette::Report::from_err(canonical_err),
+                        miette::Report::from_err(restore_err),
+                    ],
                 )
                 .into());
             }
@@ -516,7 +519,7 @@ impl Yolk {
             (Ok(_), Err(err)) => Err(err.into()),
             (Err(operation_err), Err(restore_err)) => Err(MultiError::new(
                 "Canonical operation failed and failed to restore local state",
-                vec![operation_err, restore_err.into()],
+                vec![operation_err, miette::Report::from_err(restore_err)],
             )
             .into()),
         }

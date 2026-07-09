@@ -7,14 +7,16 @@ use winnow::{
     stream::{Location, Stream},
 };
 
-use crate::script::rhai_error::RhaiError;
+use crate::script::rhai_error::RhaiScriptError;
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum TemplateError {
-    #[error("Error evaluating rhai")]
+    #[error("{error}")]
+    #[diagnostic(forward(error))]
     Rhai {
         #[source]
-        error: RhaiError,
+        #[diagnostic_source]
+        error: RhaiScriptError,
         #[label(primary, "here")]
         error_span: Option<SourceSpan>,
     },
@@ -23,22 +25,14 @@ pub enum TemplateError {
 }
 
 impl TemplateError {
-    pub fn from_rhai(error: RhaiError, expr_span: impl Into<SourceSpan>) -> Self {
-        match error {
-            RhaiError::SourceError { ref span, .. } => {
-                let expr_span = expr_span.into();
-                let start = expr_span.offset() + span.start;
-                let end = expr_span.offset() + span.end;
-                Self::Rhai {
-                    error,
-                    error_span: Some((start..end).into()),
-                }
-            }
-            error => Self::Rhai {
-                error,
-                error_span: None,
-            },
-        }
+    pub fn from_rhai(error: RhaiScriptError, expr_span: impl Into<SourceSpan>) -> Self {
+        let error_span = if let Some(span) = error.span() {
+            let expr_span = expr_span.into();
+            Some((expr_span.offset() + span.offset(), span.len()).into())
+        } else {
+            None
+        };
+        Self::Rhai { error, error_span }
     }
 
     /// Convert this error into a [`miette::Report`] with the given name and source code attached.

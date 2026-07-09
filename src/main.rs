@@ -213,6 +213,15 @@ fn parse_symlink_pair(s: &str) -> Result<(PathBuf, PathBuf), String> {
 }
 
 pub(crate) fn main() -> Result<()> {
+    miette::set_hook(Box::new(|_| {
+        Box::new(
+            miette::MietteHandlerOpts::new()
+                .show_related_errors_as_nested()
+                .build(),
+        )
+    }))
+    .into_diagnostic()?;
+
     CompleteEnv::with_factory(Args::command)
         .bin("yolk")
         .complete();

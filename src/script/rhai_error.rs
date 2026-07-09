@@ -1,21 +1,27 @@
-use std::ops::Range;
-
-use miette::Diagnostic;
+use miette::{Diagnostic, SourceSpan};
 use rhai::Engine;
 
 use super::rhai_function_hints::{hint_for_function_not_found, FunctionCallHint};
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
-pub enum RhaiError {
-    #[error("{origin}")]
-    #[diagnostic(forward(origin))]
-    SourceError {
+pub enum RhaiScriptError {
+    #[error("{kind}")]
+    #[diagnostic(forward(kind))]
+    Located {
         #[label("here")]
-        span: Range<usize>,
-        origin: Box<RhaiError>,
+        span: SourceSpan,
+        #[diagnostic_source]
+        kind: RhaiScriptErrorKind,
     },
     #[error(transparent)]
-    RhaiError(#[from] rhai::EvalAltResult),
+    #[diagnostic(transparent)]
+    Unlocated(#[from] RhaiScriptErrorKind),
+}
+
+#[derive(Debug, thiserror::Error, Diagnostic)]
+pub enum RhaiScriptErrorKind {
+    #[error(transparent)]
+    Rhai(#[from] Box<rhai::EvalAltResult>),
     /// A function was not found, and we managed to find some additional information about available alternatives.
     #[error("{message}")]
     EnrichedFunctionNotFound {
@@ -31,18 +37,39 @@ pub enum RhaiError {
     Other(miette::Report),
 }
 
-impl RhaiError {
+impl From<rhai::EvalAltResult> for RhaiScriptErrorKind {
+    fn from(err: rhai::EvalAltResult) -> Self {
+        Self::Rhai(Box::new(err))
+    }
+}
+
+impl From<rhai::EvalAltResult> for RhaiScriptError {
+    fn from(err: rhai::EvalAltResult) -> Self {
+        Self::Unlocated(err.into())
+    }
+}
+
+impl RhaiScriptError {
     pub fn new_other<E>(err: E) -> Self
     where
         E: std::error::Error + Send + Sync + 'static,
     {
-        Self::Other(miette::miette!(err))
+        Self::from_report(miette::Report::from_err(err))
     }
+
     pub fn other<E>(err: E) -> Self
     where
         E: Diagnostic + Send + Sync + 'static,
     {
-        Self::Other(miette::Report::from(err))
+        Self::from_report(miette::Report::from(err))
+    }
+
+    pub fn from_report(report: miette::Report) -> Self {
+        Self::Unlocated(RhaiScriptErrorKind::Other(report))
+    }
+
+    pub fn msg(message: impl std::fmt::Display) -> Self {
+        Self::from_report(miette::Report::msg(message.to_string()))
     }
 
     pub fn from_rhai_compile(source_code: &str, err: rhai::ParseError) -> Self {
@@ -67,15 +94,16 @@ impl RhaiError {
         engine: Option<&Engine>,
     ) -> Self {
         let position = err.position();
-        let mut span = 0..0;
-        if let Some(line_nr) = position.line() {
+        let span = if source_code.is_empty() {
+            (0..0).into()
+        } else if let Some(line_nr) = position.line() {
             // TODO: this won't work with \r\n, _or will it_? *vsauce music starts playing*
             let offset_start = source_code
                 .split_inclusive('\n')
                 .take(line_nr - 1)
                 .map(|x| x.len())
                 .sum::<usize>();
-            span = if let Some(within_line) = position.position() {
+            let span = if let Some(within_line) = position.position() {
                 offset_start + within_line..offset_start + within_line + 1
             } else {
                 let offset_end = offset_start
@@ -89,32 +117,47 @@ impl RhaiError {
                     .take_while(|x| x.is_whitespace())
                     .count();
                 offset_start + indent..offset_end
-            };
-        }
-        if span.start >= source_code.len() {
-            span = source_code.len() - 1..source_code.len();
-        }
-        let origin = match (engine, err) {
+            }
+            .into();
+            clamp_span(span, source_code.len())
+        } else {
+            (0..0).into()
+        };
+        let kind = match (engine, err) {
             (Some(engine), rhai::EvalAltResult::ErrorFunctionNotFound(signature, position)) => {
                 let hint = hint_for_function_not_found(engine, &signature);
-                Box::new(RhaiError::EnrichedFunctionNotFound {
+                RhaiScriptErrorKind::EnrichedFunctionNotFound {
                     message: hint.message(),
                     help: hint.help(),
                     origin: Box::new(rhai::EvalAltResult::ErrorFunctionNotFound(
                         signature, position,
                     )),
                     hint: Box::new(hint),
-                })
+                }
             }
-            (_, err) => Box::new(RhaiError::RhaiError(err)),
+            (_, err) => err.into(),
         };
-        Self::SourceError { span, origin }
+        Self::Located { span, kind }
     }
 
-    /// Convert this error into a [`miette::Report`] with the given name and source code attached as a rust source.
+    /// Convert this error into a [`miette::Report`] with the given name and source code attached.
     pub fn into_report(self, name: impl ToString, source: impl ToString) -> miette::Report {
         miette::Report::from(self).with_source_code(
-            miette::NamedSource::new(name.to_string(), source.to_string()).with_language("Rust"),
+            miette::NamedSource::new(name.to_string(), source.to_string()).with_language("rhai"),
         )
     }
+
+    pub fn span(&self) -> Option<SourceSpan> {
+        match self {
+            Self::Located { span, .. } => Some(*span),
+            Self::Unlocated(_) => None,
+        }
+    }
+}
+
+fn clamp_span(span: SourceSpan, source_len: usize) -> SourceSpan {
+    let start = span.offset().min(source_len.saturating_sub(1));
+    let requested_len = span.len();
+    let len = requested_len.min(source_len.saturating_sub(start));
+    (start, len).into()
 }

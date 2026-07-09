@@ -1,4 +1,4 @@
-use rhai::{CustomType, TypeBuilder};
+use rhai::CustomType;
 
 #[derive(Debug, Clone, CustomType)]
 pub struct SystemInfo {

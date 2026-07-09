@@ -6,14 +6,14 @@ use std::{
     str::FromStr,
 };
 
-use miette::{miette, IntoDiagnostic as _};
+use miette::IntoDiagnostic as _;
 use rhai::Dynamic;
 
-use crate::{script::rhai_error::RhaiError, util::PathExt as _};
+use crate::{script::rhai_error::RhaiScriptError, util::PathExt as _};
 
 macro_rules! rhai_error {
     ($($tt:tt)*) => {
-        RhaiError::Other(miette!($($tt)*))
+        RhaiScriptError::msg(format!($($tt)*))
     };
 }
 
@@ -279,7 +279,7 @@ impl EggConfig {
         Ok(paths)
     }
 
-    pub fn from_dynamic(value: Dynamic) -> Result<Self, RhaiError> {
+    pub fn from_dynamic(value: Dynamic) -> Result<Self, RhaiScriptError> {
         if let Ok(target_path) = value.as_immutable_string_ref() {
             return Ok(EggConfig::new(".", target_path.to_string()));
         }
@@ -304,7 +304,7 @@ impl EggConfig {
                 .clone()
                 .into_iter()
                 .map(|(k, v)| {
-                    Ok::<_, RhaiError>((
+                    Ok::<_, RhaiScriptError>((
                         PathBuf::from(&*k),
                         PathBuf::from(&v.into_string().map_err(|e| {
                             rhai_error!("target file value must be a path, but got {e}")
@@ -327,9 +327,8 @@ impl EggConfig {
         };
 
         let strategy = match map.get("strategy") {
-            Some(strategy) => {
-                DeploymentStrategy::from_str(&strategy.to_string()).map_err(RhaiError::Other)?
-            }
+            Some(strategy) => DeploymentStrategy::from_str(&strategy.to_string())
+                .map_err(RhaiScriptError::from_report)?,
             None => DeploymentStrategy::default(),
         };
 
@@ -340,9 +339,9 @@ impl EggConfig {
                     .map_err(|t| rhai_error!("`templates` must be a list, but got {t}"))?
                     .iter()
                     .map(|x| {
-                        Ok::<_, RhaiError>(PathBuf::from(x.clone().into_string().map_err(|e| {
-                            rhai_error!("template entry must be a path, but got {e}")
-                        })?))
+                        Ok::<_, RhaiScriptError>(PathBuf::from(x.clone().into_string().map_err(
+                            |e| rhai_error!("template entry must be a path, but got {e}"),
+                        )?))
                     })
                     .collect::<Result<HashSet<_>, _>>()?
             } else {

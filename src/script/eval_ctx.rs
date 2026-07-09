@@ -10,7 +10,7 @@ use rhai::Variant;
 
 use crate::yolk::EvalMode;
 
-use super::rhai_error::RhaiError;
+use super::rhai_error::RhaiScriptError;
 use super::stdlib;
 
 pub const YOLK_TEXT_NAME: &str = "YOLK_TEXT";
@@ -78,14 +78,14 @@ impl EvalCtx {
     }
 
     /// Load a given rhai string as a global module, and store it as the `yolk_file_module`.
-    pub fn load_rhai_file_to_module(&mut self, content: &str) -> Result<(), RhaiError> {
+    pub fn load_rhai_file_to_module(&mut self, content: &str) -> Result<(), RhaiScriptError> {
         self.engine
             .register_global_module(Arc::new(self.globals_module.clone()));
         let ast = self.compile(content)?;
         let module = match Module::eval_ast_as_new(self.scope.clone(), &ast, &self.engine) {
             Ok(module) => module,
             Err(err) => {
-                return Err(RhaiError::from_rhai_with_engine(
+                return Err(RhaiScriptError::from_rhai_with_engine(
                     content,
                     *err,
                     &self.engine,
@@ -99,14 +99,14 @@ impl EvalCtx {
     }
 
     /// Eval a given string of rhai and return the result. Execute in the scope of this [`EvalCtx`].
-    pub fn eval_rhai<T: Variant + Clone>(&mut self, content: &str) -> Result<T, RhaiError> {
+    pub fn eval_rhai<T: Variant + Clone>(&mut self, content: &str) -> Result<T, RhaiScriptError> {
         let mut ast = self.compile(content)?;
         if let Some((yolk_file_ast, _)) = self.yolk_file_module.as_ref() {
             ast = yolk_file_ast.merge(&ast);
         }
         match self.engine.eval_ast_with_scope(&mut self.scope, &ast) {
             Ok(value) => Ok(value),
-            Err(err) => Err(RhaiError::from_rhai_with_engine(
+            Err(err) => Err(RhaiScriptError::from_rhai_with_engine(
                 content,
                 *err,
                 &self.engine,
@@ -120,7 +120,7 @@ impl EvalCtx {
         &mut self,
         text: &str,
         expr: &str,
-    ) -> Result<String, RhaiError> {
+    ) -> Result<String, RhaiScriptError> {
         let scope_before = self.scope.len();
         let text = text.to_string();
         self.engine
@@ -145,9 +145,9 @@ impl EvalCtx {
         self.yolk_file_module.as_ref()
     }
 
-    fn compile(&mut self, text: &str) -> Result<rhai::AST, RhaiError> {
+    fn compile(&mut self, text: &str) -> Result<rhai::AST, RhaiScriptError> {
         self.engine
             .compile(text)
-            .map_err(|e| RhaiError::from_rhai_compile(text, e))
+            .map_err(|e| RhaiScriptError::from_rhai_compile(text, e))
     }
 }
