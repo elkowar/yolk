@@ -1,0 +1,10 @@
+---
+source: src/script/rhai_error.rs
+expression: "render_rhai_error(\"1 / 0\")"
+---
+  × Division by zero: 1 / 0
+   ╭─[<inline>:1:1]
+ 1 │ 1 / 0
+   · ▲
+   · ╰── here
+   ╰────

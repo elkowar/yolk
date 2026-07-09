@@ -1,0 +1,12 @@
+---
+source: src/script/rhai_error.rs
+expression: "render_rhai_error(\"io::path_exists(1)\")"
+---
+  × Function `io::path_exists` exists, but no overload accepts arguments: i64
+   ╭─[<inline>:1:6]
+ 1 │ io::path_exists(1)
+   ·      ┬
+   ·      ╰── here
+   ╰────
+  help: Available overloads:
+          - io::path_exists(p: string) -> Result<bool>

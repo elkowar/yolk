@@ -1,0 +1,10 @@
+---
+source: src/script/rhai_error.rs
+expression: "render_rhai_error(\"foo + 1\")"
+---
+  × Variable not found: foo (line 1, position 1)
+   ╭─[<inline>:1:2]
+ 1 │ foo + 1
+   ·  ┬
+   ·  ╰── here
+   ╰────
