@@ -10,7 +10,6 @@ pub enum RhaiScriptError {
     Located {
         #[label("here")]
         span: SourceSpan,
-        #[diagnostic_source]
         kind: RhaiScriptErrorKind,
     },
     #[error(transparent)]
