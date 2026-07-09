@@ -11,34 +11,20 @@ use crate::script::rhai_error::RhaiScriptError;
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum TemplateError {
-    #[error("{error}")]
-    #[diagnostic(forward(error))]
-    Rhai {
-        // NOTE: `error` is intentionally neither `#[source]` nor
-        // `#[diagnostic_source]`. Its `Display` is already forwarded as this
-        // variant's message (`#[error("{error}")]`), so exposing it as a cause
-        // would make the graphical handler print the message twice — and the
-        // nested render would reuse the inner, expression-local span, planting
-        // the "here" label at the wrong offset in the template source. We only
-        // forward the diagnostic metadata (help, code, ...) and attach our own
-        // template-relative label via `error_span`.
-        error: RhaiScriptError,
-        #[label(primary, "here")]
-        error_span: Option<SourceSpan>,
-    },
+    // A rhai error carries its own `here` label and diagnostic metadata, so we
+    // render it transparently. `from_rhai` first rebases the error's span into
+    // template coordinates so the label points at the right spot in the
+    // surrounding template source.
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Rhai(RhaiScriptError),
     #[error("Failed to evaluate template")]
     Multiple(#[related] Vec<TemplateError>),
 }
 
 impl TemplateError {
     pub fn from_rhai(error: RhaiScriptError, expr_span: impl Into<SourceSpan>) -> Self {
-        let error_span = if let Some(span) = error.span() {
-            let expr_span = expr_span.into();
-            Some((expr_span.offset() + span.offset(), span.len()).into())
-        } else {
-            None
-        };
-        Self::Rhai { error, error_span }
+        Self::Rhai(error.relocated_within(expr_span))
     }
 
     /// Convert this error into a [`miette::Report`] with the given name and source code attached.

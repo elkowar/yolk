@@ -3,6 +3,8 @@ source: src/script/rhai_error.rs
 expression: "render_rhai_error(\"io::path_exists(1)\")"
 ---
   × Function `io::path_exists` exists, but no overload accepts arguments: i64
+  ╰─▶   × Function not found: io::path_exists (i64) (line 1, position 5)
+      
    ╭─[<inline>:1:6]
  1 │ io::path_exists(1)
    ·      ┬

@@ -216,7 +216,7 @@ pub(crate) fn main() -> Result<()> {
     miette::set_hook(Box::new(|_| {
         Box::new(
             miette::MietteHandlerOpts::new()
-                .show_related_errors_as_nested()
+                // .show_related_errors_as_nested()
                 .build(),
         )
     }))

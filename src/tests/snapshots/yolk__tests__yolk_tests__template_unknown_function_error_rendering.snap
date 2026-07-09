@@ -4,12 +4,16 @@ expression: "env.yolk().eval_template(&mut eval_ctx, \"template.conf\",\n\"befor
 ---
   × Failed to render document `template.conf`
   ╰─▶ Failed to evaluate template
-  ╰─▶   × Unknown function `ptint`. Did you mean `print`?
-         ╭─[template.conf:2:13]
-       1 │ before
-       2 │ value = {< ptint("hi") >}
-         ·             ┬
-         ·             ╰── here
-       3 │ after
-         ╰────
-        help: Similar functions: `print`
+
+Error: 
+  × Unknown function `ptint`. Did you mean `print`?
+  ╰─▶   × Function not found: ptint (&str | ImmutableString | String) (line 1, position 1)
+      
+   ╭─[template.conf:2:13]
+ 1 │ before
+ 2 │ value = {< ptint("hi") >}
+   ·             ┬
+   ·             ╰── here
+ 3 │ after
+   ╰────
+  help: Similar functions: `print`

@@ -3,8 +3,10 @@ source: src/templating/parser.rs
 expression: "render_error(parse_document(\"\\nfoo\\n{%f%}\\nbar\\n\").unwrap_err())"
 ---
   × Failed to parse yolk template file
-  ╰─▶   × Expected block to end here
-         ╭─[file:5:1]
-       4 │ bar
-         ╰────
-        help: Did you forget an `{% end %}` tag?
+
+Error: 
+  × Expected block to end here
+   ╭─[file:5:1]
+ 4 │ bar
+   ╰────
+  help: Did you forget an `{% end %}` tag?

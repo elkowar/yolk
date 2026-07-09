@@ -4,11 +4,13 @@ expression: "env.yolk().eval_template(&mut eval_ctx, \"template.conf\",\n\"befor
 ---
   × Failed to render document `template.conf`
   ╰─▶ Failed to evaluate template
-  ╰─▶   × Division by zero: 1 / 0
-         ╭─[template.conf:2:12]
-       1 │ before
-       2 │ value = {< 1 / 0 >}
-         ·            ▲
-         ·            ╰── here
-       3 │ after
-         ╰────
+
+Error: 
+  × Division by zero: 1 / 0
+   ╭─[template.conf:2:12]
+ 1 │ before
+ 2 │ value = {< 1 / 0 >}
+   ·            ▲
+   ·            ╰── here
+ 3 │ after
+   ╰────

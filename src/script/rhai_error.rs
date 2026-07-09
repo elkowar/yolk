@@ -1,35 +1,43 @@
 use miette::{Diagnostic, SourceSpan};
 use rhai::Engine;
 
-use super::rhai_function_hints::{hint_for_function_not_found, FunctionCallHint};
+use super::rhai_function_hints::hint_for_function_not_found;
 
+/// An error that occurred while evaluating rhai, optionally carrying the
+/// source [`SourceSpan`] of the offending expression.
+///
+/// This is a thin location wrapper: its `Display` and all diagnostic metadata
+/// are forwarded to [`RhaiScriptErrorKind`], and it only adds a `here` label
+/// for `span`. It deliberately does *not* expose `kind` as a
+/// `#[diagnostic_source]` — doing so would make the graphical handler print
+/// `kind`'s message once as this error's header and again as the first nested
+/// cause. Any genuinely-nested detail (e.g. the raw rhai error behind an
+/// enriched message) is surfaced by `kind`'s own `diagnostic_source`, which
+/// `forward(kind)` passes straight through.
 #[derive(Debug, thiserror::Error, Diagnostic)]
-pub enum RhaiScriptError {
-    #[error("{kind}")]
-    #[diagnostic(forward(kind))]
-    Located {
-        #[label("here")]
-        span: SourceSpan,
-        kind: RhaiScriptErrorKind,
-    },
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    Unlocated(#[from] RhaiScriptErrorKind),
+#[error("{kind}")]
+#[diagnostic(forward(kind))]
+pub struct RhaiScriptError {
+    #[label("here")]
+    span: Option<SourceSpan>,
+    kind: RhaiScriptErrorKind,
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum RhaiScriptErrorKind {
     #[error(transparent)]
     Rhai(#[from] Box<rhai::EvalAltResult>),
-    /// A function was not found, and we managed to find some additional information about available alternatives.
+    /// A function was not found, and we managed to find some additional
+    /// information about available alternatives. The original rhai error is
+    /// kept as the diagnostic source, so its message and position render as a
+    /// nested cause beneath our enriched message.
     #[error("{message}")]
     EnrichedFunctionNotFound {
         message: String,
         #[help]
         help: Option<String>,
-        #[source]
-        origin: Box<rhai::EvalAltResult>,
-        hint: Box<FunctionCallHint>,
+        #[diagnostic_source]
+        origin: Box<dyn Diagnostic + Send + Sync + 'static>,
     },
     #[error("{}", .0)]
     #[diagnostic(transparent)]
@@ -42,9 +50,15 @@ impl From<rhai::EvalAltResult> for RhaiScriptErrorKind {
     }
 }
 
+impl From<RhaiScriptErrorKind> for RhaiScriptError {
+    fn from(kind: RhaiScriptErrorKind) -> Self {
+        Self { span: None, kind }
+    }
+}
+
 impl From<rhai::EvalAltResult> for RhaiScriptError {
     fn from(err: rhai::EvalAltResult) -> Self {
-        Self::Unlocated(err.into())
+        RhaiScriptErrorKind::from(err).into()
     }
 }
 
@@ -64,7 +78,7 @@ impl RhaiScriptError {
     }
 
     pub fn from_report(report: miette::Report) -> Self {
-        Self::Unlocated(RhaiScriptErrorKind::Other(report))
+        RhaiScriptErrorKind::Other(report).into()
     }
 
     pub fn msg(message: impl std::fmt::Display) -> Self {
@@ -128,15 +142,17 @@ impl RhaiScriptError {
                 RhaiScriptErrorKind::EnrichedFunctionNotFound {
                     message: hint.message(),
                     help: hint.help(),
-                    origin: Box::new(rhai::EvalAltResult::ErrorFunctionNotFound(
-                        signature, position,
+                    origin: Box::new(RhaiScriptErrorKind::from(
+                        rhai::EvalAltResult::ErrorFunctionNotFound(signature, position),
                     )),
-                    hint: Box::new(hint),
                 }
             }
             (_, err) => err.into(),
         };
-        Self::Located { span, kind }
+        Self {
+            span: Some(span),
+            kind,
+        }
     }
 
     /// Convert this error into a [`miette::Report`] with the given name and source code attached.
@@ -147,10 +163,21 @@ impl RhaiScriptError {
     }
 
     pub fn span(&self) -> Option<SourceSpan> {
-        match self {
-            Self::Located { span, .. } => Some(*span),
-            Self::Unlocated(_) => None,
+        self.span
+    }
+
+    /// Shift this error's label span so it points into a larger source that
+    /// embeds the evaluated expression starting at `outer_span`.
+    ///
+    /// Used when a rhai expression is evaluated as part of a template: the
+    /// span produced during evaluation is relative to the isolated
+    /// expression, and must be rebased into the surrounding template source.
+    pub fn relocated_within(mut self, outer_span: impl Into<SourceSpan>) -> Self {
+        if let Some(span) = self.span {
+            let outer = outer_span.into();
+            self.span = Some((outer.offset() + span.offset(), span.len()).into());
         }
+        self
     }
 }
 

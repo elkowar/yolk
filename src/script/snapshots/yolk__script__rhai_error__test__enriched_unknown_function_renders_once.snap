@@ -3,6 +3,8 @@ source: src/script/rhai_error.rs
 expression: "render_rhai_error(r#\"ptint(\"hi\")\"#)"
 ---
   × Unknown function `ptint`. Did you mean `print`?
+  ╰─▶   × Function not found: ptint (&str | ImmutableString | String) (line 1, position 1)
+      
    ╭─[<inline>:1:2]
  1 │ ptint("hi")
    ·  ┬

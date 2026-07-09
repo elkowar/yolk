@@ -3,7 +3,9 @@ source: src/templating/parser.rs
 expression: "render_error(parse_document(\"{%f%}\").unwrap_err())"
 ---
   × Failed to parse yolk template file
-  ╰─▶   × Expected a line after this tag
-         ╭─[file:1:6]
-       1 │ {%f%}
-         ╰────
+
+Error: 
+  × Expected a line after this tag
+   ╭─[file:1:6]
+ 1 │ {%f%}
+   ╰────

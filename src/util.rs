@@ -281,7 +281,7 @@ pub mod test_util {
         let mut out = String::new();
         GraphicalReportHandler::new()
             .with_theme(miette::GraphicalTheme::unicode_nocolor())
-            .with_show_related_as_nested(true)
+            // .with_show_related_as_nested(true)
             .render_report(&mut out, &e)
             .unwrap();
         out
@@ -293,7 +293,7 @@ pub mod test_util {
         let mut out = String::new();
         GraphicalReportHandler::new()
             .with_theme(miette::GraphicalTheme::unicode_nocolor())
-            .with_show_related_as_nested(true)
+            // .with_show_related_as_nested(true)
             .render_report(&mut out, e.as_ref())
             .unwrap();
         out
