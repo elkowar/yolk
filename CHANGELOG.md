@@ -11,23 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- improve rhai function-not-found errors by showing altenate, existing signatures
-
-### Chore
-
-- cleanup changelog
-
-### Docs
-
 - update rhai stdlib
 
 ### Fixed
 
-- fix double-printing some function not found errors
-
-### Refactor
-
-- Error handling improvements and nicer error printing
+- improve rhai function-not-found errors by showing altenate, existing signatures
+- improve error formatting
 
 ## [1.1.0](https://github.com/elkowar/yolk/compare/v1.0.0...v1.1.0) - 2026-07-06
 
