@@ -1,11 +1,34 @@
-# - name: Install cargo-binstall
-#   uses: cargo-bins/cargo-binstall@v1.10.16
-# - name: Install mdbook, mdbook-man
-#   run: cargo binstall mdbook mdbook-man
-# - name: Run mdbook build
-#   run: |
-#     echo '[output.man]' > docs/book.toml
-#     echo 'output-dir = "book-man"' >> docs/book.toml
-#     echo 'filename = "book.man"' >> docs/book.toml
-#     mdbook build docs
-#     mv docs/book/book-man/book.man yolk.man
+# Steps injected by cargo-dist into `build-local-artifacts` before `dist build`
+# (see `github-build-setup` in dist-workspace.toml).
+#
+# All steps are gated on the Android target so they no-op on the macOS,
+# Windows and x86_64 Linux build jobs. They install the Android NDK and point
+# cargo at its clang/ar so that `cargo build --target aarch64-linux-android`
+# links against Bionic (Android/Termux libc) instead of the host toolchain.
+- name: Set up Android NDK
+  if: ${{ contains(matrix.targets, 'aarch64-linux-android') }}
+  id: setup-ndk
+  uses: nttld/setup-ndk@v1
+  with:
+    ndk-version: r27c
+    local-cache: true
+- name: Configure Android cross-compilation
+  if: ${{ contains(matrix.targets, 'aarch64-linux-android') }}
+  shell: bash
+  env:
+    NDK: ${{ steps.setup-ndk.outputs.ndk-path }}
+  run: |
+    set -euo pipefail
+    # Termux requires Android 7.0+, so target API 24 as the minimum.
+    API=24
+    TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+    echo "$TOOLCHAIN" >> "$GITHUB_PATH"
+    {
+      echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$TOOLCHAIN/aarch64-linux-android$API-clang"
+      echo "CC_aarch64_linux_android=$TOOLCHAIN/aarch64-linux-android$API-clang"
+      echo "CXX_aarch64_linux_android=$TOOLCHAIN/aarch64-linux-android$API-clang++"
+      echo "AR_aarch64_linux_android=$TOOLCHAIN/llvm-ar"
+    } >> "$GITHUB_ENV"
+    # Ensure the Rust std for the target is available (dist builds with a fixed
+    # toolchain; the target may not be preinstalled on the runner).
+    rustup target add aarch64-linux-android
