@@ -3,8 +3,21 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% if title %}{{ title }} - {% endif %}{{ site.name }}</title>
+    <title>{% if pageTitle %}{{ pageTitle }}{% elif title %}{{ title }} - {{ site.name }}{% else %}{{ site.name }}{% endif %}</title>
     <meta name="description" content="{{ description or site.description }}">
+
+    {# Social preview (Open Graph + Twitter Card). og:image must be an absolute URL. #}
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="{{ site.name }}">
+    <meta property="og:title" content="{% if title %}{{ title }} - {% endif %}{{ site.name }}">
+    <meta property="og:description" content="{{ description or site.description }}">
+    <meta property="og:url" content="{{ site.origin }}{{ page.url | url }}">
+    <meta property="og:image" content="{{ site.origin }}{{ '/assets/images/yolk_social.png' | url }}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="{{ site.name }}">
+    <meta name="twitter:card" content="summary_large_image">
+
     <link rel="icon" href="{{ '/assets/images/favicon.ico' | url }}">
     <link rel="stylesheet" href="{{ '/assets/css/prism-okaidia.css' | url }}">
     <link rel="stylesheet" href="{{ '/assets/css/site.css' | url }}">
@@ -20,7 +33,7 @@
       </a>
       <nav class="site-nav" aria-label="Main navigation">
         <a href="{{ '/' | url }}">Home</a>
-        <a href="{{ '/#install' | url }}">Install</a>
+        <a class="nav-install" href="{{ '/#install' | url }}">Install</a>
         <a href="{{ '/book/' | url }}">Docs</a>
         <a href="{{ '/funding/' | url }}">Funding</a>
         <a href="{{ '/changelog/' | url }}">Changelog</a>

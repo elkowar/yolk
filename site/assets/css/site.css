@@ -142,6 +142,22 @@ header.site-header {
       width: 94px;
     }
   }
+
+  /* Too narrow for logo + full nav: drop the logo first, keep the nav
+     right-aligned where it already sat so it doesn't jump to the left. */
+  @media (max-width: 520px) {
+    justify-content: flex-end;
+    .brand {
+      display: none;
+    }
+  }
+
+  /* Even narrower: shed the Install tab (no hamburger). */
+  @media (max-width: 400px) {
+    .nav-install {
+      display: none;
+    }
+  }
 }
 
 section {
@@ -342,7 +358,7 @@ section.install-section {
 
 section.concept-section {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 2em;
   margin-bottom: 3em;
 
@@ -351,7 +367,7 @@ section.concept-section {
   }
 
   @media (max-width: 1000px) {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 28px;
   }
 }
@@ -365,6 +381,7 @@ section.concept-section {
   pre {
     padding: 20px;
     margin: 0;
+    overflow-x: auto;
   }
 
   .window-bar {
