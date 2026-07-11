@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Templates - Yolk</title>
+    <meta name="description" content="templated dotfile management without template files">
+
+    
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Yolk">
+    <meta property="og:title" content="Templates - Yolk">
+    <meta property="og:description" content="templated dotfile management without template files">
+    <meta property="og:url" content="https://elkowar.github.io/yolk/book/templates/">
+    <meta property="og:image" content="https://elkowar.github.io/yolk/assets/images/yolk_social.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Yolk">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <link rel="icon" href="/yolk/assets/images/favicon.ico">
+    <link rel="stylesheet" href="/yolk/assets/css/prism-okaidia.css">
+    <link rel="stylesheet" href="/yolk/assets/css/site.css">
+    <link rel="stylesheet" href="/yolk/assets/css/prism-overrides.css">
+    
+      <link rel="stylesheet" href="/yolk/assets/css/prose.css">
+    
+      <link rel="stylesheet" href="/yolk/assets/css/docs.css">
+    
+      <link rel="stylesheet" href="/yolk/book/pagefind/pagefind-component-ui.css">
+    
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/yolk/" aria-label="Yolk home">
+        <img src="/yolk/assets/images/yolk_banner_animated_nobg.svg" alt="Yolk">
+      </a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="/yolk/">Home</a>
+        <a class="nav-install" href="/yolk/#install">Install</a>
+        <a href="/yolk/book/">Docs</a>
+        <a href="/yolk/funding/">Funding</a>
+        <a href="/yolk/changelog/">Changelog</a>
+      </nav>
+      <a class="github-nav" href="https://github.com/elkowar/yolk">GitHub</a>
+    </header>
+
+    <main>
+      <pagefind-config
+  bundle-path="/yolk/book/pagefind/"
+  base-url="/yolk/book/"
+></pagefind-config>
+<script src="/yolk/book/pagefind/pagefind-component-ui.js" type="module"></script>
+
+<div class="docs-shell">
+  <aside class="docs-sidebar" aria-label="Documentation navigation">
+    <nav>
+      
+        <a
+          href="/yolk/book/"
+          
+        >Getting started</a>
+        
+          <div class="docs-subnav">
+            
+              <a
+                href="/yolk/book/git_concepts/"
+                
+              >Git concepts</a>
+            
+          </div>
+        
+      
+        <a
+          href="/yolk/book/eggs/"
+          
+        >Eggs</a>
+        
+      
+        <a
+          href="/yolk/book/templates/"
+          class="active" aria-current="page"
+        >Templates</a>
+        
+          <div class="docs-subnav">
+            
+              <a
+                href="/yolk/book/yolk_rhai/"
+                
+              >The yolk.rhai file</a>
+            
+              <a
+                href="/yolk/book/conditional_templates/"
+                
+              >Conditionals</a>
+            
+              <a
+                href="/yolk/book/custom_template_functions/"
+                
+              >Custom Template Functions</a>
+            
+          </div>
+        
+      
+        <a
+          href="/yolk/book/yolk_on_windows/"
+          
+        >Yolk on Windows</a>
+        
+      
+        <a
+          href="/yolk/book/rhai_docs/"
+          
+        >Function Reference</a>
+        
+          <div class="docs-subnav">
+            
+              <a
+                href="/yolk/book/rhai_docs/template/"
+                
+              >Template functions</a>
+            
+              <a
+                href="/yolk/book/rhai_docs/utils/"
+                
+              >Utils</a>
+            
+              <a
+                href="/yolk/book/rhai_docs/io/"
+                
+              >IO Functions</a>
+            
+              <a
+                href="/yolk/book/rhai_docs/global/"
+                
+              >Rhai stdlib</a>
+            
+          </div>
+        
+      
+        <a
+          href="/yolk/book/cli_reference/"
+          
+        >CLI Reference</a>
+        
+      
+    </nav>
+    <pagefind-modal-trigger></pagefind-modal-trigger>
+    <pagefind-modal></pagefind-modal>
+  </aside>
+  <article class="docs-content prose" data-pagefind-body>
+    <h1 id="templates-in-yolk" tabindex="-1"><a class="header-anchor" href="#templates-in-yolk">Templates in Yolk</a></h1>
+<p>Yolk allows you to use simple templates directly within your config files.
+Those templates will be evaluated whenever you run <code>yolk sync</code> or interact with git (see <a href="./git_concepts/">Git concepts</a>).</p>
+<p>Expressions within these templates are written in the <a href="https://rhai.rs">Rhai</a> scripting language,
+and have access to a couple of special variables that allow you to reference your configuration and system state.</p>
+<p>There are two main kinds of templates in Yolk: <a href="./conditional_templates/">conditional templates</a> and <a href="#template-tag-functions">template tag functions</a>.</p>
+<h2 id="preparation" tabindex="-1"><a class="header-anchor" href="#preparation">Preparation</a></h2>
+<p>To make yolk evaluate your file as a template, you need to explicitly tell yolk about it.
+To do this, make sure you include it in the <code>templates</code> list of your eggs deployment configuration in your <code>yolk.rhai</code>:</p>
+<pre class="language-rust"><code class="language-rust">export <span class="token keyword">let</span> eggs <span class="token operator">=</span> #<span class="token punctuation">{</span>
+  foo<span class="token punctuation">:</span> <span class="token punctuation">{</span>
+    targets<span class="token punctuation">:</span> <span class="token string">"~/.config/foo"</span><span class="token punctuation">,</span>
+    templates<span class="token punctuation">:</span> <span class="token punctuation">[</span><span class="token string">"foo.toml"</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre>
+<h2 id="conditionals" tabindex="-1"><a class="header-anchor" href="#conditionals">Conditionals</a></h2>
+<p>You can use <a href="./conditional_templates/">Conditional template elements</a> to conditionally include or exclude parts of your configuration.
+Let's take a look at a simple example:</p>
+<pre class="language-toml"><code class="language-toml"><span class="token comment"># {% if SYSTEM.hostname == "epic-desktop" %}</span>
+<span class="token key property">displays</span> <span class="token punctuation">=</span> <span class="token punctuation">[</span><span class="token string">"DP-1"</span><span class="token punctuation">,</span> <span class="token string">"DP-2"</span><span class="token punctuation">]</span>
+<span class="token comment"># {% else %}</span>
+<span class="token key property">displays</span> <span class="token punctuation">=</span> <span class="token punctuation">[</span><span class="token string">"eDP-1"</span><span class="token punctuation">]</span>
+<span class="token comment"># {% end %}</span></code></pre>
+<p>Once you run <code>yolk sync</code>, yolk will evaluate the condition and comment out the block that doesn't apply.
+For example, on your laptop, this config would be turned into:</p>
+<pre class="language-toml"><code class="language-toml"><span class="token comment"># {% if SYSTEM.hostname == "epic-desktop" %}</span>
+<span class="token comment">#&lt;yolk> displays = ["DP-1", "DP-2"]</span>
+<span class="token comment"># {% else %}</span>
+<span class="token key property">displays</span> <span class="token punctuation">=</span> <span class="token punctuation">[</span><span class="token string">"eDP-1"</span><span class="token punctuation">]</span>
+<span class="token comment"># {% end %}</span></code></pre>
+<h2 id="template-tag-functions" tabindex="-1"><a class="header-anchor" href="#template-tag-functions">Template tag functions</a></h2>
+<p>In addition to conditionals, Yolk provides a wide variety of functions to <em>edit</em> your configuration, such as to insert values from, say, your color theme.
+These are regular rhai functions that modify their attached block of text (see below).</p>
+<p>All of the built-in template tag functions are documented in the <a href="./rhai_docs/template/">Rhai reference</a>,
+and you can also <a href="./custom_template_functions/">define your own!</a></p>
+<h3 id="different-types-of-tags" tabindex="-1"><a class="header-anchor" href="#different-types-of-tags">Different types of tags</a></h3>
+<p>Yolk supports three different types of tags:</p>
+<ul>
+<li>Next-line tags (<code>{# ... #}</code>): These tags operate on the line following the tag.</li>
+<li>Inline tags (<code>{&lt; ... &gt;}</code>): These tags operate on everything before the tag within the same line.</li>
+<li>Block tags (<code>{% ... %} ... {% end %}</code>): These tags operate on everything between the tag and the corresponding <code>{% end %}</code> tag.</li>
+</ul>
+<p>You can use whichever of these you want, wherever you want. For example, all of these do the same:</p>
+<pre class="language-toml"><code class="language-toml"><span class="token key property">background_color</span> <span class="token punctuation">=</span> <span class="token string">"#000000"</span> <span class="token comment"># {&lt; replace_color(colors.background) >}</span>
+
+<span class="token comment"># {# replace_color(colors.background) #}</span>
+<span class="token key property">background_color</span> <span class="token punctuation">=</span> <span class="token string">"#000000"</span>
+
+<span class="token comment"># {% replace_color(colors.background) %}</span>
+<span class="token key property">background_color</span> <span class="token punctuation">=</span> <span class="token string">"#000000"</span>
+<span class="token comment"># {% end %}</span></code></pre>
+<h3 id="ignoring-yolk-syntax-(literal-blocks)" tabindex="-1"><a class="header-anchor" href="#ignoring-yolk-syntax-(literal-blocks)">Ignoring yolk syntax (literal blocks)</a></h3>
+<p>Sometimes your config legitimately contains text that looks like yolk template syntax (<code>{&lt; ... &gt;}</code>, <code>{# ... #}</code> or <code>{% ... %}</code>), which would otherwise cause yolk to try (and fail) to evaluate it.
+For these cases you can use the <code>ignore</code> tag to mark a region as <strong>literal</strong>: yolk will emit it verbatim, without any parsing or evaluation.</p>
+<p>There are two forms:</p>
+<ul>
+<li>Next-line: <code>{# ignore #}</code> makes the single line following it literal.</li>
+<li>Block: <code>{% ignore %} ... {% end %}</code> makes everything between the tags literal.</li>
+</ul>
+<pre class="language-toml"><code class="language-toml"><span class="token comment"># {# ignore #}</span>
+<span class="token key property">weird_value</span> <span class="token punctuation">=</span> <span class="token string">"{&lt; this is not a yolk tag >}"</span>
+
+<span class="token comment"># {% ignore %}</span>
+<span class="token key property">template</span> <span class="token punctuation">=</span> <span class="token string">"{% not evaluated %}"</span>
+<span class="token key property">other</span> <span class="token punctuation">=</span> <span class="token string">"{&lt; also left alone >}"</span>
+<span class="token comment"># {% end %}</span></code></pre>
+<p>After running <code>yolk sync</code>, all of the content above is left exactly as is.</p>
+<blockquote>
+<p>Note: An <code>{% ignore %}</code> block ends at the first <code>{% end %}</code> line, so a literal <code>{% end %}</code> can't appear inside a block.
+If you need to keep a raw <code>{% end %}</code>, put <code>{# ignore #}</code> on the line directly above it instead.</p>
+</blockquote>
+<h3 id="example%3A-templating-your-color-scheme" tabindex="-1"><a class="header-anchor" href="#example%3A-templating-your-color-scheme">Example: Templating your color scheme</a></h3>
+<p>In many cases, you'll want to make specific values, such as colors or paths, be set through one central source, rather than specifying them in every config file.
+Yolk allows you to do this (and more) by using various template functions.
+For example, the <code>replace_quoted</code> directive takes any value and replaces whatever is in quotes with the result of the expression.</p>
+<pre class="language-toml"><code class="language-toml"><span class="token comment"># {# replace_quoted(colors.background) #}</span>
+<span class="token key property">background_color</span> <span class="token punctuation">=</span> <span class="token string">"#000000"</span>
+<span class="token comment"># {# replace_quoted(colors.foreground) #}</span>
+<span class="token key property">foreground_color</span> <span class="token punctuation">=</span> <span class="token string">"#ffffff"</span></code></pre>
+<p>After running <code>yolk sync</code>, yolk will replace the regex patterns with the corresponding result of the Rhai expression.
+For example, depending on how you configured your <code>colors</code> in your <code>yolk.rhai</code>, this could turn into:</p>
+<pre class="language-toml"><code class="language-toml"><span class="token comment"># {# replace_quoted(colors.background) #}</span>
+<span class="token key property">background_color</span> <span class="token punctuation">=</span> <span class="token string">"#282828"</span>
+<span class="token comment"># {# replace_quoted(colors.foreground) #}</span>
+<span class="token key property">foreground_color</span> <span class="token punctuation">=</span> <span class="token string">"#ebdbb2"</span></code></pre>
+<p>Yolk will refuse to evaluate directives that are non-reversible (i.e. if you <code>replace_re</code>d <code>&quot;.*&quot;</code> with <code>foo</code>, as <code>foo</code> will no longer match that regex pattern).</p>
+
+  </article>
+</div>
+
+    </main>
+
+    <footer class="site-footer">
+      <span>MIT OR Apache-2.0</span>
+      <nav aria-label="Footer navigation">
+        <a href="https://github.com/elkowar/yolk">GitHub</a>
+        <a href="/yolk/funding/">Funding</a>
+        <a href="/yolk/changelog/">Changelog</a>
+      </nav>
+    </footer>
+    <script src="/yolk/assets/js/install.js"></script>
+  </body>
+</html>

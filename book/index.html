@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Getting started - Yolk</title>
+    <meta name="description" content="templated dotfile management without template files">
+
+    
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Yolk">
+    <meta property="og:title" content="Getting started - Yolk">
+    <meta property="og:description" content="templated dotfile management without template files">
+    <meta property="og:url" content="https://elkowar.github.io/yolk/book/">
+    <meta property="og:image" content="https://elkowar.github.io/yolk/assets/images/yolk_social.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Yolk">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <link rel="icon" href="/yolk/assets/images/favicon.ico">
+    <link rel="stylesheet" href="/yolk/assets/css/prism-okaidia.css">
+    <link rel="stylesheet" href="/yolk/assets/css/site.css">
+    <link rel="stylesheet" href="/yolk/assets/css/prism-overrides.css">
+    
+      <link rel="stylesheet" href="/yolk/assets/css/prose.css">
+    
+      <link rel="stylesheet" href="/yolk/assets/css/docs.css">
+    
+      <link rel="stylesheet" href="/yolk/book/pagefind/pagefind-component-ui.css">
+    
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/yolk/" aria-label="Yolk home">
+        <img src="/yolk/assets/images/yolk_banner_animated_nobg.svg" alt="Yolk">
+      </a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="/yolk/">Home</a>
+        <a class="nav-install" href="/yolk/#install">Install</a>
+        <a href="/yolk/book/">Docs</a>
+        <a href="/yolk/funding/">Funding</a>
+        <a href="/yolk/changelog/">Changelog</a>
+      </nav>
+      <a class="github-nav" href="https://github.com/elkowar/yolk">GitHub</a>
+    </header>
+
+    <main>
+      <pagefind-config
+  bundle-path="/yolk/book/pagefind/"
+  base-url="/yolk/book/"
+></pagefind-config>
+<script src="/yolk/book/pagefind/pagefind-component-ui.js" type="module"></script>
+
+<div class="docs-shell">
+  <aside class="docs-sidebar" aria-label="Documentation navigation">
+    <nav>
+      
+        <a
+          href="/yolk/book/"
+          class="active" aria-current="page"
+        >Getting started</a>
+        
+          <div class="docs-subnav">
+            
+              <a
+                href="/yolk/book/git_concepts/"
+                
+              >Git concepts</a>
+            
+          </div>
+        
+      
+        <a
+          href="/yolk/book/eggs/"
+          
+        >Eggs</a>
+        
+      
+        <a
+          href="/yolk/book/templates/"
+          
+        >Templates</a>
+        
+          <div class="docs-subnav">
+            
+              <a
+                href="/yolk/book/yolk_rhai/"
+                
+              >The yolk.rhai file</a>
+            
+              <a
+                href="/yolk/book/conditional_templates/"
+                
+              >Conditionals</a>
+            
+              <a
+                href="/yolk/book/custom_template_functions/"
+                
+              >Custom Template Functions</a>
+            
+          </div>
+        
+      
+        <a
+          href="/yolk/book/yolk_on_windows/"
+          
+        >Yolk on Windows</a>
+        
+      
+        <a
+          href="/yolk/book/rhai_docs/"
+          
+        >Function Reference</a>
+        
+          <div class="docs-subnav">
+            
+              <a
+                href="/yolk/book/rhai_docs/template/"
+                
+              >Template functions</a>
+            
+              <a
+                href="/yolk/book/rhai_docs/utils/"
+                
+              >Utils</a>
+            
+              <a
+                href="/yolk/book/rhai_docs/io/"
+                
+              >IO Functions</a>
+            
+              <a
+                href="/yolk/book/rhai_docs/global/"
+                
+              >Rhai stdlib</a>
+            
+          </div>
+        
+      
+        <a
+          href="/yolk/book/cli_reference/"
+          
+        >CLI Reference</a>
+        
+      
+    </nav>
+    <pagefind-modal-trigger></pagefind-modal-trigger>
+    <pagefind-modal></pagefind-modal>
+  </aside>
+  <article class="docs-content prose" data-pagefind-body>
+    <h1 id="getting-started" tabindex="-1"><a class="header-anchor" href="#getting-started">Getting started</a></h1>
+<div class="warning">
+<p><strong>Remember: Always have a good backup of your files before using any tool that modifies your files. Nothing bad should happen here, but better be careful.</strong></p>
+</div>
+<h2 id="how-dotfiles-are-stored" tabindex="-1"><a class="header-anchor" href="#how-dotfiles-are-stored">How dotfiles are stored</a></h2>
+<p>Yolk manages your dotfiles by storing them in a separate directory, typically inside <code>~/.config/yolk</code>.
+This allows you to keep your dotfiles in version control easily, and lets you manage your configuration from one central location.</p>
+<p>Yolk groups dotfiles into so-called <a href="eggs/">&quot;eggs&quot;</a>, which are packages of configuration,
+typically for one single application (although you can group them however you want, or even just have one egg for all your configuration files).</p>
+<p>When an egg is &quot;deployed&quot;, Yolk creates symlinks in the target location pointing towards the egg directory.
+This way, the configured applications will see the configuration files as they expect to see them.</p>
+<p>To define where a set of configuration files should be deployed to, you declare each of your eggs in your <a href="./yolk_rhai/">main yolk configuration file</a>.
+This allows you, among other things, to define a different target directory per system.</p>
+<h2 id="initial-setup" tabindex="-1"><a class="header-anchor" href="#initial-setup">Initial setup</a></h2>
+<p>To get started with Yolk, you'll first need to set up the Yolk file structure.</p>
+<pre class="language-bash"><code class="language-bash">$ yolk init</code></pre>
+<p>This will create the yolk directory, with a default <code>yolk.rhai</code> file, and an <code>eggs</code> directory.</p>
+<h3 id="adding-your-first-egg" tabindex="-1"><a class="header-anchor" href="#adding-your-first-egg">Adding your first egg</a></h3>
+<p>Let's say we want to manage the configuration for the <code>alacritty</code> terminal emulator.
+To do this, we first move our alacritty configuration into the <code>eggs</code> directory:</p>
+<pre class="language-bash"><code class="language-bash">$ <span class="token function">mv</span> ~/.config/alacritty ~/.config/yolk/eggs/</code></pre>
+<p>And then configure the corresponding <a href="./yolk_rhai/#basic-structure">egg deployment</a>:</p>
+<pre class="language-rust"><code class="language-rust">export <span class="token keyword">let</span> eggs <span class="token operator">=</span> #<span class="token punctuation">{</span>
+    alacritty<span class="token punctuation">:</span> #<span class="token punctuation">{</span>
+        targets<span class="token punctuation">:</span> <span class="token string">"~/.config/alacritty"</span><span class="token punctuation">,</span>
+        templates<span class="token punctuation">:</span> <span class="token punctuation">[</span><span class="token string">"alacritty.yml"</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+        enabled<span class="token punctuation">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre>
+<p>Now we can run <code>yolk sync</code>!
+This will set up a symlink from the target location <code>~/.config/alacritty</code>
+back to the alacritty egg directory <code>~/.config/yolk/eggs/alacritty</code>.</p>
+<h3 id="adopting-existing-config" tabindex="-1"><a class="header-anchor" href="#adopting-existing-config">Adopting existing config</a></h3>
+<p>Instead of moving files into <code>eggs</code> yourself, you can also ask Yolk to adopt an existing file or directory:</p>
+<pre class="language-bash"><code class="language-bash">$ yolk adopt alacritty ~/.config/alacritty</code></pre>
+<p>This moves the config into a new egg and prints an entry you can add to the <code>eggs</code> map in your <code>yolk.rhai</code>.
+If you want Yolk to append that entry and deploy the egg right away, run:</p>
+<pre class="language-bash"><code class="language-bash">$ yolk adopt alacritty ~/.config/alacritty --append-config-and-sync</code></pre>
+<p>The appended configuration is intentionally simple, so you may want to clean it up afterwards
+and move it into whatever structure you use in your <code>yolk.rhai</code>.</p>
+<h3 id="committing-your-dots-to-git" tabindex="-1"><a class="header-anchor" href="#committing-your-dots-to-git">Committing your dots to git</a></h3>
+<p>Now, we want to make sure our dotfiles are in version control and pushed to our git host of choice.
+Every interaction with git should be done through the <code>yolk git</code> command.
+This ensures that git sees the canonical (stable) representation of your files, and automatically performs them from within the yolk directory.</p>
+<pre class="language-bash"><code class="language-bash">$ yolk safeguard <span class="token comment"># you only need to run this once.</span>
+$ yolk <span class="token function">git</span> <span class="token function">add</span> <span class="token parameter variable">--all</span>
+$ yolk <span class="token function">git</span> commit <span class="token parameter variable">-m</span> <span class="token string">"Setup alacritty"</span></code></pre>
+<p>To understand what <code>yolk safeguard</code> does, see <a href="./git_concepts/#safeguarding-git">safeguarding git</a>.</p>
+<p>You can now set up your git remote and use git as usual -- just remember to always use <code>yolk git</code>, especially when you're committing your files.</p>
+<h3 id="baby's-first-template" tabindex="-1"><a class="header-anchor" href="#baby's-first-template">Baby's first template</a></h3>
+<p>Because you too are very indecisive about your terminal colors,
+you now decide you want to use yolk to manage your color theme for alacritty, and any other applications that you might add later.
+You also decide that you want to use a different color scheme on your desktop and your laptop.</p>
+<p>To achieve this, let's first add a declaration of your color theme in your <code>~/.config/yolk/yolk.rhai</code> file:</p>
+<pre class="language-rust"><code class="language-rust"><span class="token comment">// ... snip ...</span>
+
+<span class="token keyword">const</span> themes <span class="token operator">=</span> #<span class="token punctuation">{</span>
+    gruvbox<span class="token punctuation">:</span> #<span class="token punctuation">{</span>
+        background<span class="token punctuation">:</span> <span class="token string">"#282828"</span><span class="token punctuation">,</span>
+        foreground<span class="token punctuation">:</span> <span class="token string">"#ebdbb2"</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    mono<span class="token punctuation">:</span> #<span class="token punctuation">{</span>
+        background<span class="token punctuation">:</span> <span class="token string">"#000000"</span><span class="token punctuation">,</span>
+        foreground<span class="token punctuation">:</span> <span class="token string">"#ffffff"</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span>
+
+export <span class="token keyword">const</span> data <span class="token operator">=</span> #<span class="token punctuation">{</span>
+    colors<span class="token punctuation">:</span> <span class="token keyword">if</span> <span class="token constant">SYSTEM</span><span class="token punctuation">.</span>hostname <span class="token operator">==</span> <span class="token string">"laptop"</span> <span class="token punctuation">{</span> themes<span class="token punctuation">.</span>gruvbox <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span> themes<span class="token punctuation">.</span>mono <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre>
+<p>Beautiful!
+What we're doing here is setting up an <em>exported</em> table called <code>data</code>, which will store any user-data we might want to refer to in our templates in the future.
+We set up a field <code>colors</code>, which we then set to a different color scheme depending on the hostname of the system.</p>
+<p><strong>Don't forget to <code>export</code> any variables you might want to reference in your template tags!</strong></p>
+<p>Now, let's set up a template in our alacritty config file:</p>
+<pre class="language-toml"><code class="language-toml"><span class="token comment">#...</span>
+<span class="token punctuation">[</span><span class="token table class-name">colors.primary</span><span class="token punctuation">]</span>
+<span class="token key property">background</span> <span class="token punctuation">=</span> <span class="token string">"#ff0000"</span> <span class="token comment"># {&lt; replace_color(data.colors.background) >}</span>
+<span class="token key property">foreground</span> <span class="token punctuation">=</span> <span class="token string">"#ff0000"</span> <span class="token comment"># {&lt; replace_color(data.colors.foreground) >}</span>
+<span class="token comment"># ...</span></code></pre>
+<p>Let's break down what's happening here:
+Inside the comments after the color declarations, we're using &quot;inline template tags&quot;, as indicated by the <code>{&lt; ... &gt;}</code> syntax.
+These inline tags transform whatever is before them in the line.
+The tag calls the built-in <code>replace_color</code> function, which looks for a hex-code and replaces it with the value from the <code>data.colors</code> table.</p>
+<p><strong>Let's try it</strong>!
+Run</p>
+<pre class="language-bash"><code class="language-bash">$ yolk <span class="token function">sync</span></code></pre>
+<p>You will see that your <code>alacritty.toml</code> has changed and that the colors from your <code>yolk.rhai</code> file have been applied, depending on your hostname.</p>
+<h3 id="shell-completions" tabindex="-1"><a class="header-anchor" href="#shell-completions">Shell completions</a></h3>
+<p><code>yolk</code> comes with built-in shell completions for <code>bash</code>, <code>zsh</code>, <code>fish</code>, <code>elvish</code>, and PowerShell.
+To enable those, for <code>bash</code> run</p>
+<pre class="language-bash"><code class="language-bash"><span class="token builtin class-name">echo</span> <span class="token string">"source &lt;(COMPLETE=bash yolk)"</span> <span class="token operator">>></span> ~/.bashrc</code></pre>
+<p>for <code>zsh</code>, run</p>
+<pre class="language-bash"><code class="language-bash"><span class="token builtin class-name">echo</span> <span class="token string">"source &lt;(COMPLETE=zsh yolk)"</span> <span class="token operator">>></span> ~/.zshrc</code></pre>
+<p>Note that zsh's completion system must be initialized before this line runs. If your <code>~/.zshrc</code>
+doesn't already do so (frameworks like oh-my-zsh do it for you), add the following <em>above</em> it:</p>
+<pre class="language-bash"><code class="language-bash">autoload <span class="token parameter variable">-Uz</span> compinit <span class="token operator">&amp;&amp;</span> compinit</code></pre>
+<p>for <code>fish</code> run</p>
+<pre class="language-bash"><code class="language-bash"><span class="token builtin class-name">echo</span> <span class="token string">"COMPLETE=fish yolk | source"</span> <span class="token operator">>></span> ~/.config/fish/completions/yolk.fish</code></pre>
+<p>for <code>elvish</code> run</p>
+<pre class="language-bash"><code class="language-bash"><span class="token builtin class-name">echo</span> <span class="token string">"eval (E:COMPLETE=elvish yolk | slurp)"</span> <span class="token operator">>></span> ~/.elvish/rc.elv</code></pre>
+<p>and for PowerShell, run</p>
+<pre class="language-powershell"><code class="language-powershell"><span class="token function">echo</span> <span class="token string">'$env:COMPLETE = "powershell"; yolk | Out-String | Invoke-Expression; Remove-Item Env:\COMPLETE'</span> >> <span class="token variable">$PROFILE</span></code></pre>
+
+  </article>
+</div>
+
+    </main>
+
+    <footer class="site-footer">
+      <span>MIT OR Apache-2.0</span>
+      <nav aria-label="Footer navigation">
+        <a href="https://github.com/elkowar/yolk">GitHub</a>
+        <a href="/yolk/funding/">Funding</a>
+        <a href="/yolk/changelog/">Changelog</a>
+      </nav>
+    </footer>
+    <script src="/yolk/assets/js/install.js"></script>
+  </body>
+</html>

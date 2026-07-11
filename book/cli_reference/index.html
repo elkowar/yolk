@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cli Reference - Yolk</title>
+    <meta name="description" content="templated dotfile management without template files">
+
+    
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Yolk">
+    <meta property="og:title" content="Cli Reference - Yolk">
+    <meta property="og:description" content="templated dotfile management without template files">
+    <meta property="og:url" content="https://elkowar.github.io/yolk/book/cli_reference/">
+    <meta property="og:image" content="https://elkowar.github.io/yolk/assets/images/yolk_social.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Yolk">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <link rel="icon" href="/yolk/assets/images/favicon.ico">
+    <link rel="stylesheet" href="/yolk/assets/css/prism-okaidia.css">
+    <link rel="stylesheet" href="/yolk/assets/css/site.css">
+    <link rel="stylesheet" href="/yolk/assets/css/prism-overrides.css">
+    
+      <link rel="stylesheet" href="/yolk/assets/css/prose.css">
+    
+      <link rel="stylesheet" href="/yolk/assets/css/docs.css">
+    
+      <link rel="stylesheet" href="/yolk/book/pagefind/pagefind-component-ui.css">
+    
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/yolk/" aria-label="Yolk home">
+        <img src="/yolk/assets/images/yolk_banner_animated_nobg.svg" alt="Yolk">
+      </a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="/yolk/">Home</a>
+        <a class="nav-install" href="/yolk/#install">Install</a>
+        <a href="/yolk/book/">Docs</a>
+        <a href="/yolk/funding/">Funding</a>
+        <a href="/yolk/changelog/">Changelog</a>
+      </nav>
+      <a class="github-nav" href="https://github.com/elkowar/yolk">GitHub</a>
+    </header>
+
+    <main>
+      <pagefind-config
+  bundle-path="/yolk/book/pagefind/"
+  base-url="/yolk/book/"
+></pagefind-config>
+<script src="/yolk/book/pagefind/pagefind-component-ui.js" type="module"></script>
+
+<div class="docs-shell">
+  <aside class="docs-sidebar" aria-label="Documentation navigation">
+    <nav>
+      
+        <a
+          href="/yolk/book/"
+          
+        >Getting started</a>
+        
+          <div class="docs-subnav">
+            
+              <a
+                href="/yolk/book/git_concepts/"
+                
+              >Git concepts</a>
+            
+          </div>
+        
+      
+        <a
+          href="/yolk/book/eggs/"
+          
+        >Eggs</a>
+        
+      
+        <a
+          href="/yolk/book/templates/"
+          
+        >Templates</a>
+        
+          <div class="docs-subnav">
+            
+              <a
+                href="/yolk/book/yolk_rhai/"
+                
+              >The yolk.rhai file</a>
+            
+              <a
+                href="/yolk/book/conditional_templates/"
+                
+              >Conditionals</a>
+            
+              <a
+                href="/yolk/book/custom_template_functions/"
+                
+              >Custom Template Functions</a>
+            
+          </div>
+        
+      
+        <a
+          href="/yolk/book/yolk_on_windows/"
+          
+        >Yolk on Windows</a>
+        
+      
+        <a
+          href="/yolk/book/rhai_docs/"
+          
+        >Function Reference</a>
+        
+          <div class="docs-subnav">
+            
+              <a
+                href="/yolk/book/rhai_docs/template/"
+                
+              >Template functions</a>
+            
+              <a
+                href="/yolk/book/rhai_docs/utils/"
+                
+              >Utils</a>
+            
+              <a
+                href="/yolk/book/rhai_docs/io/"
+                
+              >IO Functions</a>
+            
+              <a
+                href="/yolk/book/rhai_docs/global/"
+                
+              >Rhai stdlib</a>
+            
+          </div>
+        
+      
+        <a
+          href="/yolk/book/cli_reference/"
+          class="active" aria-current="page"
+        >CLI Reference</a>
+        
+      
+    </nav>
+    <pagefind-modal-trigger></pagefind-modal-trigger>
+    <pagefind-modal></pagefind-modal>
+  </aside>
+  <article class="docs-content prose" data-pagefind-body>
+    <h1 id="command-line-help-for-yolk" tabindex="-1"><a class="header-anchor" href="#command-line-help-for-yolk">Command-Line Help for <code>yolk</code></a></h1>
+<p>This document contains the help content for the <code>yolk</code> command-line program.</p>
+<p><strong>Command Overview:</strong></p>
+<ul>
+<li><a href="#yolk"><code>yolk</code></a></li>
+<li><a href="#yolk-init"><code>yolk init</code></a></li>
+<li><a href="#yolk-status"><code>yolk status</code></a></li>
+<li><a href="#yolk-safeguard"><code>yolk safeguard</code></a></li>
+<li><a href="#yolk-adopt"><code>yolk adopt</code></a></li>
+<li><a href="#yolk-exec-canonical"><code>yolk exec-canonical</code></a></li>
+<li><a href="#yolk-eval"><code>yolk eval</code></a></li>
+<li><a href="#yolk-sync"><code>yolk sync</code></a></li>
+<li><a href="#yolk-eval-template"><code>yolk eval-template</code></a></li>
+<li><a href="#yolk-list"><code>yolk list</code></a></li>
+<li><a href="#yolk-edit"><code>yolk edit</code></a></li>
+<li><a href="#yolk-watch"><code>yolk watch</code></a></li>
+<li><a href="#yolk-git"><code>yolk git</code></a></li>
+</ul>
+<h2 id="yolk" tabindex="-1"><a class="header-anchor" href="#yolk"><code>yolk</code></a></h2>
+<p>Templated dotfile management without template files</p>
+<p><strong>Usage:</strong> <code>yolk [OPTIONS] &lt;COMMAND&gt;</code></p>
+<h6 id="subcommands%3A" tabindex="-1"><a class="header-anchor" href="#subcommands%3A"><strong>Subcommands:</strong></a></h6>
+<ul>
+<li><code>init</code> — Initialize the yolk directory</li>
+<li><code>status</code> — Show the current state of your yolk eggs</li>
+<li><code>safeguard</code> — Make sure you don't accidentally commit your local egg states</li>
+<li><code>adopt</code> — Migrate a directory into an egg inside your yolk repository, and guide you through adding it to your yolk.rhai configuration</li>
+<li><code>exec-canonical</code> — Run a given shell command within a canonical context. I.e.: <code>yolk exec-canonical gitui</code></li>
+<li><code>eval</code> — Evaluate a Rhai expression</li>
+<li><code>sync</code> — Sync all template files and sync the deployments to match the configuration in yolk.rhai</li>
+<li><code>eval-template</code> — Evaluate a given templated file, or read a templated string from stdin</li>
+<li><code>list</code> — List all the eggs in your yolk directory</li>
+<li><code>edit</code> — Open your <code>yolk.rhai</code> or the given egg in your <code>$EDITOR</code> of choice</li>
+<li><code>watch</code> — Watch for changes in your templated files and re-sync them when they change</li>
+<li><code>git</code> — Run a git-command within the yolk directory</li>
+</ul>
+<h6 id="options%3A" tabindex="-1"><a class="header-anchor" href="#options%3A"><strong>Options:</strong></a></h6>
+<ul>
+<li><code>--yolk-dir &lt;YOLK_DIR&gt;</code> — Provide a custom yolk directory</li>
+<li><code>--home-dir &lt;HOME_DIR&gt;</code> — Provide a custom home directory that everything will be resolved relative to</li>
+<li><code>-v</code>, <code>--debug</code> — Enable debug logging</li>
+<li><code>--tracing-tree</code> — Enable displaying logs as a tree</li>
+</ul>
+<h2 id="yolk-init" tabindex="-1"><a class="header-anchor" href="#yolk-init"><code>yolk init</code></a></h2>
+<p>Initialize the yolk directory.</p>
+<p>This creates a directory called <code>yolk</code> within your config directory, and initializes it with the basic yolk directory structure.</p>
+<p><strong>Usage:</strong> <code>yolk init</code></p>
+<h2 id="yolk-status" tabindex="-1"><a class="header-anchor" href="#yolk-status"><code>yolk status</code></a></h2>
+<p>Show the current state of your yolk eggs</p>
+<p><strong>Usage:</strong> <code>yolk status</code></p>
+<h2 id="yolk-safeguard" tabindex="-1"><a class="header-anchor" href="#yolk-safeguard"><code>yolk safeguard</code></a></h2>
+<p>Make sure you don't accidentally commit your local egg states.</p>
+<p>This renames <code>.git</code> to <code>.yolk_git</code> to ensure that git interaction happens through the yolk CLI</p>
+<p><strong>Usage:</strong> <code>yolk safeguard</code></p>
+<h2 id="yolk-adopt" tabindex="-1"><a class="header-anchor" href="#yolk-adopt"><code>yolk adopt</code></a></h2>
+<p>Migrate a directory into an egg inside your yolk repository, and guide you through adding it to your yolk.rhai configuration</p>
+<p><strong>Usage:</strong> <code>yolk adopt [OPTIONS] &lt;EGG_NAME&gt; &lt;PATH&gt;</code></p>
+<h6 id="arguments%3A" tabindex="-1"><a class="header-anchor" href="#arguments%3A"><strong>Arguments:</strong></a></h6>
+<ul>
+<li><code>&lt;EGG_NAME&gt;</code> — Name of the egg that will be created</li>
+<li><code>&lt;PATH&gt;</code> — Path that should be adopted into yolk</li>
+</ul>
+<h6 id="options%3A-1" tabindex="-1"><a class="header-anchor" href="#options%3A-1"><strong>Options:</strong></a></h6>
+<ul>
+<li><code>--strategy &lt;STRATEGY&gt;</code> — Whether this should be deployed via <code>merge</code> or <code>put</code> strategy. Defaults to <code>put</code></li>
+<li><code>--append-config-and-sync</code> — Append the generated config to yolk.rhai and sync the adopted egg without prompting</li>
+<li><code>--templates &lt;TEMPLATES&gt;</code> — List of filepaths that should be included in the list of templated files</li>
+</ul>
+<h2 id="yolk-exec-canonical" tabindex="-1"><a class="header-anchor" href="#yolk-exec-canonical"><code>yolk exec-canonical</code></a></h2>
+<p>Run a given shell command within a canonical context. I.e.: <code>yolk exec-canonical gitui</code></p>
+<p><strong>Usage:</strong> <code>yolk exec-canonical [-- &lt;COMMAND&gt;...]</code></p>
+<h6 id="arguments%3A-1" tabindex="-1"><a class="header-anchor" href="#arguments%3A-1"><strong>Arguments:</strong></a></h6>
+<ul>
+<li><code>&lt;COMMAND&gt;</code></li>
+</ul>
+<h2 id="yolk-eval" tabindex="-1"><a class="header-anchor" href="#yolk-eval"><code>yolk eval</code></a></h2>
+<p>Evaluate a Rhai expression.</p>
+<p>The expression is executed in the same scope that template tag expressions are evaluated in.</p>
+<p><strong>Usage:</strong> <code>yolk eval [OPTIONS] &lt;EXPR&gt;</code></p>
+<h6 id="arguments%3A-2" tabindex="-1"><a class="header-anchor" href="#arguments%3A-2"><strong>Arguments:</strong></a></h6>
+<ul>
+<li><code>&lt;EXPR&gt;</code> — The rhai expression to evaluate</li>
+</ul>
+<h6 id="options%3A-2" tabindex="-1"><a class="header-anchor" href="#options%3A-2"><strong>Options:</strong></a></h6>
+<ul>
+<li><code>--canonical</code> — Evaluate in canonical context instead</li>
+</ul>
+<h2 id="yolk-sync" tabindex="-1"><a class="header-anchor" href="#yolk-sync"><code>yolk sync</code></a></h2>
+<p>Sync all template files and sync the deployments to match the configuration in yolk.rhai.</p>
+<p>This will modify your template files in place, as well as deploying or undeploying any eggs to match your egg configuration.</p>
+<p><strong>Usage:</strong> <code>yolk sync [OPTIONS]</code></p>
+<h6 id="options%3A-3" tabindex="-1"><a class="header-anchor" href="#options%3A-3"><strong>Options:</strong></a></h6>
+<ul>
+<li><code>--canonical</code> — Sync to canonical state. This should only be necessary for debugging purposes</li>
+</ul>
+<h2 id="yolk-eval-template" tabindex="-1"><a class="header-anchor" href="#yolk-eval-template"><code>yolk eval-template</code></a></h2>
+<p>Evaluate a given templated file, or read a templated string from stdin</p>
+<p><strong>Usage:</strong> <code>yolk eval-template [OPTIONS] [PATH]</code></p>
+<h6 id="arguments%3A-3" tabindex="-1"><a class="header-anchor" href="#arguments%3A-3"><strong>Arguments:</strong></a></h6>
+<ul>
+<li><code>&lt;PATH&gt;</code> — The path to the file you want to evaluate If not provided, the program will read from stdin</li>
+</ul>
+<h6 id="options%3A-4" tabindex="-1"><a class="header-anchor" href="#options%3A-4"><strong>Options:</strong></a></h6>
+<ul>
+<li><code>--canonical</code></li>
+</ul>
+<h2 id="yolk-list" tabindex="-1"><a class="header-anchor" href="#yolk-list"><code>yolk list</code></a></h2>
+<p>List all the eggs in your yolk directory</p>
+<p><strong>Usage:</strong> <code>yolk list</code></p>
+<h2 id="yolk-edit" tabindex="-1"><a class="header-anchor" href="#yolk-edit"><code>yolk edit</code></a></h2>
+<p>Open your <code>yolk.rhai</code> or the given egg in your <code>$EDITOR</code> of choice</p>
+<p><strong>Usage:</strong> <code>yolk edit [EGG]</code></p>
+<h6 id="arguments%3A-4" tabindex="-1"><a class="header-anchor" href="#arguments%3A-4"><strong>Arguments:</strong></a></h6>
+<ul>
+<li><code>&lt;EGG&gt;</code></li>
+</ul>
+<h2 id="yolk-watch" tabindex="-1"><a class="header-anchor" href="#yolk-watch"><code>yolk watch</code></a></h2>
+<p>Watch for changes in your templated files and re-sync them when they change</p>
+<p><strong>Usage:</strong> <code>yolk watch [OPTIONS]</code></p>
+<h6 id="options%3A-5" tabindex="-1"><a class="header-anchor" href="#options%3A-5"><strong>Options:</strong></a></h6>
+<ul>
+<li><code>--canonical</code></li>
+<li><code>--no-sync</code> — Don't actually update any files, just evaluate the templates and print any errors</li>
+</ul>
+<h2 id="yolk-git" tabindex="-1"><a class="header-anchor" href="#yolk-git"><code>yolk git</code></a></h2>
+<p>Run a git-command within the yolk directory</p>
+<p><strong>Usage:</strong> <code>yolk git [OPTIONS] [COMMAND]...</code></p>
+<h6 id="arguments%3A-5" tabindex="-1"><a class="header-anchor" href="#arguments%3A-5"><strong>Arguments:</strong></a></h6>
+<ul>
+<li><code>&lt;COMMAND&gt;</code></li>
+</ul>
+<h6 id="options%3A-6" tabindex="-1"><a class="header-anchor" href="#options%3A-6"><strong>Options:</strong></a></h6>
+<ul>
+<li><code>--force-canonical</code> — Force yolk to run the command with canonicalized files, regardless of what command it is</li>
+</ul>
+<hr/>
+<p><small><i>
+This document was generated automatically by
+<a href="https://crates.io/crates/clap-markdown"><code>clap-markdown</code></a>.
+</i></small></p>
+
+  </article>
+</div>
+
+    </main>
+
+    <footer class="site-footer">
+      <span>MIT OR Apache-2.0</span>
+      <nav aria-label="Footer navigation">
+        <a href="https://github.com/elkowar/yolk">GitHub</a>
+        <a href="/yolk/funding/">Funding</a>
+        <a href="/yolk/changelog/">Changelog</a>
+      </nav>
+    </footer>
+    <script src="/yolk/assets/js/install.js"></script>
+  </body>
+</html>

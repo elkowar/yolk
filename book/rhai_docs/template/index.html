@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Template - Yolk</title>
+    <meta name="description" content="templated dotfile management without template files">
+
+    
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Yolk">
+    <meta property="og:title" content="Template - Yolk">
+    <meta property="og:description" content="templated dotfile management without template files">
+    <meta property="og:url" content="https://elkowar.github.io/yolk/book/rhai_docs/template/">
+    <meta property="og:image" content="https://elkowar.github.io/yolk/assets/images/yolk_social.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Yolk">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <link rel="icon" href="/yolk/assets/images/favicon.ico">
+    <link rel="stylesheet" href="/yolk/assets/css/prism-okaidia.css">
+    <link rel="stylesheet" href="/yolk/assets/css/site.css">
+    <link rel="stylesheet" href="/yolk/assets/css/prism-overrides.css">
+    
+      <link rel="stylesheet" href="/yolk/assets/css/prose.css">
+    
+      <link rel="stylesheet" href="/yolk/assets/css/docs.css">
+    
+      <link rel="stylesheet" href="/yolk/book/pagefind/pagefind-component-ui.css">
+    
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/yolk/" aria-label="Yolk home">
+        <img src="/yolk/assets/images/yolk_banner_animated_nobg.svg" alt="Yolk">
+      </a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="/yolk/">Home</a>
+        <a class="nav-install" href="/yolk/#install">Install</a>
+        <a href="/yolk/book/">Docs</a>
+        <a href="/yolk/funding/">Funding</a>
+        <a href="/yolk/changelog/">Changelog</a>
+      </nav>
+      <a class="github-nav" href="https://github.com/elkowar/yolk">GitHub</a>
+    </header>
+
+    <main>
+      <pagefind-config
+  bundle-path="/yolk/book/pagefind/"
+  base-url="/yolk/book/"
+></pagefind-config>
+<script src="/yolk/book/pagefind/pagefind-component-ui.js" type="module"></script>
+
+<div class="docs-shell">
+  <aside class="docs-sidebar" aria-label="Documentation navigation">
+    <nav>
+      
+        <a
+          href="/yolk/book/"
+          
+        >Getting started</a>
+        
+          <div class="docs-subnav">
+            
+              <a
+                href="/yolk/book/git_concepts/"
+                
+              >Git concepts</a>
+            
+          </div>
+        
+      
+        <a
+          href="/yolk/book/eggs/"
+          
+        >Eggs</a>
+        
+      
+        <a
+          href="/yolk/book/templates/"
+          
+        >Templates</a>
+        
+          <div class="docs-subnav">
+            
+              <a
+                href="/yolk/book/yolk_rhai/"
+                
+              >The yolk.rhai file</a>
+            
+              <a
+                href="/yolk/book/conditional_templates/"
+                
+              >Conditionals</a>
+            
+              <a
+                href="/yolk/book/custom_template_functions/"
+                
+              >Custom Template Functions</a>
+            
+          </div>
+        
+      
+        <a
+          href="/yolk/book/yolk_on_windows/"
+          
+        >Yolk on Windows</a>
+        
+      
+        <a
+          href="/yolk/book/rhai_docs/"
+          
+        >Function Reference</a>
+        
+          <div class="docs-subnav">
+            
+              <a
+                href="/yolk/book/rhai_docs/template/"
+                class="active" aria-current="page"
+              >Template functions</a>
+            
+              <a
+                href="/yolk/book/rhai_docs/utils/"
+                
+              >Utils</a>
+            
+              <a
+                href="/yolk/book/rhai_docs/io/"
+                
+              >IO Functions</a>
+            
+              <a
+                href="/yolk/book/rhai_docs/global/"
+                
+              >Rhai stdlib</a>
+            
+          </div>
+        
+      
+        <a
+          href="/yolk/book/cli_reference/"
+          
+        >CLI Reference</a>
+        
+      
+    </nav>
+    <pagefind-modal-trigger></pagefind-modal-trigger>
+    <pagefind-modal></pagefind-modal>
+  </aside>
+  <article class="docs-content prose" data-pagefind-body>
+    <div class='rhai-doc'>
+<h1 id="template-tag-functions" tabindex="-1"><a class="header-anchor" href="#template-tag-functions">Template tag functions</a></h1>
+<p>Yolk template tags simply execute rhai functions that transform the block of text the tag operates on.</p>
+<p>Quick reminder: Yolk has three different types of tags, that differ only in what text they operate on:</p>
+<ul>
+<li>Next-line tags (<code>{# ... #}</code>): These tags operate on the line following the tag.</li>
+<li>Inline tags (<code>{&lt; ... &gt;}</code>): These tags operate on everything before the tag within the same line.</li>
+<li>Block tags (<code>{% ... %} ... {% end %}</code>): These tags operate on everything between the tag and the corresponding <code>{% end %}</code> tag.</li>
+</ul>
+<p>Inside these tags, you can call any of Yolk's template tag functions (or, in fact, any Rhai expression that returns a string).</p>
+<hr>
+<p><strong>namespace</strong>: <code>template</code></p>
+<hr>
+<div class='doc-block'>
+<h2 id="replace_between" tabindex="-1"><a class="header-anchor" href="#replace_between">replace_between</a></h2>
+<div class='doc-content'>
+<pre class="language-rust"><code class="language-rust"><span class="token function">replace_between</span><span class="token punctuation">(</span>left<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token keyword">str</span><span class="token punctuation">,</span> right<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token keyword">str</span><span class="token punctuation">,</span> replacement<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token keyword">str</span><span class="token punctuation">)</span> <span class="token punctuation">-></span> <span class="token class-name">Result</span><span class="token operator">&lt;</span><span class="token class-name">String</span><span class="token operator">></span></code></pre>
+<p><strong>shorthand</strong>: <code>rbet</code>.</p>
+<p>Replaces the text between two delimiters with the <code>replacement</code>.</p>
+<h4 id="example" tabindex="-1"><a class="header-anchor" href="#example">Example</a></h4>
+<pre class="language-toml"><code class="language-toml"><span class="token key property">ui_font</span> <span class="token punctuation">=</span> (Arial) <span class="token comment"># {&lt; replace_between(`(`, `)`, data.font.ui) >}</span></code></pre>
+<p>Note: we don't need to include the quotes in the replacement here.</p>
+</div>
+</div>
+<div class='doc-block'>
+<h2 id="replace_color" tabindex="-1"><a class="header-anchor" href="#replace_color">replace_color</a></h2>
+<div class='doc-content'>
+<pre class="language-rust"><code class="language-rust"><span class="token function">replace_color</span><span class="token punctuation">(</span>replacement<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token keyword">str</span><span class="token punctuation">)</span> <span class="token punctuation">-></span> <span class="token class-name">Result</span><span class="token operator">&lt;</span><span class="token class-name">String</span><span class="token operator">></span></code></pre>
+<p><strong>shorthand</strong>: <code>rcol</code>.</p>
+<p>Replaces a hex color value with a new hex color.</p>
+<h4 id="example-1" tabindex="-1"><a class="header-anchor" href="#example-1">Example</a></h4>
+<pre class="language-toml"><code class="language-toml"><span class="token key property">background_color</span> <span class="token punctuation">=</span> <span class="token string">"#282828"</span> <span class="token comment"># {&lt; replace_color(data.colors.bg) >}</span></code></pre>
+</div>
+</div>
+<div class='doc-block'>
+<h2 id="replace_in" tabindex="-1"><a class="header-anchor" href="#replace_in">replace_in</a></h2>
+<div class='doc-content'>
+<pre class="language-rust"><code class="language-rust"><span class="token function">replace_in</span><span class="token punctuation">(</span>between<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token keyword">str</span><span class="token punctuation">,</span> replacement<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token keyword">str</span><span class="token punctuation">)</span> <span class="token punctuation">-></span> <span class="token class-name">Result</span><span class="token operator">&lt;</span><span class="token class-name">String</span><span class="token operator">></span></code></pre>
+<p><strong>shorthand</strong>: <code>rin</code>.</p>
+<p>Replaces the text between two delimiters with the <code>replacement</code>.</p>
+<h4 id="example-2" tabindex="-1"><a class="header-anchor" href="#example-2">Example</a></h4>
+<pre class="language-toml"><code class="language-toml"><span class="token key property">ui_font</span> <span class="token punctuation">=</span> <span class="token string">"Arial"</span> <span class="token comment"># {&lt; replace_in(`"`, data.font.ui) >}</span></code></pre>
+<p>Note: we don't need to include the quotes in the replacement here.</p>
+</div>
+</div>
+<div class='doc-block'>
+<h2 id="replace_number" tabindex="-1"><a class="header-anchor" href="#replace_number">replace_number</a></h2>
+<div class='doc-content'>
+<pre class="language-rust"><code class="language-rust"><span class="token function">replace_number</span><span class="token punctuation">(</span>replacement<span class="token punctuation">:</span> <span class="token class-name">Dynamic</span><span class="token punctuation">)</span> <span class="token punctuation">-></span> <span class="token class-name">Result</span><span class="token operator">&lt;</span><span class="token class-name">String</span><span class="token operator">></span></code></pre>
+<p><strong>shorthand</strong>: <code>rnum</code>.</p>
+<p>Replaces a number with another number.</p>
+<h4 id="example-3" tabindex="-1"><a class="header-anchor" href="#example-3">Example</a></h4>
+<pre class="language-toml"><code class="language-toml"><span class="token key property">cursor_size</span> <span class="token punctuation">=</span> <span class="token number">32</span> <span class="token comment"># {&lt; replace_number(data.cursor_size) >}</span></code></pre>
+</div>
+</div>
+<div class='doc-block'>
+<h2 id="replace_quoted" tabindex="-1"><a class="header-anchor" href="#replace_quoted">replace_quoted</a></h2>
+<div class='doc-content'>
+<pre class="language-rust"><code class="language-rust"><span class="token function">replace_quoted</span><span class="token punctuation">(</span>replacement<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token keyword">str</span><span class="token punctuation">)</span> <span class="token punctuation">-></span> <span class="token class-name">Result</span><span class="token operator">&lt;</span><span class="token class-name">String</span><span class="token operator">></span></code></pre>
+<p><strong>shorthand</strong>: <code>rq</code>.</p>
+<p>Replaces a value between quotes with another value</p>
+<h4 id="example-4" tabindex="-1"><a class="header-anchor" href="#example-4">Example</a></h4>
+<pre class="language-toml"><code class="language-toml"><span class="token key property">ui_font</span> <span class="token punctuation">=</span> <span class="token string">"Arial"</span> <span class="token comment"># {&lt; replace_quoted(data.font.ui) >}</span></code></pre>
+</div>
+</div>
+<div class='doc-block'>
+<h2 id="replace_re" tabindex="-1"><a class="header-anchor" href="#replace_re">replace_re</a></h2>
+<div class='doc-content'>
+<pre class="language-rust"><code class="language-rust"><span class="token function">replace_re</span><span class="token punctuation">(</span>regex<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token keyword">str</span><span class="token punctuation">,</span> replacement<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token keyword">str</span><span class="token punctuation">)</span> <span class="token punctuation">-></span> <span class="token class-name">Result</span><span class="token operator">&lt;</span><span class="token class-name">String</span><span class="token operator">></span></code></pre>
+<p><strong>shorthand</strong>: <code>rr</code>.</p>
+<p>Replaces all occurrences of a Regex <code>pattern</code> with <code>replacement</code> in the text.</p>
+<h4 id="example-5" tabindex="-1"><a class="header-anchor" href="#example-5">Example</a></h4>
+<pre class="language-toml"><code class="language-toml"><span class="token key property">ui_font</span> <span class="token punctuation">=</span> <span class="token string">"Arial"</span> <span class="token comment"># {&lt; replace_re(`".*"`, `"{data.font.ui}"`) >}</span></code></pre>
+<p>Note that the replacement value needs to contain the quotes, as those are also matched against in the regex pattern.
+Otherwise, we would end up with invalid toml.</p>
+</div>
+</div>
+<div class='doc-block'>
+<h2 id="replace_value" tabindex="-1"><a class="header-anchor" href="#replace_value">replace_value</a></h2>
+<div class='doc-content'>
+<pre class="language-rust"><code class="language-rust"><span class="token function">replace_value</span><span class="token punctuation">(</span>replacement<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token keyword">str</span><span class="token punctuation">)</span> <span class="token punctuation">-></span> <span class="token class-name">Result</span><span class="token operator">&lt;</span><span class="token class-name">String</span><span class="token operator">></span></code></pre>
+<p><strong>shorthand</strong>: <code>rv</code>.</p>
+<p>Replaces a value (without spaces) after a <code>:</code> or a <code>=</code> with another value</p>
+<h4 id="example-6" tabindex="-1"><a class="header-anchor" href="#example-6">Example</a></h4>
+<pre class="language-toml"><code class="language-toml"><span class="token key property">ui_font</span> <span class="token punctuation">=</span> Arial <span class="token comment"># {&lt; replace_value(data.font.ui) >}</span></code></pre>
+</div>
+</div>
+</div>
+
+  </article>
+</div>
+
+    </main>
+
+    <footer class="site-footer">
+      <span>MIT OR Apache-2.0</span>
+      <nav aria-label="Footer navigation">
+        <a href="https://github.com/elkowar/yolk">GitHub</a>
+        <a href="/yolk/funding/">Funding</a>
+        <a href="/yolk/changelog/">Changelog</a>
+      </nav>
+    </footer>
+    <script src="/yolk/assets/js/install.js"></script>
+  </body>
+</html>

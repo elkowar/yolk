@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Yolk - Painfree Dotfile Management</title>
+    <meta name="description" content="templated dotfile management without template files">
+
+    
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Yolk">
+    <meta property="og:title" content="Painfree Templated Dotfile Management - Yolk">
+    <meta property="og:description" content="templated dotfile management without template files">
+    <meta property="og:url" content="https://elkowar.github.io/yolk/">
+    <meta property="og:image" content="https://elkowar.github.io/yolk/assets/images/yolk_social.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Yolk">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <link rel="icon" href="/yolk/assets/images/favicon.ico">
+    <link rel="stylesheet" href="/yolk/assets/css/prism-okaidia.css">
+    <link rel="stylesheet" href="/yolk/assets/css/site.css">
+    <link rel="stylesheet" href="/yolk/assets/css/prism-overrides.css">
+    
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/yolk/" aria-label="Yolk home">
+        <img src="/yolk/assets/images/yolk_banner_animated_nobg.svg" alt="Yolk">
+      </a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="/yolk/">Home</a>
+        <a class="nav-install" href="/yolk/#install">Install</a>
+        <a href="/yolk/book/">Docs</a>
+        <a href="/yolk/funding/">Funding</a>
+        <a href="/yolk/changelog/">Changelog</a>
+      </nav>
+      <a class="github-nav" href="https://github.com/elkowar/yolk">GitHub</a>
+    </header>
+
+    <main>
+      
+<section class="hero">
+  <div class="hero-img"><img src="/yolk/assets/images/yolk_banner_animated_nobg.svg" alt="Yolk"></div>
+  <h1><span>Templated Dotfile Management</span> without Template Files</h1>
+  <p class="hero-summary">
+      Yolk is a cross platform dotfile management tool with a unique spin on templating,
+      sitting somewhere in between <a href="https://www.gnu.org/software/stow/">GNU Stow</a>
+      and <a href="https://www.chezmoi.io/">chezmoi</a>.
+  </p>
+</section>
+
+<section class="install-section" id="install" data-install-root>
+  
+    <section
+      class="install-option"
+      id="install-linux-x64"
+      data-install-option="linux-x64"
+      
+    >
+      <div class="install-method-tabs" role="tablist" aria-label="Linux x64 installation methods">
+        
+          <button
+            type="button"
+            role="tab"
+            data-install-method="0"
+            aria-selected="true"
+          >
+            shell
+          </button>
+        
+          <button
+            type="button"
+            role="tab"
+            data-install-method="1"
+            aria-selected="false"
+          >
+            crates.io
+          </button>
+        
+          <button
+            type="button"
+            role="tab"
+            data-install-method="2"
+            aria-selected="false"
+          >
+            cargo-binstall
+          </button>
+        
+        <button
+          type="button"
+          role="tab"
+          data-install-method="3"
+          aria-selected="false"
+        >
+          tarball
+        </button>
+      </div>
+      
+        <div
+          class="install-command-row"
+          data-install-command="0"
+          
+        >
+          <div class="install-command">
+            <pre class="language-bash"><code class="language-bash"><span class="token function">curl</span> <span class="token parameter variable">--proto</span> <span class="token string">'=https'</span> <span class="token parameter variable">--tlsv1.2</span> <span class="token parameter variable">-LsSf</span> https://github.com/elkowar/yolk/releases/download/v1.3.0/yolk_dots-installer.sh <span class="token operator">|</span> <span class="token function">sh</span></code></pre>
+          </div>
+          <button class="copy-button" type="button" data-install-copy>Copy</button>
+        </div>
+      
+        <div
+          class="install-command-row"
+          data-install-command="1"
+          hidden
+        >
+          <div class="install-command">
+            <pre class="language-bash"><code class="language-bash"><span class="token function">cargo</span> <span class="token function">install</span> yolk_dots <span class="token parameter variable">--locked</span> <span class="token parameter variable">--profile</span><span class="token operator">=</span>dist</code></pre>
+          </div>
+          <button class="copy-button" type="button" data-install-copy>Copy</button>
+        </div>
+      
+        <div
+          class="install-command-row"
+          data-install-command="2"
+          hidden
+        >
+          <div class="install-command">
+            <pre class="language-bash"><code class="language-bash"><span class="token function">cargo</span> binstall yolk_dots</code></pre>
+          </div>
+          <button class="copy-button" type="button" data-install-copy>Copy</button>
+        </div>
+      
+      <div
+        class="install-command-row"
+        data-install-command="3"
+        hidden
+      >
+        <div class="install-command">
+          <pre class="language-bash"><code class="language-bash"><span class="token function">curl</span> <span class="token parameter variable">-LO</span> https://github.com/elkowar/yolk/releases/download/v1.3.0/yolk_dots-x86_64-unknown-linux-gnu.tar.xz</code></pre>
+        </div>
+        <button class="copy-button" type="button" data-install-copy>Copy</button>
+      </div>
+    </section>
+  
+    <section
+      class="install-option"
+      id="install-linux-musl-x64"
+      data-install-option="linux-musl-x64"
+      hidden
+    >
+      <div class="install-method-tabs" role="tablist" aria-label="musl Linux x64 installation methods">
+        
+          <button
+            type="button"
+            role="tab"
+            data-install-method="0"
+            aria-selected="true"
+          >
+            shell
+          </button>
+        
+          <button
+            type="button"
+            role="tab"
+            data-install-method="1"
+            aria-selected="false"
+          >
+            crates.io
+          </button>
+        
+          <button
+            type="button"
+            role="tab"
+            data-install-method="2"
+            aria-selected="false"
+          >
+            cargo-binstall
+          </button>
+        
+        <button
+          type="button"
+          role="tab"
+          data-install-method="3"
+          aria-selected="false"
+        >
+          tarball
+        </button>
+      </div>
+      
+        <div
+          class="install-command-row"
+          data-install-command="0"
+          
+        >
+          <div class="install-command">
+            <pre class="language-bash"><code class="language-bash"><span class="token function">curl</span> <span class="token parameter variable">--proto</span> <span class="token string">'=https'</span> <span class="token parameter variable">--tlsv1.2</span> <span class="token parameter variable">-LsSf</span> https://github.com/elkowar/yolk/releases/download/v1.3.0/yolk_dots-installer.sh <span class="token operator">|</span> <span class="token function">sh</span></code></pre>
+          </div>
+          <button class="copy-button" type="button" data-install-copy>Copy</button>
+        </div>
+      
+        <div
+          class="install-command-row"
+          data-install-command="1"
+          hidden
+        >
+          <div class="install-command">
+            <pre class="language-bash"><code class="language-bash"><span class="token function">cargo</span> <span class="token function">install</span> yolk_dots <span class="token parameter variable">--locked</span> <span class="token parameter variable">--profile</span><span class="token operator">=</span>dist</code></pre>
+          </div>
+          <button class="copy-button" type="button" data-install-copy>Copy</button>
+        </div>
+      
+        <div
+          class="install-command-row"
+          data-install-command="2"
+          hidden
+        >
+          <div class="install-command">
+            <pre class="language-bash"><code class="language-bash"><span class="token function">cargo</span> binstall yolk_dots</code></pre>
+          </div>
+          <button class="copy-button" type="button" data-install-copy>Copy</button>
+        </div>
+      
+      <div
+        class="install-command-row"
+        data-install-command="3"
+        hidden
+      >
+        <div class="install-command">
+          <pre class="language-bash"><code class="language-bash"><span class="token function">curl</span> <span class="token parameter variable">-LO</span> https://github.com/elkowar/yolk/releases/download/v1.3.0/yolk_dots-x86_64-unknown-linux-musl.tar.xz</code></pre>
+        </div>
+        <button class="copy-button" type="button" data-install-copy>Copy</button>
+      </div>
+    </section>
+  
+    <section
+      class="install-option"
+      id="install-macos-arm64"
+      data-install-option="macos-arm64"
+      hidden
+    >
+      <div class="install-method-tabs" role="tablist" aria-label="macOS Apple Silicon installation methods">
+        
+          <button
+            type="button"
+            role="tab"
+            data-install-method="0"
+            aria-selected="true"
+          >
+            shell
+          </button>
+        
+          <button
+            type="button"
+            role="tab"
+            data-install-method="1"
+            aria-selected="false"
+          >
+            crates.io
+          </button>
+        
+          <button
+            type="button"
+            role="tab"
+            data-install-method="2"
+            aria-selected="false"
+          >
+            cargo-binstall
+          </button>
+        
+          <button
+            type="button"
+            role="tab"
+            data-install-method="3"
+            aria-selected="false"
+          >
+            Homebrew
+          </button>
+        
+        <button
+          type="button"
+          role="tab"
+          data-install-method="4"
+          aria-selected="false"
+        >
+          tarball
+        </button>
+      </div>
+      
+        <div
+          class="install-command-row"
+          data-install-command="0"
+          
+        >
+          <div class="install-command">
+            <pre class="language-bash"><code class="language-bash"><span class="token function">curl</span> <span class="token parameter variable">--proto</span> <span class="token string">'=https'</span> <span class="token parameter variable">--tlsv1.2</span> <span class="token parameter variable">-LsSf</span> https://github.com/elkowar/yolk/releases/download/v1.3.0/yolk_dots-installer.sh <span class="token operator">|</span> <span class="token function">sh</span></code></pre>
+          </div>
+          <button class="copy-button" type="button" data-install-copy>Copy</button>
+        </div>
+      
+        <div
+          class="install-command-row"
+          data-install-command="1"
+          hidden
+        >
+          <div class="install-command">
+            <pre class="language-bash"><code class="language-bash"><span class="token function">cargo</span> <span class="token function">install</span> yolk_dots <span class="token parameter variable">--locked</span> <span class="token parameter variable">--profile</span><span class="token operator">=</span>dist</code></pre>
+          </div>
+          <button class="copy-button" type="button" data-install-copy>Copy</button>
+        </div>
+      
+        <div
+          class="install-command-row"
+          data-install-command="2"
+          hidden
+        >
+          <div class="install-command">
+            <pre class="language-bash"><code class="language-bash"><span class="token function">cargo</span> binstall yolk_dots</code></pre>
+          </div>
+          <button class="copy-button" type="button" data-install-copy>Copy</button>
+        </div>
+      
+        <div
+          class="install-command-row"
+          data-install-command="3"
+          hidden
+        >
+          <div class="install-command">
+            <pre class="language-bash"><code class="language-bash">brew <span class="token function">install</span> elkowar/tap/yolk</code></pre>
+          </div>
+          <button class="copy-button" type="button" data-install-copy>Copy</button>
+        </div>
+      
+      <div
+        class="install-command-row"
+        data-install-command="4"
+        hidden
+      >
+        <div class="install-command">
+          <pre class="language-bash"><code class="language-bash"><span class="token function">curl</span> <span class="token parameter variable">-LO</span> https://github.com/elkowar/yolk/releases/download/v1.3.0/yolk_dots-aarch64-apple-darwin.tar.xz</code></pre>
+        </div>
+        <button class="copy-button" type="button" data-install-copy>Copy</button>
+      </div>
+    </section>
+  
+    <section
+      class="install-option"
+      id="install-macos-x64"
+      data-install-option="macos-x64"
+      hidden
+    >
+      <div class="install-method-tabs" role="tablist" aria-label="macOS Intel installation methods">
+        
+          <button
+            type="button"
+            role="tab"
+            data-install-method="0"
+            aria-selected="true"
+          >
+            shell
+          </button>
+        
+          <button
+            type="button"
+            role="tab"
+            data-install-method="1"
+            aria-selected="false"
+          >
+            crates.io
+          </button>
+        
+          <button
+            type="button"
+            role="tab"
+            data-install-method="2"
+            aria-selected="false"
+          >
+            cargo-binstall
+          </button>
+        
+          <button
+            type="button"
+            role="tab"
+            data-install-method="3"
+            aria-selected="false"
+          >
+            Homebrew
+          </button>
+        
+        <button
+          type="button"
+          role="tab"
+          data-install-method="4"
+          aria-selected="false"
+        >
+          tarball
+        </button>
+      </div>
+      
+        <div
+          class="install-command-row"
+          data-install-command="0"
+          
+        >
+          <div class="install-command">
+            <pre class="language-bash"><code class="language-bash"><span class="token function">curl</span> <span class="token parameter variable">--proto</span> <span class="token string">'=https'</span> <span class="token parameter variable">--tlsv1.2</span> <span class="token parameter variable">-LsSf</span> https://github.com/elkowar/yolk/releases/download/v1.3.0/yolk_dots-installer.sh <span class="token operator">|</span> <span class="token function">sh</span></code></pre>
+          </div>
+          <button class="copy-button" type="button" data-install-copy>Copy</button>
+        </div>
+      
+        <div
+          class="install-command-row"
+          data-install-command="1"
+          hidden
+        >
+          <div class="install-command">
+            <pre class="language-bash"><code class="language-bash"><span class="token function">cargo</span> <span class="token function">install</span> yolk_dots <span class="token parameter variable">--locked</span> <span class="token parameter variable">--profile</span><span class="token operator">=</span>dist</code></pre>
+          </div>
+          <button class="copy-button" type="button" data-install-copy>Copy</button>
+        </div>
+      
+        <div
+          class="install-command-row"
+          data-install-command="2"
+          hidden
+        >
+          <div class="install-command">
+            <pre class="language-bash"><code class="language-bash"><span class="token function">cargo</span> binstall yolk_dots</code></pre>
+          </div>
+          <button class="copy-button" type="button" data-install-copy>Copy</button>
+        </div>
+      
+        <div
+          class="install-command-row"
+          data-install-command="3"
+          hidden
+        >
+          <div class="install-command">
+            <pre class="language-bash"><code class="language-bash">brew <span class="token function">install</span> elkowar/tap/yolk</code></pre>
+          </div>
+          <button class="copy-button" type="button" data-install-copy>Copy</button>
+        </div>
+      
+      <div
+        class="install-command-row"
+        data-install-command="4"
+        hidden
+      >
+        <div class="install-command">
+          <pre class="language-bash"><code class="language-bash"><span class="token function">curl</span> <span class="token parameter variable">-LO</span> https://github.com/elkowar/yolk/releases/download/v1.3.0/yolk_dots-x86_64-apple-darwin.tar.xz</code></pre>
+        </div>
+        <button class="copy-button" type="button" data-install-copy>Copy</button>
+      </div>
+    </section>
+  
+    <section
+      class="install-option"
+      id="install-windows-x64"
+      data-install-option="windows-x64"
+      hidden
+    >
+      <div class="install-method-tabs" role="tablist" aria-label="Windows x64 installation methods">
+        
+          <button
+            type="button"
+            role="tab"
+            data-install-method="0"
+            aria-selected="true"
+          >
+            powershell
+          </button>
+        
+          <button
+            type="button"
+            role="tab"
+            data-install-method="1"
+            aria-selected="false"
+          >
+            crates.io
+          </button>
+        
+        <button
+          type="button"
+          role="tab"
+          data-install-method="2"
+          aria-selected="false"
+        >
+          tarball
+        </button>
+      </div>
+      
+        <div
+          class="install-command-row"
+          data-install-command="0"
+          
+        >
+          <div class="install-command">
+            <pre class="language-powershell"><code class="language-powershell"><span class="token function">irm</span> https:<span class="token operator">/</span><span class="token operator">/</span>github<span class="token punctuation">.</span>com/elkowar/yolk/releases/download/v1<span class="token punctuation">.</span>3<span class="token punctuation">.</span>0/yolk_dots-installer<span class="token punctuation">.</span>ps1 <span class="token punctuation">|</span> <span class="token function">iex</span></code></pre>
+          </div>
+          <button class="copy-button" type="button" data-install-copy>Copy</button>
+        </div>
+      
+        <div
+          class="install-command-row"
+          data-install-command="1"
+          hidden
+        >
+          <div class="install-command">
+            <pre class="language-powershell"><code class="language-powershell">cargo install yolk_dots <span class="token operator">--</span>locked <span class="token operator">--</span>profile=dist</code></pre>
+          </div>
+          <button class="copy-button" type="button" data-install-copy>Copy</button>
+        </div>
+      
+      <div
+        class="install-command-row"
+        data-install-command="2"
+        hidden
+      >
+        <div class="install-command">
+          <pre class="language-bash"><code class="language-bash"><span class="token function">curl</span> <span class="token parameter variable">-LO</span> https://github.com/elkowar/yolk/releases/download/v1.3.0/yolk_dots-x86_64-pc-windows-msvc.zip</code></pre>
+        </div>
+        <button class="copy-button" type="button" data-install-copy>Copy</button>
+      </div>
+    </section>
+  
+
+  <div class="install-footer">
+    <a class="install-options-link" href="/yolk/book/">View all installation options</a>
+    <label class="arch-select">
+      <span>Platform</span>
+      <select data-install-arch aria-label="Select architecture">
+      
+        <option
+          value="linux-x64"
+          selected
+        >Linux x64</option>
+      
+        <option
+          value="linux-musl-x64"
+          
+        >musl Linux x64</option>
+      
+        <option
+          value="macos-arm64"
+          
+        >macOS Apple Silicon</option>
+      
+        <option
+          value="macos-x64"
+          
+        >macOS Intel</option>
+      
+        <option
+          value="windows-x64"
+          
+        >Windows x64</option>
+      
+      </select>
+    </label>
+  </div>
+</section>
+
+<section class="concept-section" id="features">
+  <div class="concept-text">
+    <h2>The Concept</h2>
+    <p>
+      Yolk allows you to use simple templates in your configuration files without having
+      to worry about keeping a separate template file and the generated config file in sync.
+    </p>
+    <p>
+      This is achieved through a design that allows all templates to be included inside
+      comments in your actual configuration file.
+    </p>
+    <a class="learn-link" href="/yolk/book/">Read the full documentation →</a>
+  </div>
+
+  <div class="concept-code">
+    <div class="code-window">
+      <div class="window-bar">
+        <span></span><span></span><span></span>
+        <strong>config.toml - Yolk Editor</strong>
+      </div>
+      <pre class="language-toml"><code class="language-toml"><span class="token comment"># Use a different font on one host</span>
+<span class="token comment"># {% if SYSTEM.hostname == "epic-desktop" %}</span>
+<span class="token key property">font</span><span class="token punctuation">=</span><span class="token string">"Fira Code"</span>
+<span class="token comment"># {% else %}</span>
+<span class="token comment">#&lt;yolk> font="Iosevka"</span>
+<span class="token comment"># {% end %}</span>
+
+<span class="token punctuation">[</span><span class="token table class-name">colors</span><span class="token punctuation">]</span>
+<span class="token comment"># Load your colors from your yolk configuration</span>
+<span class="token key property">bg</span><span class="token punctuation">=</span><span class="token string">"#282828"</span> <span class="token comment"># {&lt; replace_color(data.colors.bg) >}</span>
+<span class="token key property">fg</span><span class="token punctuation">=</span><span class="token string">"#ebdbb2"</span> <span class="token comment"># {&lt; replace_color(data.colors.fg) >}</span></code></pre>
+    </div>
+  </div>
+</section>
+
+<section class="details-grid">
+  <article>
+    <h2>Inline Templates</h2>
+    <p>
+      Yolk is able to run the template modifications on the file itself,
+      allowing you to set templated values while keeping the template directly in the same file.
+    </p>
+    <a class="learn-link" href="/yolk/book/templates">Learn about templating →</a>
+  </article>
+
+  <article>
+    <h2>User Configuration</h2>
+    <p>
+      Yolk template expressions and configuration are written in the
+      <a href="https://rhai.rs/">Rhai</a> scripting language. You can provide custom data
+      to use in your templates via the <code>yolk.rhai</code> file in your yolk directory,
+      which allows you to fetch data dynamically from your system, or reference different
+      static data depending on your system.
+    </p>
+  </article>
+
+  <article>
+    <h2>Version Control</h2>
+    <p>
+      Given that the concrete files in use on your system may be different across machines,
+      adding those to version control directly would result in frequent merge conflicts.
+      Yolk solves this by only committing a canonical version of your templates, generated
+      right before you commit. The version of your configuration seen in git is generated
+      from a consistent, stable context.
+    </p>
+    <a class="learn-link" href="/yolk/book/git_concepts/">Read the git workflow docs →</a>
+  </article>
+
+  <article class="card-multiplatform">
+    <div>
+      <h2>Cross Platform</h2>
+      <p>
+        Yolk can lay your eggs anywhere you'll need them.
+      </p>
+    </div>
+    <div class="platform-list" aria-label="Supported platforms">
+      <span>Linux</span>
+      <span>macOS</span>
+      <span>Windows</span>
+      <span>Android</span>
+    </div>
+  </article>
+</section>
+
+    </main>
+
+    <footer class="site-footer">
+      <span>MIT OR Apache-2.0</span>
+      <nav aria-label="Footer navigation">
+        <a href="https://github.com/elkowar/yolk">GitHub</a>
+        <a href="/yolk/funding/">Funding</a>
+        <a href="/yolk/changelog/">Changelog</a>
+      </nav>
+    </footer>
+    <script src="/yolk/assets/js/install.js"></script>
+  </body>
+</html>

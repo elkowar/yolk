@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Eggs - Yolk</title>
+    <meta name="description" content="templated dotfile management without template files">
+
+    
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Yolk">
+    <meta property="og:title" content="Eggs - Yolk">
+    <meta property="og:description" content="templated dotfile management without template files">
+    <meta property="og:url" content="https://elkowar.github.io/yolk/book/eggs/">
+    <meta property="og:image" content="https://elkowar.github.io/yolk/assets/images/yolk_social.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Yolk">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <link rel="icon" href="/yolk/assets/images/favicon.ico">
+    <link rel="stylesheet" href="/yolk/assets/css/prism-okaidia.css">
+    <link rel="stylesheet" href="/yolk/assets/css/site.css">
+    <link rel="stylesheet" href="/yolk/assets/css/prism-overrides.css">
+    
+      <link rel="stylesheet" href="/yolk/assets/css/prose.css">
+    
+      <link rel="stylesheet" href="/yolk/assets/css/docs.css">
+    
+      <link rel="stylesheet" href="/yolk/book/pagefind/pagefind-component-ui.css">
+    
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/yolk/" aria-label="Yolk home">
+        <img src="/yolk/assets/images/yolk_banner_animated_nobg.svg" alt="Yolk">
+      </a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="/yolk/">Home</a>
+        <a class="nav-install" href="/yolk/#install">Install</a>
+        <a href="/yolk/book/">Docs</a>
+        <a href="/yolk/funding/">Funding</a>
+        <a href="/yolk/changelog/">Changelog</a>
+      </nav>
+      <a class="github-nav" href="https://github.com/elkowar/yolk">GitHub</a>
+    </header>
+
+    <main>
+      <pagefind-config
+  bundle-path="/yolk/book/pagefind/"
+  base-url="/yolk/book/"
+></pagefind-config>
+<script src="/yolk/book/pagefind/pagefind-component-ui.js" type="module"></script>
+
+<div class="docs-shell">
+  <aside class="docs-sidebar" aria-label="Documentation navigation">
+    <nav>
+      
+        <a
+          href="/yolk/book/"
+          
+        >Getting started</a>
+        
+          <div class="docs-subnav">
+            
+              <a
+                href="/yolk/book/git_concepts/"
+                
+              >Git concepts</a>
+            
+          </div>
+        
+      
+        <a
+          href="/yolk/book/eggs/"
+          class="active" aria-current="page"
+        >Eggs</a>
+        
+      
+        <a
+          href="/yolk/book/templates/"
+          
+        >Templates</a>
+        
+          <div class="docs-subnav">
+            
+              <a
+                href="/yolk/book/yolk_rhai/"
+                
+              >The yolk.rhai file</a>
+            
+              <a
+                href="/yolk/book/conditional_templates/"
+                
+              >Conditionals</a>
+            
+              <a
+                href="/yolk/book/custom_template_functions/"
+                
+              >Custom Template Functions</a>
+            
+          </div>
+        
+      
+        <a
+          href="/yolk/book/yolk_on_windows/"
+          
+        >Yolk on Windows</a>
+        
+      
+        <a
+          href="/yolk/book/rhai_docs/"
+          
+        >Function Reference</a>
+        
+          <div class="docs-subnav">
+            
+              <a
+                href="/yolk/book/rhai_docs/template/"
+                
+              >Template functions</a>
+            
+              <a
+                href="/yolk/book/rhai_docs/utils/"
+                
+              >Utils</a>
+            
+              <a
+                href="/yolk/book/rhai_docs/io/"
+                
+              >IO Functions</a>
+            
+              <a
+                href="/yolk/book/rhai_docs/global/"
+                
+              >Rhai stdlib</a>
+            
+          </div>
+        
+      
+        <a
+          href="/yolk/book/cli_reference/"
+          
+        >CLI Reference</a>
+        
+      
+    </nav>
+    <pagefind-modal-trigger></pagefind-modal-trigger>
+    <pagefind-modal></pagefind-modal>
+  </aside>
+  <article class="docs-content prose" data-pagefind-body>
+    <h1 id="eggs" tabindex="-1"><a class="header-anchor" href="#eggs">Eggs</a></h1>
+<p>An egg is one package of configuration, typically for one single application.
+For example, your editor configuration <code>~/.config/nvim</code> would likely be one egg called <code>nvim</code>.</p>
+<p>According to your <code>yolk.rhai</code>, these get deployed on your system, and may contain some templated files.</p>
+
+  </article>
+</div>
+
+    </main>
+
+    <footer class="site-footer">
+      <span>MIT OR Apache-2.0</span>
+      <nav aria-label="Footer navigation">
+        <a href="https://github.com/elkowar/yolk">GitHub</a>
+        <a href="/yolk/funding/">Funding</a>
+        <a href="/yolk/changelog/">Changelog</a>
+      </nav>
+    </footer>
+    <script src="/yolk/assets/js/install.js"></script>
+  </body>
+</html>

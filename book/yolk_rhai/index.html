@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Yolk Rhai - Yolk</title>
+    <meta name="description" content="templated dotfile management without template files">
+
+    
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Yolk">
+    <meta property="og:title" content="Yolk Rhai - Yolk">
+    <meta property="og:description" content="templated dotfile management without template files">
+    <meta property="og:url" content="https://elkowar.github.io/yolk/book/yolk_rhai/">
+    <meta property="og:image" content="https://elkowar.github.io/yolk/assets/images/yolk_social.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Yolk">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <link rel="icon" href="/yolk/assets/images/favicon.ico">
+    <link rel="stylesheet" href="/yolk/assets/css/prism-okaidia.css">
+    <link rel="stylesheet" href="/yolk/assets/css/site.css">
+    <link rel="stylesheet" href="/yolk/assets/css/prism-overrides.css">
+    
+      <link rel="stylesheet" href="/yolk/assets/css/prose.css">
+    
+      <link rel="stylesheet" href="/yolk/assets/css/docs.css">
+    
+      <link rel="stylesheet" href="/yolk/book/pagefind/pagefind-component-ui.css">
+    
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/yolk/" aria-label="Yolk home">
+        <img src="/yolk/assets/images/yolk_banner_animated_nobg.svg" alt="Yolk">
+      </a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="/yolk/">Home</a>
+        <a class="nav-install" href="/yolk/#install">Install</a>
+        <a href="/yolk/book/">Docs</a>
+        <a href="/yolk/funding/">Funding</a>
+        <a href="/yolk/changelog/">Changelog</a>
+      </nav>
+      <a class="github-nav" href="https://github.com/elkowar/yolk">GitHub</a>
+    </header>
+
+    <main>
+      <pagefind-config
+  bundle-path="/yolk/book/pagefind/"
+  base-url="/yolk/book/"
+></pagefind-config>
+<script src="/yolk/book/pagefind/pagefind-component-ui.js" type="module"></script>
+
+<div class="docs-shell">
+  <aside class="docs-sidebar" aria-label="Documentation navigation">
+    <nav>
+      
+        <a
+          href="/yolk/book/"
+          
+        >Getting started</a>
+        
+          <div class="docs-subnav">
+            
+              <a
+                href="/yolk/book/git_concepts/"
+                
+              >Git concepts</a>
+            
+          </div>
+        
+      
+        <a
+          href="/yolk/book/eggs/"
+          
+        >Eggs</a>
+        
+      
+        <a
+          href="/yolk/book/templates/"
+          
+        >Templates</a>
+        
+          <div class="docs-subnav">
+            
+              <a
+                href="/yolk/book/yolk_rhai/"
+                class="active" aria-current="page"
+              >The yolk.rhai file</a>
+            
+              <a
+                href="/yolk/book/conditional_templates/"
+                
+              >Conditionals</a>
+            
+              <a
+                href="/yolk/book/custom_template_functions/"
+                
+              >Custom Template Functions</a>
+            
+          </div>
+        
+      
+        <a
+          href="/yolk/book/yolk_on_windows/"
+          
+        >Yolk on Windows</a>
+        
+      
+        <a
+          href="/yolk/book/rhai_docs/"
+          
+        >Function Reference</a>
+        
+          <div class="docs-subnav">
+            
+              <a
+                href="/yolk/book/rhai_docs/template/"
+                
+              >Template functions</a>
+            
+              <a
+                href="/yolk/book/rhai_docs/utils/"
+                
+              >Utils</a>
+            
+              <a
+                href="/yolk/book/rhai_docs/io/"
+                
+              >IO Functions</a>
+            
+              <a
+                href="/yolk/book/rhai_docs/global/"
+                
+              >Rhai stdlib</a>
+            
+          </div>
+        
+      
+        <a
+          href="/yolk/book/cli_reference/"
+          
+        >CLI Reference</a>
+        
+      
+    </nav>
+    <pagefind-modal-trigger></pagefind-modal-trigger>
+    <pagefind-modal></pagefind-modal>
+  </aside>
+  <article class="docs-content prose" data-pagefind-body>
+    <h1 id="the-yolk.rhai-file" tabindex="-1"><a class="header-anchor" href="#the-yolk.rhai-file">The yolk.rhai file</a></h1>
+<p>The <code>yolk.rhai</code> file is the heart of your Yolk configuration.</p>
+<p>It's where you define all of your <a href="eggs/">eggs</a> (packages), as well as export any variables and functionality you will then refer to inside your <a href="templates/">templates</a>.</p>
+<p>If you're familiar with <a href="https://rhai.rs/">Rhai</a>, this is loaded as a module, imported into the global scope of your template tags.</p>
+<h2 id="basic-structure" tabindex="-1"><a class="header-anchor" href="#basic-structure">Basic structure</a></h2>
+<p>The <code>yolk.rhai</code> file is a Rhai script that is run by Yolk to generate your configuration.
+Everything you declare in <code>yolk.rhai</code> will be available to use in your templates.</p>
+<p>Your <code>yolk.rhai</code> needs to define one special variable called <code>eggs</code>.
+This is a map of all the <a href="./eggs/">eggs</a> you have in your egg directory,
+which describes where their files should be deployed to,
+and which files should be treated as template files.</p>
+<p>Let's look at an example:</p>
+<pre class="language-rust"><code class="language-rust">export <span class="token keyword">let</span> eggs <span class="token operator">=</span> #<span class="token punctuation">{</span>
+    foot<span class="token punctuation">:</span> #<span class="token punctuation">{</span>
+        targets<span class="token punctuation">:</span> <span class="token string">"~/.config/foot"</span><span class="token punctuation">,</span>
+        templates<span class="token punctuation">:</span> <span class="token punctuation">[</span><span class="token string">"foot.ini"</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    zsh<span class="token punctuation">:</span> #<span class="token punctuation">{</span>
+        targets<span class="token punctuation">:</span> #<span class="token punctuation">{</span>
+            <span class="token string">".zshrc"</span><span class="token punctuation">:</span> <span class="token string">"~/.config/zsh/.zshrc"</span><span class="token punctuation">,</span>
+            <span class="token string">".zshenv"</span><span class="token punctuation">:</span> <span class="token string">"~/.zshenv"</span><span class="token punctuation">,</span>
+        <span class="token punctuation">}</span><span class="token punctuation">,</span>
+        main_file<span class="token punctuation">:</span> <span class="token string">".zshrc"</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    nvim<span class="token punctuation">:</span> #<span class="token punctuation">{</span>
+        targets<span class="token punctuation">:</span> <span class="token string">"~/.config/nvim"</span><span class="token punctuation">,</span>
+        <span class="token comment">// Note that you can use shell-style glob patterns for the templates list</span>
+        templates<span class="token punctuation">:</span> <span class="token punctuation">[</span><span class="token string">"**/*.lua"</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    niri<span class="token punctuation">:</span> #<span class="token punctuation">{</span>
+        targets<span class="token punctuation">:</span> <span class="token string">"~/.config/niri"</span><span class="token punctuation">,</span>
+        templates<span class="token punctuation">:</span> <span class="token punctuation">[</span><span class="token string">"config.kdl"</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+        enabled<span class="token punctuation">:</span> <span class="token constant">SYSTEM</span><span class="token punctuation">.</span>hostname <span class="token operator">==</span> <span class="token string">"cool-desktop"</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    alacritty<span class="token punctuation">:</span> <span class="token string">"~/.config/alacritty"</span><span class="token punctuation">,</span>
+    <span class="token comment">// This uses the `merge` deployment strategy, which</span>
+    <span class="token comment">// will merge the directory structures during deployment,</span>
+    <span class="token comment">// allowing a stow-style pattern</span>
+    <span class="token comment">// of mirroring your home directory structure in your egg directory</span>
+    zed<span class="token punctuation">:</span> #<span class="token punctuation">{</span> targets<span class="token punctuation">:</span> <span class="token string">"~"</span><span class="token punctuation">,</span> strategy<span class="token punctuation">:</span> <span class="token string">"merge"</span> <span class="token punctuation">}</span>
+    
+    another_example<span class="token punctuation">:</span> #<span class="token punctuation">{</span>
+        targets<span class="token punctuation">:</span> <span class="token string">"~"</span><span class="token punctuation">,</span>
+        strategy<span class="token punctuation">:</span> <span class="token string">"merge"</span><span class="token punctuation">,</span>
+        unsafe_shell_hooks<span class="token punctuation">:</span> #<span class="token punctuation">{</span>
+            post_deploy<span class="token punctuation">:</span> <span class="token string">"some shellscript"</span><span class="token punctuation">,</span>
+            post_undeploy<span class="token punctuation">:</span> <span class="token string">"another shellscript"</span><span class="token punctuation">,</span>
+            pre_deploy<span class="token punctuation">:</span> <span class="token string">"some other shellscript"</span><span class="token punctuation">,</span>
+            pre_undeploy<span class="token punctuation">:</span> <span class="token string">"yet another shellscript"</span><span class="token punctuation">,</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre>
+<p>Now, let's break this down.
+For every entry in our <code>~/.config/yolk/eggs</code> directory, we have a corresponding egg configuration here in the eggs object.
+This configuration can either be the path where the egg's files should be deployed
+or an object.</p>
+<p>If it's an object, it can contain the following fields:</p>
+<h4 id="enabled" tabindex="-1"><a class="header-anchor" href="#enabled"><code>enabled</code></a></h4>
+<p>a boolean, describing whether this egg should be deployed or not.
+This is useful if you only want to deploy an egg on some systems, or depending on some other condition.</p>
+<h4 id="targets" tabindex="-1"><a class="header-anchor" href="#targets"><code>targets</code></a></h4>
+<p>Either the path where to deploy the egg, or an object with mappings from file inside the egg directory to the target path.</p>
+<p>Providing the string <code>&quot;~/.config/foot&quot;</code> is shorthand for <code>#{ &quot;.&quot;: &quot;~/.config/foot&quot;}</code>.</p>
+<h4 id="strategy" tabindex="-1"><a class="header-anchor" href="#strategy"><code>strategy</code></a></h4>
+<p>Either <code>&quot;put&quot;</code> or <code>&quot;merge&quot;</code>. Defaults to <code>put</code>.</p>
+<ul>
+<li>
+<p>In <strong>put</strong> mode, yolk will create a symlink for each mapping from egg directory entry to target path.
+If a directory or file already exists, Yolk will refuse to create the symlink.</p>
+</li>
+<li>
+<p>In <strong>merge</strong> mode, yolk will merge the directory structures during deployment.
+This means, if you want to use a stow-style approach, and have the egg directory mirror your home directory structure, you can use
+<code>&quot;~&quot;</code> (or <code>#{&quot;.&quot;: &quot;~&quot;}</code>) as the targets value.</p>
+</li>
+</ul>
+<h4 id="templates" tabindex="-1"><a class="header-anchor" href="#templates"><code>templates</code></a></h4>
+<p>A list of files that should be treated as templates.
+This list can contain shell-style glob patterns, so <code>*.lua</code> will expand to all lua files in the egg directory.
+Files that are not listed here will not be edited by yolk during <code>yolk sync</code>!</p>
+<h4 id="main_file" tabindex="-1"><a class="header-anchor" href="#main_file"><code>main_file</code></a></h4>
+<p>A path, relative to the egg directory, that will be opened when you run <code>yolk edit &lt;eggname&gt;</code>.</p>
+<h4 id="unsafe_shell_hooks" tabindex="-1"><a class="header-anchor" href="#unsafe_shell_hooks"><code>unsafe_shell_hooks</code></a></h4>
+<p>An object that may declare scripts to run when the egg is deployed or undeployed.
+The <code>pre_deploy</code> script runs before the egg is deployed, the <code>pre_undeploy</code> script runs before the egg is undeployed, the <code>post_deploy</code> script runs after the egg has been deployed, and the <code>post_undeploy</code> script runs after the egg has been undeployed.</p>
+<p>Note that these scripts should ideally be idempotent, so running them twice should not change anything compared to running them once.</p>
+<h2 id="available-variables" tabindex="-1"><a class="header-anchor" href="#available-variables">Available variables</a></h2>
+<p>To generate your configuration depending on your system, there are a couple global variables that you can reference inside the <code>yolk.rhai</code> file.
+The <code>SYSTEM</code> variable is a table containing data about your local system.
+If the config is being executed in canonical mode, the <code>SYSTEM</code> table will instead contain a fixed set of values that will be the same across all systems.</p>
+<p>To know if you're currently in local or canonical mode, you can check the <code>LOCAL</code> variable.</p>
+<p><strong>Tip:</strong>
+To look at the contents of those variables or try out your logic, you can always use the <code>yolk eval</code> command.</p>
+<pre class="language-bash"><code class="language-bash">$ yolk <span class="token builtin class-name">eval</span> <span class="token string">'print(SYSTEM)'</span></code></pre>
+<h2 id="splitting-up-into-multiple-files" tabindex="-1"><a class="header-anchor" href="#splitting-up-into-multiple-files">Splitting up into multiple files</a></h2>
+<p>Rhai allows you to import other files into your scripts.
+For example, let's say you want to keep your color theme definition in a separate file.
+Simply create a new <code>colors.rhai</code> file next to your <code>yolk.rhai</code>, and make sure to explicitly declare exported variables as <code>export</code>:</p>
+<pre class="language-rust"><code class="language-rust">export <span class="token keyword">let</span> gruvbox <span class="token operator">=</span> #<span class="token punctuation">{</span>
+  background<span class="token punctuation">:</span> <span class="token string">"#282828"</span><span class="token punctuation">,</span>
+  foreground<span class="token punctuation">:</span> <span class="token string">"#ebdbb2"</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+<span class="token keyword">fn</span> <span class="token function-definition function">some_function</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token function">print</span><span class="token punctuation">(</span><span class="token string">"hi"</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span></code></pre>
+<p>Note that functions are exported by default.</p>
+<p>Now, in your <code>yolk.rhai</code>, import this script, giving the module an explicit name:</p>
+<pre class="language-rust"><code class="language-rust">import <span class="token string">"colors"</span> <span class="token keyword">as</span> colors<span class="token punctuation">;</span></code></pre>
+<p>Now you can refer to anything exported from that file as <code>colors::thing</code>, i.e.:</p>
+<pre class="language-rust"><code class="language-rust"><span class="token keyword">let</span> theme <span class="token operator">=</span> <span class="token namespace">colors<span class="token punctuation">::</span></span>gruvbox<span class="token punctuation">;</span>
+<span class="token namespace">colors<span class="token punctuation">::</span></span><span class="token function">some_function</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre>
+
+  </article>
+</div>
+
+    </main>
+
+    <footer class="site-footer">
+      <span>MIT OR Apache-2.0</span>
+      <nav aria-label="Footer navigation">
+        <a href="https://github.com/elkowar/yolk">GitHub</a>
+        <a href="/yolk/funding/">Funding</a>
+        <a href="/yolk/changelog/">Changelog</a>
+      </nav>
+    </footer>
+    <script src="/yolk/assets/js/install.js"></script>
+  </body>
+</html>

@@ -1,0 +1,12 @@
+/* Preserve Yolk's code containers while Prism Okaidia supplies token colors. */
+code[class*="language-"],
+pre[class*="language-"] {
+  font-family: var(--font-mono);
+}
+
+.code-window pre[class*="language-"],
+.install-command pre[class*="language-"],
+.docs-content pre[class*="language-"] {
+  background: transparent;
+  text-shadow: none;
+}
