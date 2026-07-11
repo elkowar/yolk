@@ -15,7 +15,7 @@ Let's type out a simple example:
 ```toml
 # {% if SYSTEM.hostname == "epic-desktop" %}
 displays = ["DP-1", "DP-2"]
-# {% if SYSTEM.hostname == "business-desktop" %}
+# {% elif SYSTEM.hostname == "business-desktop" %}
 displays = ["HDMI-1", "HDMI-2"]
 # {% else %}
 displays = ["eDP-1"]
@@ -30,7 +30,7 @@ For example, on your laptop, this config might be turned into:
 ```toml
 # {% if SYSTEM.hostname == "epic-desktop" %}
 #<yolk> displays = ["DP-1", "DP-2"]
-# {% if SYSTEM.hostname == "business-desktop" %}
+# {% elif SYSTEM.hostname == "business-desktop" %}
 #<yolk> displays = ["HDMI-1", "HDMI-2"]
 # {% else %}
 displays = ["eDP-1"]
