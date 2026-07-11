@@ -58,6 +58,7 @@ walkdir = "2.5.0"
 tracing-tree = "0.4.0"
 clap_complete = { version = "4.5.66", features = ["unstable-dynamic"] }
 assert_matches = "1.5.0"
+clap-markdown = "0.1.5"
 # rhai-autodocs = { version = "0.7.0", path = "../../clones/rhai-autodocs" }
 
 [dev-dependencies]

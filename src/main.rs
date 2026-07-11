@@ -28,7 +28,7 @@ use yolk::{
 mod adopt;
 
 #[derive(clap::Parser, Debug)]
-#[command(version, about)]
+#[command(version, about, name = "yolk", author = "ElKowar")]
 struct Args {
     #[command(subcommand)]
     command: Command,
@@ -158,6 +158,9 @@ enum Command {
         delete_symlink: Vec<PathBuf>,
     },
 
+    /// Generate markdown documentation for the CLI
+    #[command(hide(true))]
+    GenerateMarkdownHelp,
     #[cfg(feature = "docgen")]
     #[command(hide(true))]
     Docs {
@@ -602,6 +605,9 @@ fn run_command(args: Args) -> Result<()> {
                     tracker.pending_elevated_operations_summary()
                 );
             }
+        }
+        Command::GenerateMarkdownHelp => {
+            clap_markdown::print_help_markdown::<Args>();
         }
 
         #[cfg(feature = "docgen")]

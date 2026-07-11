@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% if title %}{{ title }} - {% endif %}{{ site.name }}</title>
+    <meta name="description" content="{{ description or site.description }}">
+    <link rel="icon" href="{{ '/assets/images/favicon.ico' | url }}">
+    <link rel="stylesheet" href="{{ '/assets/css/prism-okaidia.css' | url }}">
+    <link rel="stylesheet" href="{{ '/assets/css/site.css' | url }}">
+    <link rel="stylesheet" href="{{ '/assets/css/prism-overrides.css' | url }}">
+    {% for stylesheet in styles or [] %}
+      <link rel="stylesheet" href="{{ stylesheet | url }}">
+    {% endfor %}
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="{{ '/' | url }}" aria-label="{{ site.name }} home">
+        <img src="{{ '/assets/images/yolk_banner_animated_nobg.svg' | url }}" alt="Yolk">
+      </a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="{{ '/' | url }}">Home</a>
+        <a href="{{ '/#install' | url }}">Install</a>
+        <a href="{{ '/book/' | url }}">Docs</a>
+        <a href="{{ '/funding/' | url }}">Funding</a>
+        <a href="{{ '/changelog/' | url }}">Changelog</a>
+      </nav>
+      <a class="github-nav" href="{{ site.repository }}">GitHub</a>
+    </header>
+
+    <main>
+      {{ content | safe }}
+    </main>
+
+    <footer class="site-footer">
+      <span>{{ site.license }}</span>
+      <nav aria-label="Footer navigation">
+        <a href="{{ site.repository }}">GitHub</a>
+        <a href="{{ '/funding/' | url }}">Funding</a>
+        <a href="{{ '/changelog/' | url }}">Changelog</a>
+      </nav>
+    </footer>
+    <script src="{{ '/assets/js/install.js' | url }}"></script>
+  </body>
+</html>

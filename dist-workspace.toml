@@ -9,8 +9,6 @@ windows-archive = ".zip"
 fail-fast = true
 # Whether to enable GitHub Attestations
 github-attestations = true
-# Global artifacts jobs to run in CI
-global-artifacts-jobs = ["./build-man"]
 # The preferred dist version to use in CI (Cargo.toml SemVer syntax)
 cargo-dist-version = "0.32.0"
 # Which actions to run on pull requests

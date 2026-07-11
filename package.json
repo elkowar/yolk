@@ -1,0 +1,21 @@
+{
+  "name": "yolk-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "docs:cli": "sh scripts/generate-cli-docs.sh",
+    "prebuild": "npm run docs:cli",
+    "build": "eleventy && pagefind --site public/book",
+    "preserve": "npm run docs:cli",
+    "serve": "eleventy --serve"
+  },
+  "devDependencies": {
+    "@11ty/eleventy": "^3.1.2",
+    "markdown-it": "^14.3.0",
+    "markdown-it-anchor": "^9.2.0",
+    "pagefind": "^1.5.2"
+  },
+  "dependencies": {
+    "prismjs": "^1.30.0"
+  }
+}

@@ -1,0 +1,44 @@
+---
+layout: base.njk
+title: Releases
+permalink: /changelog/index.html
+styles:
+  - /assets/css/prose.css
+  - /assets/css/changelog.css
+---
+<section class="page-heading">
+  <h1>Releases</h1>
+</section>
+
+<div class="release-layout">
+  <aside class="release-sidebar" aria-label="Release navigation">
+    <p>Release history</p>
+    <nav>
+      {% for release in releases %}
+        <a href="#v{{ release.version | slugify }}">v{{ release.version }}</a>
+      {% endfor %}
+    </nav>
+  </aside>
+  <section class="release-list">
+    {% for release in releases %}
+      <article class="release" id="v{{ release.version | slugify }}">
+        <header>
+          <div class="release-heading">
+            <h2>
+              {% if release.url %}
+                <a href="{{ release.url }}">Release {{ release.version }}</a>
+              {% else %}
+                Release {{ release.version }}
+              {% endif %}
+            </h2>
+            <div class="release-meta">
+              {% if release.date %}<time datetime="{{ release.date }}">{{ release.date }}</time>{% endif %}
+              <a href="{{ release.version | releaseUrl }}">View on GitHub <span aria-hidden="true">↗</span></a>
+            </div>
+          </div>
+        </header>
+        <div class="prose">{{ release.body | markdown | safe }}</div>
+      </article>
+    {% endfor %}
+  </section>
+</div>

@@ -16,19 +16,6 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  mdbook-check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@v1.10.16
-      - name: Install mdbook, mdbook-linkcheck
-        run: cargo binstall mdbook@0.4 mdbook-linkcheck
-      - name: mdbook linkcheck
-        run: |
-          echo '[output.linkcheck]' > docs/book.toml
-          mdbook build docs
-
   build:
     runs-on: ubuntu-latest
     steps:
