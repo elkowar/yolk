@@ -1,0 +1,132 @@
+.docs-shell {
+  --pf-text: var(--text);
+  --pf-text-secondary: var(--muted);
+  --pf-text-muted: var(--muted);
+  --pf-background: var(--panel);
+  --pf-border: var(--line);
+  --pf-border-focus: var(--accent);
+  --pf-hover: var(--accent-soft);
+  --pf-mark: var(--heading);
+  --pf-scroll-shadow: rgba(0, 0, 0, 0.28);
+  --pf-outline-focus: var(--accent);
+  --pf-font: var(--font-docs-body);
+  --pf-border-radius: 7px;
+  --pf-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.24);
+  --pf-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.28);
+  --pf-shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.42);
+  --pf-modal-backdrop: rgba(10, 10, 10, 0.78);
+  display: grid;
+  grid-template-columns: minmax(235px, 280px) minmax(0, 1fr);
+  width: min(100%, 1440px);
+  min-height: calc(100vh - 78px);
+  margin: 0 auto;
+
+  @media (max-width: 760px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.docs-sidebar {
+  position: sticky;
+  top: 78px;
+  align-self: start;
+  display: grid;
+  gap: 18px;
+  align-content: start;
+  grid-auto-rows: max-content;
+  height: calc(100vh - 78px);
+  overflow: auto;
+  padding: 26px 18px;
+  font-family: var(--font-docs-body);
+
+  pagefind-modal-trigger {
+    margin: 0 10px;
+  }
+
+  nav {
+    display: grid;
+    gap: 3px;
+
+    a {
+      display: block;
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.3;
+
+      &:hover,
+      &:focus-visible,
+      &.active {
+        color: var(--heading);
+        background: var(--accent-soft);
+      }
+    }
+    > a {
+      padding: 8px 10px;
+      color: var(--text);
+      font-weight: 650;
+    }
+
+    .docs-subnav {
+      display: grid;
+      gap: 2px;
+      margin: 1px 0 8px 10px;
+      padding: 2px 0 2px 13px;
+
+      a {
+        padding: 6px 9px;
+        font-size: 0.86rem;
+      }
+    }
+  }
+
+  @media (max-width: 760px) {
+    position: static;
+    height: auto;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--line);
+  }
+}
+
+.docs-content {
+  width: min(100%, 860px);
+  padding: clamp(36px, 6vw, 72px) clamp(24px, 5vw, 68px) 88px;
+
+  @media (max-width: 760px) {
+    padding-top: 38px;
+  }
+}
+
+.warning {
+  position: relative;
+  margin: 20px 0;
+  padding-inline-start: 60px;
+}
+
+.warning > p {
+  margin: 0;
+}
+
+.warning::before {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  display: grid;
+  width: 2.4rem;
+  height: 2.4rem;
+  place-items: center;
+  content: "ⓘ";
+  color: var(--heading);
+  font-weight: bold;
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.warning::after {
+  position: absolute;
+  inset-block: 3.2rem 0.35rem;
+  inset-inline-start: 1rem;
+  width: 2px;
+  content: "";
+  background-color: var(--heading);
+}

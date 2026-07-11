@@ -1,0 +1,36 @@
+---
+layout: base.njk
+---
+<pagefind-config
+  bundle-path="{{ '/book/pagefind/' | url }}"
+  base-url="{{ '/book/' | url }}"
+></pagefind-config>
+<script src="{{ '/book/pagefind/pagefind-component-ui.js' | url }}" type="module"></script>
+
+<div class="docs-shell">
+  <aside class="docs-sidebar" aria-label="Documentation navigation">
+    <nav>
+      {% for entry in docsNav %}
+        <a
+          href="{{ entry.url | url }}"
+          {% if entry.url == page.url %}class="active" aria-current="page"{% endif %}
+        >{{ entry.title }}</a>
+        {% if entry.children.length %}
+          <div class="docs-subnav">
+            {% for child in entry.children %}
+              <a
+                href="{{ child.url | url }}"
+                {% if child.url == page.url %}class="active" aria-current="page"{% endif %}
+              >{{ child.title }}</a>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endfor %}
+    </nav>
+    <pagefind-modal-trigger></pagefind-modal-trigger>
+    <pagefind-modal></pagefind-modal>
+  </aside>
+  <article class="docs-content prose" data-pagefind-body>
+    {{ content | safe }}
+  </article>
+</div>

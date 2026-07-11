@@ -1,0 +1,72 @@
+/* Rendered-markdown styling, shared by the docs pages and the changelog release notes. */
+.prose {
+  font-family: var(--font-docs-body);
+
+  > :first-child {
+    margin-top: 0;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    color: var(--heading);
+    font-family: var(--font-docs-heading);
+    font-weight: 700;
+    line-height: 1.2;
+
+    a {
+      color: inherit;
+    }
+  }
+
+  h1 {
+    margin-bottom: 1.1rem;
+    font-size: clamp(2.2rem, 4vw, 3.35rem);
+  }
+  h2 {
+    margin-top: 2.4em;
+    padding-bottom: 0.35em;
+    border-bottom: 1px solid var(--line);
+    font-size: 1.55rem;
+  }
+  h3 {
+    margin-top: 2em;
+  }
+
+  p,
+  li {
+    max-width: 72ch;
+  }
+
+  ul {
+    display: grid;
+    gap: 0.45rem;
+    padding-left: 1.15rem;
+  }
+  li {
+    padding-left: 0.2rem;
+    &::marker {
+      color: var(--accent);
+    }
+  }
+
+  pre {
+    margin: 1rem 0;
+    padding: 10px 20px;
+    border: 1px solid var(--line-strong);
+    border-radius: 9px;
+    background: var(--code);
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.18);
+    line-height: 1.55;
+
+    code {
+      display: block;
+      min-width: max-content;
+      padding: 0;
+      color: var(--text);
+      background: transparent;
+      font-size: 0.88rem;
+    }
+  }
+}

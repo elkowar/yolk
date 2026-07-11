@@ -1,0 +1,169 @@
+---
+layout: base.njk
+title: Painfree Templated Dotfile Management
+---
+{% set concept %}{% raw %}
+# Use a different font on one host
+# {% if SYSTEM.hostname == "epic-desktop" %}
+font="Fira Code"
+# {% else %}
+#<yolk> font="Iosevka"
+# {% end %}
+
+[colors]
+# Load your colors from your yolk configuration
+bg="#282828" # {< replace_color(data.colors.bg) >}
+fg="#ebdbb2" # {< replace_color(data.colors.fg) >}
+{% endraw %}{% endset %}
+<section class="hero">
+  <div class="hero-img"><img src="{{ '/assets/images/yolk_banner_animated_nobg.svg' | url }}" alt="Yolk"></div>
+  <h1><span>Templated Dotfile Management</span> without Template Files</h1>
+  <p class="hero-summary">
+      Yolk is a cross platform dotfile management tool with a unique spin on templating,
+      sitting somewhere in between <a href="https://www.gnu.org/software/stow/">GNU Stow</a>
+      and <a href="https://www.chezmoi.io/">chezmoi</a>.
+  </p>
+</section>
+
+<section class="install-section" id="install" data-install-root>
+  {% for option in install.options %}
+    <section
+      class="install-option"
+      id="install-{{ option.id }}"
+      data-install-option="{{ option.id }}"
+      {% if not loop.first %}hidden{% endif %}
+    >
+      <div class="install-method-tabs" role="tablist" aria-label="{{ option.label }} installation methods">
+        {% for command in option.commands %}
+          <button
+            type="button"
+            role="tab"
+            data-install-method="{{ loop.index0 }}"
+            {% if loop.first %}aria-selected="true"{% else %}aria-selected="false"{% endif %}
+          >
+            {{ command.label }}
+          </button>
+        {% endfor %}
+        <button
+          type="button"
+          role="tab"
+          data-install-method="{{ option.commands.length }}"
+          aria-selected="false"
+        >
+          tarball
+        </button>
+      </div>
+      {% for command in option.commands %}
+        <div
+          class="install-command-row"
+          data-install-command="{{ loop.index0 }}"
+          {% if not loop.first %}hidden{% endif %}
+        >
+          <div class="install-command">
+            {{ command.command | codeblock(command.language) | safe }}
+          </div>
+          <button class="copy-button" type="button" data-install-copy>Copy</button>
+        </div>
+      {% endfor %}
+      <div
+        class="install-command-row"
+        data-install-command="{{ option.commands.length }}"
+        hidden
+      >
+        <div class="install-command">
+          {{ ('curl -LO ' + option.artifact) | codeblock("shell") | safe }}
+        </div>
+        <button class="copy-button" type="button" data-install-copy>Copy</button>
+      </div>
+    </section>
+  {% endfor %}
+
+  <div class="install-footer">
+    <a class="install-options-link" href="{{ '/book/' | url }}">View all installation options</a>
+    <label class="arch-select">
+      <span>Platform</span>
+      <select data-install-arch aria-label="Select architecture">
+      {% for option in install.options %}
+        <option
+          value="{{ option.id }}"
+          {% if loop.first %}selected{% endif %}
+        >{{ option.label }}</option>
+      {% endfor %}
+      </select>
+    </label>
+  </div>
+</section>
+
+<section class="concept-section" id="features">
+  <div class="concept-text">
+    <h2>The Concept</h2>
+    <p>
+      Yolk allows you to use simple templates in your configuration files without having
+      to worry about keeping a separate template file and the generated config file in sync.
+    </p>
+    <p>
+      This is achieved through a design that allows all templates to be included inside
+      comments in your actual configuration file.
+    </p>
+    <a class="learn-link" href="{{ '/book/' | url }}">Read the full documentation →</a>
+  </div>
+
+  <div class="concept-code">
+    <div class="code-window">
+      <div class="window-bar">
+        <span></span><span></span><span></span>
+        <strong>config.toml - Yolk Editor</strong>
+      </div>
+      {{ concept | codeblock("toml") | safe }}
+    </div>
+  </div>
+</section>
+
+<section class="details-grid">
+  <article>
+    <h2>Inline Templates</h2>
+    <p>
+      Yolk is able to run the template modifications on the file itself,
+      allowing you to set templated values while keeping the template directly in the same file.
+    </p>
+    <a class="learn-link" href="{{ '/book/templates' | url }}">Learn about templating →</a>
+  </article>
+
+  <article>
+    <h2>User Configuration</h2>
+    <p>
+      Yolk template expressions and configuration are written in the
+      <a href="https://rhai.rs/">Rhai</a> scripting language. You can provide custom data
+      to use in your templates via the <code>yolk.rhai</code> file in your yolk directory,
+      which allows you to fetch data dynamically from your system, or reference different
+      static data depending on your system.
+    </p>
+  </article>
+
+  <article>
+    <h2>Version Control</h2>
+    <p>
+      Given that the concrete files in use on your system may be different across machines,
+      adding those to version control directly would result in frequent merge conflicts.
+      Yolk solves this by only committing a canonical version of your templates, generated
+      right before you commit. The version of your configuration seen in git is generated
+      from a consistent, stable context.
+    </p>
+    <a class="learn-link" href="{{ '/book/git_concepts/' | url }}">Read the git workflow docs →</a>
+  </article>
+
+  <article class="card-multiplatform">
+    <div>
+      <h2>Cross Platform</h2>
+      <p>
+        Yolk can lay your eggs anywhere you'll need them.
+      </p>
+    </div>
+    <div class="platform-list" aria-label="Supported platforms">
+      <span>Linux</span>
+      <span>macOS</span>
+      <span>Windows</span>
+      <span>Android</span>
+    </div>
+  </article>
+</section>

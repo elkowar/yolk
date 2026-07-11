@@ -1,0 +1,151 @@
+.release-layout {
+  display: grid;
+  grid-template-columns: minmax(160px, 210px) minmax(0, 760px);
+  gap: clamp(38px, 7vw, 104px);
+  width: min(100% - 48px, 1120px);
+  margin: 0 auto;
+  padding-bottom: 92px;
+
+  @media (max-width: 760px) {
+    display: block;
+    width: min(100% - 40px, 620px);
+  }
+}
+
+.release-sidebar {
+  position: sticky;
+  top: 98px;
+  align-self: start;
+  max-height: calc(100vh - 124px);
+  overflow: auto;
+  padding: 18px 16px 18px 0;
+
+  p {
+    margin: 0 0 12px;
+    color: var(--heading);
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+
+  nav {
+    display: grid;
+    gap: 2px;
+  }
+
+  a {
+    display: block;
+    padding: 6px 10px;
+    border-radius: 5px;
+    color: var(--muted);
+    font-family: var(--font-docs-body);
+    font-size: 0.88rem;
+
+    &:hover,
+    &:focus-visible {
+      color: var(--heading);
+      background: var(--accent-soft);
+    }
+  }
+
+  @media (max-width: 760px) {
+    position: static;
+    max-height: none;
+    margin-bottom: 38px;
+    padding: 0 0 16px;
+    border-bottom: 1px solid var(--line);
+
+    nav {
+      display: flex;
+      gap: 4px;
+      overflow: auto;
+    }
+    a {
+      flex: 0 0 auto;
+    }
+  }
+}
+
+.release-list {
+  position: relative;
+  width: 100%;
+  margin: 0;
+
+  /* The timeline spine the release dots sit on. */
+  &::before {
+    position: absolute;
+    top: 18px;
+    bottom: 18px;
+    left: -30px;
+    width: 1px;
+    background: linear-gradient(var(--line-strong), transparent);
+    content: "";
+  }
+
+  @media (max-width: 760px) {
+    &::before {
+      display: none;
+    }
+  }
+}
+
+.release {
+  position: relative;
+  margin: 0;
+  padding: 0 0 56px;
+  color: var(--text);
+  font-family: var(--font-docs-body);
+
+  /* Timeline dot: one node per release, centered on the spine drawn by .release-list::before. */
+  &::before {
+    position: absolute;
+    top: 15px;
+    left: -36px;
+    width: 11px;
+    height: 11px;
+    border: 2px solid var(--bg);
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 1px var(--line-strong);
+    content: "";
+  }
+
+  header {
+    margin-bottom: 18px;
+  }
+
+  @media (max-width: 760px) {
+    padding-bottom: 44px;
+
+    &::before {
+      display: none;
+    }
+  }
+}
+
+.release-heading h2 {
+  margin: 0;
+  font-family: var(--font-docs-heading);
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  line-height: 1.2;
+
+  a {
+    color: var(--heading);
+    &:hover {
+      color: #ffe48f;
+    }
+  }
+}
+
+.release-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.86rem;
+
+  a {
+    color: var(--link);
+    font-weight: 600;
+  }
+}
